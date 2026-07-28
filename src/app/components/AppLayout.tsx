@@ -29,9 +29,13 @@ export default function AppLayout() {
       {/* Logo */}
       <div className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-green-400 rounded-lg flex items-center justify-center shrink-0">
-            <Leaf size={16} className="text-green-950" />
-          </div>
+          <div className="w-8 h-8 rounded-lg overflow-hidden">
+            <img
+              src="/yardpilot-logo.png"
+              alt="YardPilotUSA logo"
+              className="w-full h-full object-contain"
+            />
+        </div>
           <div>
             <p className="text-white font-bold text-sm" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilotUSA</p>
             <p className="text-green-400 text-xs truncate max-w-[140px]">{user.company}</p>
