@@ -26,7 +26,9 @@ export type Project = {
   updatedAt: string;
 };
 
-export type ContactStatus = "lead" | "active" | "customer" | "inactive";
+export type ContactType = "lead" | "customer";
+
+export type ContactActivity = "active" | "inactive";
 
 export type Contact = {
   id: string;
@@ -37,7 +39,8 @@ export type Contact = {
   city: string;
   state: string;
   zip: string;
-  status: ContactStatus;
+  contactType: ContactType;
+  activityStatus: ContactActivity;
   source: string;
   notes: string;
   createdAt: string;

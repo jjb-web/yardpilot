@@ -16,16 +16,23 @@ import {
 import { useApp } from "../context/AppContext";
 import type {
   Contact,
-  ContactStatus,
+  ContactActivity,
+  ContactType,
 } from "../data/types";
 
-const STATUS_OPTIONS: Array<{
-  value: ContactStatus;
+const CONTACT_TYPE_OPTIONS: Array<{
+  value: ContactType;
   label: string;
 }> = [
   { value: "lead", label: "Lead" },
-  { value: "active", label: "Active" },
   { value: "customer", label: "Customer" },
+];
+
+const ACTIVITY_OPTIONS: Array<{
+  value: ContactActivity;
+  label: string;
+}> = [
+  { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
 
@@ -60,7 +67,8 @@ function emptyDraft(): ContactDraft {
     city: "",
     state: "",
     zip: "",
-    status: "lead",
+    contactType: "lead",
+    activityStatus: "active",
     source: "",
     notes: "",
   };
@@ -80,17 +88,18 @@ function contactAddress(contact: Contact) {
     .join(", ");
 }
 
-function statusClasses(status: ContactStatus) {
-  switch (status) {
-    case "customer":
-      return "bg-green-100 text-green-700";
-    case "active":
-      return "bg-blue-100 text-blue-700";
-    case "inactive":
-      return "bg-gray-100 text-gray-600";
-    default:
-      return "bg-amber-100 text-amber-700";
-  }
+function typeClasses(contactType: ContactType) {
+  return contactType === "customer"
+    ? "bg-blue-100 text-blue-700"
+    : "bg-amber-100 text-amber-700";
+}
+
+function activityClasses(
+  activityStatus: ContactActivity
+) {
+  return activityStatus === "active"
+    ? "bg-green-100 text-green-700"
+    : "bg-gray-100 text-gray-600";
 }
 
 export default function Contacts() {
@@ -104,6 +113,11 @@ export default function Contacts() {
   } = useApp();
 
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<
+    "all" | ContactType
+  >("all");
+  const [activityFilter, setActivityFilter] =
+    useState<"all" | ContactActivity>("all");
   const [modalOpen, setModalOpen] =
     useState(false);
   const [selected, setSelected] =
@@ -118,26 +132,67 @@ export default function Contacts() {
   const filteredContacts = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    if (!query) {
-      return contacts;
-    }
+    return [...contacts]
+      .filter((contact) => {
+        if (
+          typeFilter !== "all" &&
+          contact.contactType !== typeFilter
+        ) {
+          return false;
+        }
 
-    return contacts.filter((contact) =>
-      [
-        contact.name,
-        contact.email,
-        contact.phone,
-        contact.address,
-        contact.city,
-        contact.state,
-        contact.zip,
-        contact.status,
-        contact.source,
-      ].some((value) =>
-        value.toLowerCase().includes(query)
-      )
-    );
-  }, [contacts, search]);
+        if (
+          activityFilter !== "all" &&
+          contact.activityStatus !== activityFilter
+        ) {
+          return false;
+        }
+
+        if (!query) {
+          return true;
+        }
+
+        return [
+          contact.name,
+          contact.email,
+          contact.phone,
+          contact.address,
+          contact.city,
+          contact.state,
+          contact.zip,
+          contact.contactType,
+          contact.activityStatus,
+          contact.source,
+        ].some((value) =>
+          value.toLowerCase().includes(query)
+        );
+      })
+      .sort((first, second) => {
+        if (
+          first.activityStatus !==
+          second.activityStatus
+        ) {
+          return first.activityStatus === "active"
+            ? -1
+            : 1;
+        }
+
+        const updatedDifference =
+          new Date(second.updatedAt).getTime() -
+          new Date(first.updatedAt).getTime();
+
+        if (updatedDifference !== 0) {
+          return updatedDifference;
+        }
+
+        return first.name.localeCompare(second.name);
+      });
+  }, [
+    contacts,
+    search,
+    typeFilter,
+    activityFilter,
+  ]);
 
   useEffect(() => {
     if (!modalOpen) {
@@ -190,7 +245,8 @@ export default function Contacts() {
       city: contact.city,
       state: contact.state,
       zip: contact.zip,
-      status: contact.status,
+      contactType: contact.contactType,
+      activityStatus: contact.activityStatus,
       source: contact.source,
       notes: contact.notes,
     });
@@ -332,20 +388,74 @@ export default function Contacts() {
         </button>
       </div>
 
-      <div className="relative mb-6 max-w-md">
-        <Search
-          size={17}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(event) =>
-            setSearch(event.target.value)
-          }
-          placeholder="Search contacts..."
-          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30"
-        />
+      <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="relative w-full max-w-md">
+          <Search
+            size={17}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
+            placeholder="Search contacts..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
+            <span className="px-2 text-xs font-semibold text-gray-400">
+              Type
+            </span>
+            {([
+              ["all", "All"],
+              ["lead", "Leads"],
+              ["customer", "Customers"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTypeFilter(value)}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                  typeFilter === value
+                    ? "bg-green-700 text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
+            <span className="px-2 text-xs font-semibold text-gray-400">
+              Activity
+            </span>
+            {([
+              ["all", "All"],
+              ["active", "Active"],
+              ["inactive", "Inactive"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() =>
+                  setActivityFilter(value)
+                }
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                  activityFilter === value
+                    ? "bg-green-700 text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {contactsError && (
@@ -371,7 +481,7 @@ export default function Contacts() {
           <p className="text-sm text-gray-400 mt-1">
             {contacts.length === 0
               ? "Add your first customer or lead."
-              : "Try a different search."}
+              : "Try a different search or filter."}
           </p>
           {contacts.length === 0 && (
             <button
@@ -404,13 +514,22 @@ export default function Contacts() {
                       {contact.source || "No source"}
                     </p>
                   </div>
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${statusClasses(
-                      contact.status
-                    )}`}
-                  >
-                    {contact.status}
-                  </span>
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    <span
+                      className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${typeClasses(
+                        contact.contactType
+                      )}`}
+                    >
+                      {contact.contactType}
+                    </span>
+                    <span
+                      className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${activityClasses(
+                        contact.activityStatus
+                      )}`}
+                    >
+                      {contact.activityStatus}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-2.5">
@@ -596,19 +715,47 @@ export default function Contacts() {
 
                 <div>
                   <label className={labelClass}>
-                    Status
+                    Contact Type
                   </label>
                   <select
-                    value={draft.status}
+                    value={draft.contactType}
                     onChange={(event) =>
                       setField(
-                        "status",
-                        event.target.value as ContactStatus
+                        "contactType",
+                        event.target.value as ContactType
                       )
                     }
                     className={inputClass}
                   >
-                    {STATUS_OPTIONS.map((option) => (
+                    {CONTACT_TYPE_OPTIONS.map(
+                      (option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                        >
+                          {option.label}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={labelClass}>
+                    Activity
+                  </label>
+                  <select
+                    value={draft.activityStatus}
+                    onChange={(event) =>
+                      setField(
+                        "activityStatus",
+                        event.target
+                          .value as ContactActivity
+                      )
+                    }
+                    className={inputClass}
+                  >
+                    {ACTIVITY_OPTIONS.map((option) => (
                       <option
                         key={option.value}
                         value={option.value}

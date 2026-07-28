@@ -12,7 +12,8 @@ import type {
 import { supabase } from "../lib/supabase";
 import type {
   Contact,
-  ContactStatus,
+  ContactActivity,
+  ContactType,
   LineItem,
   Project,
   ProjectStatus,
@@ -83,7 +84,8 @@ type ContactRow = {
   city: string;
   state: string;
   zip: string;
-  status: ContactStatus;
+  contact_type: ContactType;
+  activity_status: ContactActivity;
   source: string;
   notes: string;
   created_at: string;
@@ -190,7 +192,8 @@ function rowToContact(row: ContactRow): Contact {
     city: row.city,
     state: row.state,
     zip: row.zip,
-    status: row.status,
+    contactType: row.contact_type,
+    activityStatus: row.activity_status,
     source: row.source,
     notes: row.notes,
     createdAt: row.created_at,
@@ -212,7 +215,8 @@ function contactToDatabase(
     city: contact.city,
     state: contact.state,
     zip: contact.zip,
-    status: contact.status,
+    contact_type: contact.contactType,
+    activity_status: contact.activityStatus,
     source: contact.source,
     notes: contact.notes,
     created_at: contact.createdAt,
@@ -229,7 +233,8 @@ function contactUpdates(contact: Contact) {
     city: contact.city,
     state: contact.state,
     zip: contact.zip,
-    status: contact.status,
+    contact_type: contact.contactType,
+    activity_status: contact.activityStatus,
     source: contact.source,
     notes: contact.notes,
     updated_at: contact.updatedAt,
