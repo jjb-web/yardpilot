@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { Leaf } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -13,6 +13,31 @@ type FormData = {
 
 export default function Login() {
   const navigate = useNavigate();
+  useEffect(() => {
+  async function checkSession() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session) {
+      navigate("/app/dashboard", { replace: true });
+    }
+  }
+
+  checkSession();
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (session) {
+      navigate("/app/dashboard", { replace: true });
+    }
+  });
+
+  return () => {
+    subscription.unsubscribe();
+  };
+}, [navigate]);
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
