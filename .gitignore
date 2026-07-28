@@ -3,3 +3,7 @@ node_modules/
 .env.local
 dist/
 .vite/
+Vercel
+→ YardPilot
+→ Settings
+→ Environment Variables

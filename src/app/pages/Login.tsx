@@ -8,7 +8,6 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router";
-import { Leaf } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 type FormData = {

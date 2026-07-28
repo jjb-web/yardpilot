@@ -13,7 +13,6 @@ import {
   PlusCircle,
   User,
   Users,
-  Leaf,
   Menu,
   X,
   LogOut,
@@ -82,11 +81,12 @@ export default function AppLayout() {
     <div className="flex flex-col h-full">
       <div className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-green-400 rounded-lg flex items-center justify-center shrink-0">
-            <Leaf
-              size={16}
-              className="text-green-950"
-            />
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+            <img
+              src="/yardpilot-logo.png"
+              alt="YardPilotUSA logo"
+              className="w-full h-full object-contain"
+           />
           </div>
           <div>
             <p

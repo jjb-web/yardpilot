@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { CheckCircle, Zap, Camera, Users, FileText, Bell, Smartphone, ChevronRight, Leaf } from "lucide-react";
+import { CheckCircle, Zap, Camera, Users, FileText, Bell, Smartphone, ChevronRight, } from "lucide-react";
 
 const problems = [
   "Creating quotes manually for every job",
