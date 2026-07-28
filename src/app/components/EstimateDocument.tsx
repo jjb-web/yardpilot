@@ -174,10 +174,15 @@ export default function EstimateDocument({
                 <tr>
                   <td className="px-4 py-3 font-medium">Labor</td>
                   <td className="px-4 py-3 text-right text-gray-600">
-                    {project.laborHours} hours
+                    {(project.laborAssignments.length
+                      ? project.laborAssignments.reduce(
+                          (sum, assignment) => sum + Number(assignment.hours || 0),
+                          0
+                        )
+                      : project.laborHours).toLocaleString("en-US")} hours
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600">
-                    {formatMoney(project.laborRate)} / hr
+                    Crew labor
                   </td>
                   <td className="px-4 py-3 text-right font-semibold">
                     {formatMoney(totals.labor)}
@@ -256,6 +261,43 @@ export default function EstimateDocument({
               {property?.clientNotes && <p>{property.clientNotes}</p>}
               {project.clientNotes && <p>{project.clientNotes}</p>}
             </div>
+          </section>
+        )}
+
+        {project.respondedAt && (
+          <section className={`rounded-xl border p-5 ${
+            project.estimateStatus === "accepted"
+              ? "border-green-200 bg-green-50"
+              : "border-red-200 bg-red-50"
+          }`}>
+            <p className={`text-xs uppercase tracking-wider font-bold mb-2 ${
+              project.estimateStatus === "accepted"
+                ? "text-green-700"
+                : "text-red-700"
+            }`}>
+              Client response — {project.estimateStatus}
+            </p>
+            <p className="text-sm font-semibold text-gray-900">
+              {project.responseName || "Client"}
+            </p>
+            {project.responseMessage && (
+              <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">
+                {project.responseMessage}
+              </p>
+            )}
+            {project.signatureData && (
+              <div className="mt-4">
+                <p className="text-xs text-gray-500 mb-2">Signature</p>
+                <img
+                  src={project.signatureData}
+                  alt={`Signature from ${project.responseName || "client"}`}
+                  className="max-h-24 max-w-xs object-contain bg-white rounded-lg border border-gray-200 px-3 py-2"
+                />
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-3">
+              Responded {new Date(project.respondedAt).toLocaleString("en-US")}
+            </p>
           </section>
         )}
 

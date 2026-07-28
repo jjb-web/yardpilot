@@ -87,9 +87,10 @@ export default function Estimates() {
   async function shareEstimate(project: Project) {
     setActionMessage("");
     try {
-      const sharedProject = project.shareEnabled
-        ? project
-        : await setProjectSharing(project.id, true);
+      const sharedProject =
+        project.shareEnabled && project.estimateStatus !== "draft"
+          ? project
+          : await setProjectSharing(project.id, true);
       const url = estimateShareUrl(sharedProject.shareToken);
       const shareData = {
         title: `${sharedProject.estimateNumber} - ${sharedProject.name}`,
@@ -99,10 +100,10 @@ export default function Estimates() {
 
       if (navigator.share) {
         await navigator.share(shareData);
-        setActionMessage("Estimate shared.");
+        setActionMessage("Estimate marked Sent and shared.");
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(url);
-        setActionMessage("Public estimate link copied.");
+        setActionMessage("Estimate marked Sent and public link copied.");
       } else {
         window.prompt("Copy this public estimate link:", url);
       }

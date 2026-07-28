@@ -333,3 +333,35 @@
     break-inside: avoid;
   }
 }
+
+/* Mobile form reliability -------------------------------------------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Remove browser spinner controls. YardPilot's numeric fields are typed
+   directly so users can erase the initial value and enter any amount. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+@media (max-width: 767px) {
+  /* iOS Safari zooms focused form controls whose text is smaller than 16px. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .app-shell {
+    min-height: 100dvh;
+  }
+}

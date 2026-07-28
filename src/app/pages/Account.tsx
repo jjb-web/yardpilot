@@ -40,10 +40,14 @@ export default function Account() {
           </div>
           <div className="rounded-lg bg-gray-50 p-4">
             <div className="flex items-center gap-2 mb-2 text-gray-500">
-              <Building2 size={15} /> <span className={labelClass}>Company</span>
+              <Building2 size={15} />
+              <span className={labelClass}>Profile business name</span>
             </div>
             <p className="font-semibold text-gray-900">
-              {user?.company || activeWorkspace?.name || "—"}
+              {user?.company || "Not set"}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              This optional profile field does not create or claim a company workspace.
             </p>
           </div>
           <div className="rounded-lg bg-gray-50 p-4">
@@ -70,7 +74,7 @@ export default function Account() {
           <div>
             <p className={labelClass}>Role</p>
             <p className="font-semibold text-gray-900 mt-1 capitalize">
-              {role || "—"}
+              {role === "co_owner" ? "Co-owner" : role || "—"}
             </p>
           </div>
           <div>

@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
 import {
+  BriefcaseBusiness,
   Check,
   Clipboard,
   Copy,
+  Edit3,
+  ExternalLink,
+  Mail,
   Plus,
   ShieldCheck,
   Trash2,
@@ -11,18 +15,31 @@ import {
   X,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
 import type {
   JobRequest,
+  WorkspaceMember,
   WorkspaceRole,
 } from "../data/types";
 
 function uid() {
-  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    Math.random().toString(36).slice(2, 11)
+  );
 }
 
-function toLocalInput(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
+function roleLabel(role: WorkspaceRole) {
+  switch (role) {
+    case "owner":
+      return "Owner";
+    case "co_owner":
+      return "Co-owner";
+    case "manager":
+      return "Manager";
+    default:
+      return "Employee";
+  }
 }
 
 export default function Team() {
@@ -38,10 +55,11 @@ export default function Team() {
     jobRequests,
     jobRequestsLoading,
     switchWorkspace,
+    createCompanyWorkspace,
     createWorkspaceInvite,
     revokeWorkspaceInvite,
     acceptWorkspaceInvite,
-    updateWorkspaceMemberRole,
+    updateWorkspaceMember,
     removeWorkspaceMember,
     addJobRequest,
     approveJobRequest,
@@ -49,11 +67,27 @@ export default function Team() {
     deleteJobRequest,
   } = useApp();
 
-  const manager = role === "owner" || role === "partner";
+  const manager = role !== "employee";
+  const admin = role === "owner" || role === "co_owner";
+  const canInvite = manager;
+
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"partner" | "employee">("employee");
+  const [inviteRole, setInviteRole] = useState<
+    Exclude<WorkspaceRole, "owner">
+  >("employee");
+  const [lastInviteLink, setLastInviteLink] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  const [companyOpen, setCompanyOpen] = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const [memberOpen, setMemberOpen] = useState(false);
+  const [selectedMember, setSelectedMember] =
+    useState<WorkspaceMember | null>(null);
+  const [memberRole, setMemberRole] = useState<
+    Exclude<WorkspaceRole, "owner">
+  >("employee");
+  const [positionTitle, setPositionTitle] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestDraft, setRequestDraft] = useState({
     title: "",
@@ -66,16 +100,22 @@ export default function Team() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const pendingInvites = workspaceInvites.filter((invite) => invite.status === "pending");
+  const pendingInvites = workspaceInvites.filter(
+    (invite) => invite.status === "pending"
+  );
   const pendingRequests = useMemo(
     () => jobRequests.filter((request) => request.status === "pending"),
     [jobRequests]
   );
 
   const inputClass =
-    "w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30";
+    "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30";
   const labelClass =
     "block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5";
+
+  function inviteLink(token: string) {
+    return `${window.location.origin}/login?mode=register&invite=${encodeURIComponent(token)}`;
+  }
 
   async function createInvite() {
     setError("");
@@ -87,12 +127,32 @@ export default function Team() {
     setSaving(true);
     try {
       const invite = await createWorkspaceInvite(inviteEmail, inviteRole);
-      await navigator.clipboard.writeText(invite.token).catch(() => undefined);
-      setMessage(`Invite created. The code ${invite.token} was copied.`);
+      const link = inviteLink(invite.token);
+      setLastInviteLink(link);
+      await navigator.clipboard?.writeText(link).catch(() => undefined);
+
+      const { error: sendError } = await supabase.functions.invoke(
+        "send-team-invite",
+        {
+          body: {
+            invitationId: invite.id,
+          },
+        }
+      );
+
+      setMessage(
+        sendError
+          ? "Invite created and link copied. Automatic email is not configured yet, so send the copied link manually."
+          : `Invite emailed to ${invite.email} and copied to your clipboard.`
+      );
       setInviteEmail("");
       setInviteOpen(false);
     } catch (inviteError) {
-      setError(inviteError instanceof Error ? inviteError.message : "Could not create invite.");
+      setError(
+        inviteError instanceof Error
+          ? inviteError.message
+          : "Could not create invite."
+      );
     } finally {
       setSaving(false);
     }
@@ -102,32 +162,104 @@ export default function Team() {
     setError("");
     setMessage("");
     if (!joinCode.trim()) {
-      setError("Paste an invite code first.");
+      setError("Paste an invite code or invite link first.");
       return;
     }
     setSaving(true);
     try {
-      await acceptWorkspaceInvite(joinCode);
+      let code = joinCode.trim();
+      try {
+        const parsed = new URL(code);
+        code = parsed.searchParams.get("invite") || code;
+      } catch {
+        // The value is a plain code.
+      }
+      await acceptWorkspaceInvite(code);
       setJoinCode("");
       setMessage("Workspace joined successfully.");
     } catch (joinError) {
-      setError(joinError instanceof Error ? joinError.message : "Could not accept invite.");
+      setError(
+        joinError instanceof Error
+          ? joinError.message
+          : "Could not accept invite."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createCompany() {
+    setError("");
+    if (!companyName.trim()) {
+      setError("Enter a company name.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createCompanyWorkspace(companyName);
+      setCompanyOpen(false);
+      setCompanyName("");
+      setMessage("Company workspace created. You are its owner.");
+    } catch (companyError) {
+      setError(
+        companyError instanceof Error
+          ? companyError.message
+          : "Could not create company."
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function copyInvite(token: string) {
-    await navigator.clipboard.writeText(token);
-    setMessage("Invite code copied.");
+    const link = inviteLink(token);
+    await navigator.clipboard?.writeText(link);
+    setLastInviteLink(link);
+    setMessage("Invite link copied.");
   }
 
-  async function changeRole(membershipId: string, nextRole: Exclude<WorkspaceRole, "owner">) {
+  function emailInvite(email: string, token: string) {
+    const link = inviteLink(token);
+    const subject = encodeURIComponent(
+      `Join ${activeWorkspace?.name ?? "my team"} on YardPilot`
+    );
+    const body = encodeURIComponent(
+      `You have been invited to join ${activeWorkspace?.name ?? "a YardPilot workspace"}.\n\nCreate or sign into your account using this link:\n${link}`
+    );
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+  }
+
+  function editMember(member: WorkspaceMember) {
+    if (member.role === "owner") return;
+    setSelectedMember(member);
+    setMemberRole(member.role as Exclude<WorkspaceRole, "owner">);
+    setPositionTitle(member.positionTitle);
+    setHourlyRate(member.hourlyRate ? String(member.hourlyRate) : "");
+    setMemberOpen(true);
+  }
+
+  async function saveMember() {
+    if (!selectedMember) return;
+    setSaving(true);
     setError("");
     try {
-      await updateWorkspaceMemberRole(membershipId, nextRole);
-    } catch (roleError) {
-      setError(roleError instanceof Error ? roleError.message : "Could not update member role.");
+      await updateWorkspaceMember(
+        selectedMember.id,
+        memberRole,
+        positionTitle,
+        Number(hourlyRate || 0)
+      );
+      setMemberOpen(false);
+      setSelectedMember(null);
+      setMessage(`${selectedMember.name}'s team profile was updated.`);
+    } catch (memberError) {
+      setError(
+        memberError instanceof Error
+          ? memberError.message
+          : "Could not update the team member."
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -135,8 +267,13 @@ export default function Team() {
     if (!window.confirm(`Remove ${name} from this workspace?`)) return;
     try {
       await removeWorkspaceMember(id);
+      setMessage(`${name} was removed from the workspace.`);
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Could not remove member.");
+      setError(
+        removeError instanceof Error
+          ? removeError.message
+          : "Could not remove member."
+      );
     }
   }
 
@@ -179,9 +316,13 @@ export default function Team() {
         scopeDescription: "",
         proposedStart: "",
       });
-      setMessage("Job proposal sent to the owner/partners.");
+      setMessage("Job proposal sent for approval.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not create job request.");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not create job request."
+      );
     } finally {
       setSaving(false);
     }
@@ -193,7 +334,11 @@ export default function Team() {
       await approveJobRequest(request.id);
       setMessage(`${request.title} was approved and added as a job.`);
     } catch (approvalError) {
-      setError(approvalError instanceof Error ? approvalError.message : "Could not approve job request.");
+      setError(
+        approvalError instanceof Error
+          ? approvalError.message
+          : "Could not approve job request."
+      );
     }
   }
 
@@ -203,7 +348,11 @@ export default function Team() {
       await declineJobRequest(request.id, notes);
       setMessage(`${request.title} was declined.`);
     } catch (declineError) {
-      setError(declineError instanceof Error ? declineError.message : "Could not decline job request.");
+      setError(
+        declineError instanceof Error
+          ? declineError.message
+          : "Could not decline job request."
+      );
     }
   }
 
@@ -212,20 +361,32 @@ export default function Team() {
     try {
       await deleteJobRequest(request.id);
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Could not delete request.");
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Could not delete request."
+      );
     }
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-7">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Team</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Team & Workspaces</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Partners share the full dashboard. Employees see assigned work, their schedule, and non-financial job details.
+            Personal workspaces stay private. Company workspaces are joined by
+            invitation with owner, co-owner, manager, or employee access.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setCompanyOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 cursor-pointer"
+          >
+            <BriefcaseBusiness size={16} /> Create Company
+          </button>
           <button
             type="button"
             onClick={() => setRequestOpen(true)}
@@ -233,13 +394,13 @@ export default function Team() {
           >
             <Clipboard size={16} /> Propose Job
           </button>
-          {manager && (
+          {canInvite && activeWorkspace?.kind === "company" && (
             <button
               type="button"
               onClick={() => setInviteOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer"
             >
-              <UserPlus size={16} /> Add Partner / Employee
+              <UserPlus size={16} /> Invite Team Member
             </button>
           )}
         </div>
@@ -253,24 +414,39 @@ export default function Team() {
       {message && (
         <div className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           {message}
+          {lastInviteLink && (
+            <a
+              href={lastInviteLink}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-2 inline-flex items-center gap-1 font-semibold underline"
+            >
+              Open invite <ExternalLink size={12} />
+            </a>
+          )}
         </div>
       )}
 
       <div className="grid lg:grid-cols-[1fr_340px] gap-6 mb-6">
-        <section className="bg-white rounded-xl border border-gray-200">
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
             <Users size={17} className="text-green-700" />
             <h2 className="font-bold text-gray-900">Workspace Members</h2>
           </div>
           <div className="divide-y divide-gray-100">
             {workspaceMembers.map((member) => (
-              <div key={member.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div
+                key={member.id}
+                className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3"
+              >
                 <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold shrink-0">
                   {member.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold text-gray-900 truncate">{member.name}</p>
+                    <p className="font-semibold text-gray-900 truncate">
+                      {member.name}
+                    </p>
                     {member.userId === authUserId && (
                       <span className="text-xs text-gray-400">You</span>
                     )}
@@ -278,33 +454,37 @@ export default function Team() {
                       <ShieldCheck size={14} className="text-green-700" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 truncate">{member.email}</p>
+                  <p className="text-sm text-gray-500 truncate">
+                    {member.email}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {member.positionTitle || roleLabel(member.role)}
+                    {manager && member.hourlyRate > 0
+                      ? ` · $${member.hourlyRate.toFixed(2)}/hr`
+                      : ""}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {manager && member.role !== "owner" && member.userId !== authUserId ? (
-                    <select
-                      value={member.role}
-                      onChange={(event) =>
-                        void changeRole(
-                          member.id,
-                          event.target.value as "partner" | "employee"
-                        )
-                      }
-                      className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm capitalize"
+                  <span className="text-xs font-semibold capitalize rounded-full bg-gray-100 text-gray-600 px-2.5 py-1">
+                    {roleLabel(member.role)}
+                  </span>
+                  {(admin || (role === "manager" && member.role === "employee")) &&
+                    member.role !== "owner" && (
+                    <button
+                      type="button"
+                      onClick={() => editMember(member)}
+                      className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 cursor-pointer"
+                      aria-label={`Edit ${member.name}`}
                     >
-                      <option value="partner">Partner</option>
-                      <option value="employee">Employee</option>
-                    </select>
-                  ) : (
-                    <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold capitalize">
-                      {member.role}
-                    </span>
+                      <Edit3 size={15} />
+                    </button>
                   )}
-                  {manager && member.role !== "owner" && member.userId !== authUserId && (
+                  {admin && member.role !== "owner" && member.userId !== authUserId && (
                     <button
                       type="button"
                       onClick={() => void removeMember(member.id, member.name)}
                       className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-600 cursor-pointer"
+                      aria-label={`Remove ${member.name}`}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -315,118 +495,139 @@ export default function Team() {
           </div>
         </section>
 
-        <div className="space-y-5">
+        <aside className="space-y-5">
           <section className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-bold text-gray-900 mb-3">Active Workspace</h2>
+            <h2 className="font-bold text-gray-900">Active Workspace</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Switch between your private workspace and companies you belong to.
+            </p>
             <select
               value={activeWorkspaceId ?? ""}
               onChange={(event) => void switchWorkspace(event.target.value)}
-              className={inputClass}
+              className={`${inputClass} mt-4`}
             >
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
-                  {workspace.name} — {workspace.role}
+                  {workspace.name} — {roleLabel(workspace.role)}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-400 mt-2">
-              Current role: <span className="capitalize font-semibold">{role ?? "loading"}</span>
-            </p>
+            {activeWorkspace && (
+              <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                {activeWorkspace.isPersonal
+                  ? "Private personal workspace"
+                  : `Company workspace · ${roleLabel(activeWorkspace.role)}`}
+              </div>
+            )}
           </section>
 
           <section className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-bold text-gray-900 mb-3">Join a Workspace</h2>
-            <p className="text-sm text-gray-500 mb-3">
-              Paste the invite code sent by an owner or partner. You must be signed in with the invited email.
+            <h2 className="font-bold text-gray-900">Join a Company</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Paste the invite code or full invite link sent to your email.
             </p>
-            <div className="space-y-2">
-              <input
-                value={joinCode}
-                onChange={(event) => setJoinCode(event.target.value)}
-                placeholder="Invite code"
-                className={inputClass}
-              />
-              <button
-                type="button"
-                onClick={() => void joinWorkspace()}
-                disabled={saving}
-                className="w-full px-4 py-2.5 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
-              >
-                Join Workspace
-              </button>
-            </div>
+            <input
+              value={joinCode}
+              onChange={(event) => setJoinCode(event.target.value)}
+              placeholder="Invite code or link"
+              className={`${inputClass} mt-4`}
+            />
+            <button
+              type="button"
+              onClick={() => void joinWorkspace()}
+              disabled={saving}
+              className="w-full mt-3 px-4 py-2.5 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
+            >
+              Join Workspace
+            </button>
           </section>
-        </div>
+
+          {manager && pendingInvites.length > 0 && (
+            <section className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-bold text-gray-900">Pending Invites</h2>
+              <div className="space-y-3 mt-4">
+                {pendingInvites.map((invite) => (
+                  <div key={invite.id} className="rounded-lg border border-gray-200 p-3">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {invite.email}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {roleLabel(invite.role)} · expires {new Date(invite.expiresAt).toLocaleDateString("en-US")}
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => void copyInvite(invite.token)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 cursor-pointer"
+                      >
+                        <Copy size={13} /> Copy Link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => emailInvite(invite.email, invite.token)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 cursor-pointer"
+                      >
+                        <Mail size={13} /> Email
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void revokeWorkspaceInvite(invite.id)}
+                        className="ml-auto text-xs font-semibold text-red-600 cursor-pointer"
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </aside>
       </div>
 
-      {manager && (
-        <section className="bg-white rounded-xl border border-gray-200 mb-6">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">Pending Invites</h2>
-            <span className="text-sm text-gray-400">{pendingInvites.length}</span>
-          </div>
-          {pendingInvites.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-gray-400">No pending invites.</div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {pendingInvites.map((invite) => (
-                <div key={invite.id} className="px-5 py-4 flex flex-wrap items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{invite.email}</p>
-                    <p className="text-xs text-gray-400 capitalize">
-                      {invite.role} · expires {new Date(invite.expiresAt).toLocaleDateString("en-US")}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void copyInvite(invite.token)}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer"
-                  >
-                    <Copy size={14} /> Copy Code
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void revokeWorkspaceInvite(invite.id)}
-                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-red-600 cursor-pointer"
-                  >
-                    Revoke
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="bg-white rounded-xl border border-gray-200">
+      <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="font-bold text-gray-900">Job Proposals</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Employees can propose jobs. Owners and partners approve them before they become real jobs.
+              Employees can propose work. Managers approve it before it becomes
+              a real job.
             </p>
           </div>
-          <span className="text-sm text-gray-400">{pendingRequests.length} pending</span>
+          <span className="text-sm text-gray-400">
+            {pendingRequests.length} pending
+          </span>
         </div>
 
         {jobRequestsLoading ? (
-          <div className="px-5 py-10 text-center text-sm text-gray-400">Loading proposals...</div>
+          <div className="px-5 py-10 text-center text-sm text-gray-400">
+            Loading proposals...
+          </div>
         ) : jobRequests.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-gray-400">No job proposals yet.</div>
+          <div className="px-5 py-10 text-center text-sm text-gray-400">
+            No job proposals yet.
+          </div>
         ) : (
           <div className="divide-y divide-gray-100">
             {jobRequests.map((request) => (
-              <div key={request.id} className="px-5 py-5 flex flex-col lg:flex-row lg:items-center gap-4">
+              <div
+                key={request.id}
+                className="px-5 py-5 flex flex-col lg:flex-row lg:items-center gap-4"
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold text-gray-900">{request.title}</p>
-                    <span className={`text-xs font-semibold capitalize px-2 py-1 rounded-full ${
-                      request.status === "approved"
-                        ? "bg-green-100 text-green-700"
-                        : request.status === "declined"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-amber-100 text-amber-700"
-                    }`}>
+                    <p className="font-semibold text-gray-900">
+                      {request.title}
+                    </p>
+                    <span
+                      className={`text-xs font-semibold capitalize px-2 py-1 rounded-full ${
+                        request.status === "approved"
+                          ? "bg-green-100 text-green-700"
+                          : request.status === "declined"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
                       {request.status}
                     </span>
                   </div>
@@ -434,20 +635,15 @@ export default function Team() {
                     Proposed by {request.requestedByName}
                     {request.client ? ` · ${request.client}` : ""}
                   </p>
-                  {request.address && <p className="text-sm text-gray-400 mt-1">{request.address}</p>}
-                  {request.scopeDescription && (
-                    <p className="text-sm text-gray-600 mt-2">{request.scopeDescription}</p>
-                  )}
-                  {request.proposedStart && (
-                    <p className="text-xs text-gray-400 mt-2">
-                      Proposed start: {new Date(request.proposedStart).toLocaleString("en-US", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
+                  {request.address && (
+                    <p className="text-sm text-gray-400 mt-1">
+                      {request.address}
                     </p>
                   )}
-                  {request.managerNotes && (
-                    <p className="text-xs text-red-600 mt-2">Manager note: {request.managerNotes}</p>
+                  {request.scopeDescription && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      {request.scopeDescription}
+                    </p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2 shrink-0">
@@ -469,15 +665,16 @@ export default function Team() {
                       </button>
                     </>
                   )}
-                  {(request.requestedBy === authUserId || manager) && request.status === "pending" && (
-                    <button
-                      type="button"
-                      onClick={() => void removeRequest(request)}
-                      className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-600 cursor-pointer"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                  {(request.requestedBy === authUserId || manager) &&
+                    request.status === "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => void removeRequest(request)}
+                        className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-600 cursor-pointer"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                 </div>
               </div>
             ))}
@@ -485,16 +682,50 @@ export default function Team() {
         )}
       </section>
 
+      {companyOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-bold text-gray-900">Create Company Workspace</h2>
+              <button type="button" onClick={() => setCompanyOpen(false)} className="text-gray-400 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 sm:p-6">
+              <label className={labelClass}>Company Name</label>
+              <input
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                placeholder="John's Lawn Care"
+                className={inputClass}
+              />
+              <p className="text-sm text-gray-500 mt-3">
+                Company names are unique. You will be the owner and can invite
+                co-owners, managers, and employees afterward.
+              </p>
+            </div>
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button type="button" onClick={() => setCompanyOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">
+                Cancel
+              </button>
+              <button type="button" onClick={() => void createCompany()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+                Create Company
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {inviteOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-bold text-gray-900">Add Partner or Employee</h2>
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-bold text-gray-900">Invite Team Member</h2>
               <button type="button" onClick={() => setInviteOpen(false)} className="text-gray-400 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-5 sm:p-6 space-y-4">
               <div>
                 <label className={labelClass}>Email Address</label>
                 <input
@@ -508,28 +739,103 @@ export default function Team() {
                 <label className={labelClass}>Access Level</label>
                 <select
                   value={inviteRole}
-                  onChange={(event) => setInviteRole(event.target.value as "partner" | "employee")}
+                  onChange={(event) =>
+                    setInviteRole(
+                      event.target.value as Exclude<WorkspaceRole, "owner">
+                    )
+                  }
                   className={inputClass}
                 >
-                  <option value="employee">Employee — assigned jobs and schedule only</option>
-                  <option value="partner">Partner — full shared dashboard</option>
+                  <option value="employee">Employee — assigned work only</option>
+                  {admin && (
+                    <option value="manager">Manager — operations and employees</option>
+                  )}
+                  {admin && (
+                    <option value="co_owner">Co-owner — full company access</option>
+                  )}
                 </select>
               </div>
               <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                The person will receive an invite code from you. They sign in with this exact email, open Team, and paste the code.
+                YardPilot tries to email the invite automatically. It always
+                creates a secure link you can copy as a fallback.
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
-              <button type="button" onClick={() => setInviteOpen(false)} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 cursor-pointer">
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button type="button" onClick={() => setInviteOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => void createInvite()}
-                disabled={saving}
-                className="px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
-              >
-                Create Invite
+              <button type="button" onClick={() => void createInvite()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+                Send Invite
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {memberOpen && selectedMember && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-gray-900">Edit Team Member</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{selectedMember.name}</p>
+              </div>
+              <button type="button" onClick={() => setMemberOpen(false)} className="text-gray-400 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 sm:p-6 space-y-4">
+              <div>
+                <label className={labelClass}>Role</label>
+                <select
+                  value={memberRole}
+                  onChange={(event) =>
+                    setMemberRole(
+                      event.target.value as Exclude<WorkspaceRole, "owner">
+                    )
+                  }
+                  className={inputClass}
+                >
+                  <option value="employee">Employee</option>
+                  {admin && <option value="manager">Manager</option>}
+                  {admin && <option value="co_owner">Co-owner</option>}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Position / Title</label>
+                <input
+                  value={positionTitle}
+                  onChange={(event) => setPositionTitle(event.target.value)}
+                  placeholder="Crew Lead, Irrigation Technician..."
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Internal Labor Rate Per Hour</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={hourlyRate}
+                    onChange={(event) =>
+                      setHourlyRate(event.target.value.replace(/[^0-9.]/g, ""))
+                    }
+                    placeholder="0.00"
+                    className={`${inputClass} pl-7`}
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Used automatically when this person is assigned hours on an estimate. Employees cannot see other workers' rates.
+                </p>
+              </div>
+            </div>
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button type="button" onClick={() => setMemberOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">
+                Cancel
+              </button>
+              <button type="button" onClick={() => void saveMember()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+                Save Team Profile
               </button>
             </div>
           </div>
@@ -537,70 +843,39 @@ export default function Team() {
       )}
 
       {requestOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-2xl max-h-[100dvh] sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h2 className="font-bold text-gray-900">Propose a Job</h2>
               <button type="button" onClick={() => setRequestOpen(false)} className="text-gray-400 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 grid sm:grid-cols-2 gap-4">
+            <div className="p-5 sm:p-6 grid sm:grid-cols-2 gap-4 overflow-y-auto">
               <div className="sm:col-span-2">
                 <label className={labelClass}>Job Title</label>
-                <input
-                  value={requestDraft.title}
-                  onChange={(event) => setRequestDraft((current) => ({ ...current, title: event.target.value }))}
-                  className={inputClass}
-                />
+                <input value={requestDraft.title} onChange={(event) => setRequestDraft((current) => ({ ...current, title: event.target.value }))} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Customer</label>
-                <input
-                  value={requestDraft.client}
-                  onChange={(event) => setRequestDraft((current) => ({ ...current, client: event.target.value }))}
-                  className={inputClass}
-                />
+                <input value={requestDraft.client} onChange={(event) => setRequestDraft((current) => ({ ...current, client: event.target.value }))} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Proposed Start</label>
-                <input
-                  type="datetime-local"
-                  value={requestDraft.proposedStart}
-                  onChange={(event) => setRequestDraft((current) => ({ ...current, proposedStart: event.target.value }))}
-                  className={inputClass}
-                />
+                <input type="datetime-local" value={requestDraft.proposedStart} onChange={(event) => setRequestDraft((current) => ({ ...current, proposedStart: event.target.value }))} className={inputClass} />
               </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>Address</label>
-                <input
-                  value={requestDraft.address}
-                  onChange={(event) => setRequestDraft((current) => ({ ...current, address: event.target.value }))}
-                  className={inputClass}
-                />
+                <input value={requestDraft.address} onChange={(event) => setRequestDraft((current) => ({ ...current, address: event.target.value }))} className={inputClass} />
               </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>Scope / Description</label>
-                <textarea
-                  rows={4}
-                  value={requestDraft.scopeDescription}
-                  onChange={(event) => setRequestDraft((current) => ({ ...current, scopeDescription: event.target.value }))}
-                  className={inputClass}
-                />
+                <textarea rows={4} value={requestDraft.scopeDescription} onChange={(event) => setRequestDraft((current) => ({ ...current, scopeDescription: event.target.value }))} className={inputClass} />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
-              <button type="button" onClick={() => setRequestOpen(false)} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 cursor-pointer">
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void createJobRequest()}
-                disabled={saving}
-                className="px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
-              >
-                Send Proposal
-              </button>
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2 shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <button type="button" onClick={() => setRequestOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button>
+              <button type="button" onClick={() => void createJobRequest()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">Send Proposal</button>
             </div>
           </div>
         </div>

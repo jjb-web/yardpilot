@@ -21,6 +21,7 @@ import type {
   InvoiceStatus,
   JobRequest,
   JobRequestStatus,
+  LaborAssignment,
   LineItem,
   Project,
   ProjectStatus,
@@ -85,15 +86,18 @@ type AppContextType = {
 
   switchWorkspace: (workspaceId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
+  createCompanyWorkspace: (name: string) => Promise<string>;
   createWorkspaceInvite: (
     email: string,
     role: Exclude<WorkspaceRole, "owner">
   ) => Promise<WorkspaceInvite>;
   revokeWorkspaceInvite: (id: string) => Promise<void>;
   acceptWorkspaceInvite: (code: string) => Promise<string>;
-  updateWorkspaceMemberRole: (
+  updateWorkspaceMember: (
     membershipId: string,
-    role: Exclude<WorkspaceRole, "owner">
+    role: Exclude<WorkspaceRole, "owner">,
+    positionTitle: string,
+    hourlyRate: number
   ) => Promise<void>;
   removeWorkspaceMember: (membershipId: string) => Promise<void>;
 
@@ -153,6 +157,9 @@ type ProfileRow = {
 type WorkspaceRow = {
   id: string;
   name: string;
+  slug: string;
+  kind: Workspace["kind"];
+  is_personal: boolean;
   created_by: string;
   role: WorkspaceRole;
   created_at: string;
@@ -167,6 +174,8 @@ type WorkspaceMemberRow = {
   email: string;
   company: string;
   phone: string;
+  position_title: string;
+  hourly_rate: number | string;
   created_at: string;
 };
 
@@ -211,12 +220,27 @@ type ProjectRow = {
   notes: string;
   share_token: string;
   share_enabled: boolean;
+  sent_at: string | null;
+  viewed_at: string | null;
+  responded_at: string | null;
+  accepted_at: string | null;
+  declined_at: string | null;
+  response_name: string;
+  response_message: string;
+  signature_data: string;
   scheduled_start: string | null;
   scheduled_end: string | null;
   follow_up_at: string | null;
   assigned_member_ids?: string[] | null;
   created_at: string;
   updated_at: string;
+};
+
+type ProjectAssignmentRow = {
+  project_id: string;
+  user_id: string;
+  hours: number | string;
+  hourly_rate_snapshot: number | string;
 };
 
 type ContactRow = {
@@ -396,6 +420,9 @@ function rowToWorkspace(row: WorkspaceRow): Workspace {
   return {
     id: row.id,
     name: row.name,
+    slug: row.slug,
+    kind: row.kind,
+    isPersonal: Boolean(row.is_personal),
     createdBy: row.created_by,
     role: row.role,
     createdAt: row.created_at,
@@ -412,6 +439,8 @@ function rowToWorkspaceMember(row: WorkspaceMemberRow): WorkspaceMember {
     email: row.email,
     company: row.company,
     phone: row.phone,
+    positionTitle: row.position_title ?? "",
+    hourlyRate: Number(row.hourly_rate ?? 0),
     createdAt: row.created_at,
   };
 }
@@ -431,7 +460,9 @@ function rowToWorkspaceInvite(row: WorkspaceInviteRow): WorkspaceInvite {
 
 function rowToProject(
   row: ProjectRow,
-  assignments: string[] = row.assigned_member_ids ?? []
+  laborAssignments: LaborAssignment[] = (row.assigned_member_ids ?? []).map(
+    (userId) => ({ userId, name: "Team member", hours: 0, hourlyRate: 0 })
+  )
 ): Project {
   return {
     id: row.id,
@@ -451,6 +482,7 @@ function rowToProject(
     squareFootage: Number(row.square_footage),
     laborRate: Number(row.labor_rate),
     laborHours: Number(row.labor_hours),
+    laborAssignments,
     lineItems: normalizeLineItems(row.line_items),
     aiEstimate: row.estimate_summary,
     scopeDescription: row.scope_description ?? "",
@@ -462,10 +494,18 @@ function rowToProject(
     notes: row.notes ?? "",
     shareToken: row.share_token,
     shareEnabled: Boolean(row.share_enabled),
+    sentAt: row.sent_at ?? null,
+    viewedAt: row.viewed_at ?? null,
+    respondedAt: row.responded_at ?? null,
+    acceptedAt: row.accepted_at ?? null,
+    declinedAt: row.declined_at ?? null,
+    responseName: row.response_name ?? "",
+    responseMessage: row.response_message ?? "",
+    signatureData: row.signature_data ?? "",
     scheduledStart: row.scheduled_start,
     scheduledEnd: row.scheduled_end,
     followUpAt: row.follow_up_at,
-    assignedMemberIds: assignments,
+    assignedMemberIds: laborAssignments.map((assignment) => assignment.userId),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -726,8 +766,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   function ensureManager() {
-    if (role !== "owner" && role !== "partner") {
-      throw new Error("Only an owner or partner can do that.");
+    if (role !== "owner" && role !== "co_owner" && role !== "manager") {
+      throw new Error("Only an owner, co-owner, or manager can do that.");
     }
   }
 
@@ -782,19 +822,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (requestId !== workspaceRequestRef.current) return;
       setWorkspaceMembers(members);
 
-      const manager = workspaceRole === "owner" || workspaceRole === "partner";
+      const manager = workspaceRole !== "employee";
 
-      const projectPromise: Promise<any> = manager
+      const projectPromise = manager
         ? Promise.all([
             supabase
               .from("projects")
               .select("*")
               .eq("workspace_id", workspaceId)
               .order("updated_at", { ascending: false }),
-            supabase
-              .from("project_assignments")
-              .select("project_id, user_id")
-              .eq("workspace_id", workspaceId),
+            supabase.rpc("get_project_labor_assignments", {
+              requested_workspace_id: workspaceId,
+            }),
           ])
         : supabase.rpc("get_employee_projects", {
             requested_workspace_id: workspaceId,
@@ -873,12 +912,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ];
         if (projectsQuery.error) throw new Error(projectsQuery.error.message);
         if (assignmentsQuery.error) throw new Error(assignmentsQuery.error.message);
-        const assignmentMap = new Map<string, string[]>();
+        const assignmentMap = new Map<string, LaborAssignment[]>();
         for (const row of assignmentsQuery.data ?? []) {
-          const candidate = row as { project_id: string; user_id: string };
+          const candidate = row as ProjectAssignmentRow;
+          const member = members.find((item) => item.userId === candidate.user_id);
           assignmentMap.set(candidate.project_id, [
             ...(assignmentMap.get(candidate.project_id) ?? []),
-            candidate.user_id,
+            {
+              userId: candidate.user_id,
+              name: member?.name ?? "Team member",
+              hours: Number(candidate.hours ?? 0),
+              hourlyRate: Number(candidate.hourly_rate_snapshot ?? member?.hourlyRate ?? 0),
+            },
           ]);
         }
         setProjects(
@@ -1031,6 +1076,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeWorkspaceId || role === "employee") return;
+
+    const channel = supabase
+      .channel(`yardpilot-projects-${activeWorkspaceId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "projects",
+          filter: `workspace_id=eq.${activeWorkspaceId}`,
+        },
+        () => {
+          window.setTimeout(() => {
+            void refreshCurrentBundle();
+          }, 0);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeWorkspaceId, role]);
+
   async function login(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -1064,6 +1135,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function refreshWorkspaces() {
     const loaded = await fetchWorkspaces();
     setWorkspaces(loaded);
+  }
+
+  async function createCompanyWorkspace(name: string) {
+    const { data, error } = await supabase.rpc("create_company_workspace", {
+      requested_name: name.trim(),
+    });
+    if (error) throw new Error(error.message);
+    const workspaceId = String(data);
+    const loaded = await fetchWorkspaces();
+    setWorkspaces(loaded);
+    const created = loaded.find((workspace) => workspace.id === workspaceId);
+    if (created) {
+      activeWorkspaceIdRef.current = created.id;
+      setActiveWorkspaceId(created.id);
+      localStorage.setItem("yardpilot-workspace", created.id);
+      await loadWorkspaceBundle(created.id, created.role);
+    }
+    return workspaceId;
   }
 
   async function switchWorkspace(workspaceId: string) {
@@ -1139,21 +1228,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return workspaceId;
   }
 
-  async function updateWorkspaceMemberRole(
+  async function updateWorkspaceMember(
     membershipId: string,
-    memberRole: Exclude<WorkspaceRole, "owner">
+    memberRole: Exclude<WorkspaceRole, "owner">,
+    positionTitle: string,
+    hourlyRate: number
   ) {
     ensureManager();
-    const workspaceId = currentWorkspaceOrThrow();
-    const { error } = await supabase
-      .from("workspace_memberships")
-      .update({ role: memberRole })
-      .eq("id", membershipId)
-      .eq("workspace_id", workspaceId);
+    const { error } = await supabase.rpc("update_workspace_member", {
+      requested_membership_id: membershipId,
+      requested_role: memberRole,
+      requested_position_title: positionTitle.trim(),
+      requested_hourly_rate: Math.max(0, Number(hourlyRate) || 0),
+    });
     if (error) throw new Error(error.message);
     setWorkspaceMembers((previous) =>
       previous.map((member) =>
-        member.id === membershipId ? { ...member, role: memberRole } : member
+        member.id === membershipId
+          ? {
+              ...member,
+              role: memberRole,
+              positionTitle: positionTitle.trim(),
+              hourlyRate: Math.max(0, Number(hourlyRate) || 0),
+            }
+          : member
       )
     );
   }
@@ -1232,15 +1330,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .eq("workspace_id", workspaceId);
     if (deleteError) throw new Error(deleteError.message);
 
-    const uniqueIds = [...new Set(project.assignedMemberIds)].filter(Boolean);
-    if (!uniqueIds.length) return;
+    const uniqueAssignments = new Map<string, LaborAssignment>();
+    for (const assignment of project.laborAssignments) {
+      if (!assignment.userId) continue;
+      uniqueAssignments.set(assignment.userId, assignment);
+    }
+    if (!uniqueAssignments.size) return;
 
     const { error } = await supabase.from("project_assignments").insert(
-      uniqueIds.map((memberId) => ({
+      [...uniqueAssignments.values()].map((assignment) => ({
         workspace_id: workspaceId,
         project_id: project.id,
-        user_id: memberId,
+        user_id: assignment.userId,
         assigned_by: userId,
+        hours: Math.max(0, Number(assignment.hours) || 0),
+        hourly_rate_snapshot: Math.max(0, Number(assignment.hourlyRate) || 0),
       }))
     );
     if (error) throw new Error(error.message);
@@ -1259,7 +1363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) throw new Error(error.message);
     await syncProjectAssignments(project);
-    const saved = rowToProject(data as ProjectRow, project.assignedMemberIds);
+    const saved = rowToProject(data as ProjectRow, project.laborAssignments);
     setProjects((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
     await Promise.all([refreshSchedule(), refreshFollowUps()]);
     return saved;
@@ -1277,7 +1381,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) throw new Error(error.message);
     await syncProjectAssignments(project);
-    const saved = rowToProject(data as ProjectRow, project.assignedMemberIds);
+    const saved = rowToProject(data as ProjectRow, project.laborAssignments);
     setProjects((previous) =>
       previous.map((item) => (item.id === saved.id ? saved : item))
     );
@@ -1288,16 +1392,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function setProjectSharing(id: string, enabled: boolean) {
     ensureManager();
     const workspaceId = currentWorkspaceOrThrow();
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = {
+      share_enabled: enabled,
+      updated_at: now,
+    };
+
+    if (enabled) {
+      updates.estimate_status = "sent";
+      updates.sent_at = now;
+    }
+
     const { data, error } = await supabase
       .from("projects")
-      .update({ share_enabled: enabled, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq("id", id)
       .eq("workspace_id", workspaceId)
       .select("*")
       .single();
     if (error) throw new Error(error.message);
     const existing = projects.find((project) => project.id === id);
-    const saved = rowToProject(data as ProjectRow, existing?.assignedMemberIds ?? []);
+    const saved = rowToProject(data as ProjectRow, existing?.laborAssignments ?? []);
     setProjects((previous) =>
       previous.map((project) => (project.id === id ? saved : project))
     );
@@ -1498,18 +1613,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ensureManager();
     const userId = currentUserOrThrow();
     const workspaceId = currentWorkspaceOrThrow();
-    if (!file.type.startsWith("image/")) throw new Error("Choose an image file.");
+    const extension = getFileExtension(file);
+    const supportedImageExtension = [
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "gif",
+      "heic",
+      "heif",
+    ].includes(extension);
+    if (!file.type.startsWith("image/") && !supportedImageExtension) {
+      throw new Error("Choose an image file.");
+    }
     if (file.size > 10 * 1024 * 1024) {
       throw new Error("Each photo must be 10 MB or smaller.");
     }
     const photoId = globalThis.crypto.randomUUID();
-    const path = `${userId}/${propertyId}/${photoId}.${getFileExtension(file)}`;
+    const path = `${userId}/${propertyId}/${photoId}.${extension}`;
+    const fallbackContentType =
+      extension === "heic"
+        ? "image/heic"
+        : extension === "heif"
+          ? "image/heif"
+          : "image/jpeg";
     const { error: uploadError } = await supabase.storage
       .from("property-photos")
       .upload(path, file, {
         cacheControl: "3600",
         upsert: false,
-        contentType: file.type,
+        contentType: file.type || fallbackContentType,
       });
     if (uploadError) throw new Error(uploadError.message);
     const now = new Date().toISOString();
@@ -1945,10 +2078,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         register,
         switchWorkspace,
         refreshWorkspaces,
+        createCompanyWorkspace,
         createWorkspaceInvite,
         revokeWorkspaceInvite,
         acceptWorkspaceInvite,
-        updateWorkspaceMemberRole,
+        updateWorkspaceMember,
         removeWorkspaceMember,
         refreshProjects,
         addProject,

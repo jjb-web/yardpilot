@@ -1,18 +1,36 @@
-import type { LineItem, Project, Property } from "../data/types";
-
-export function calculateEstimate(project: Pick<
+import type {
+  LaborAssignment,
+  LineItem,
   Project,
-  | "lineItems"
-  | "laborHours"
-  | "laborRate"
-  | "taxRate"
-  | "discountAmount"
->) {
+  Property,
+} from "../data/types";
+
+export function laborAssignmentsTotal(assignments: LaborAssignment[]) {
+  return assignments.reduce(
+    (sum, assignment) =>
+      sum + Number(assignment.hours || 0) * Number(assignment.hourlyRate || 0),
+    0
+  );
+}
+
+export function calculateEstimate(
+  project: Pick<
+    Project,
+    | "lineItems"
+    | "laborHours"
+    | "laborRate"
+    | "laborAssignments"
+    | "taxRate"
+    | "discountAmount"
+  >
+) {
   const materials = project.lineItems.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.unitCost),
     0
   );
-  const labor = Number(project.laborHours) * Number(project.laborRate);
+  const assignedLabor = laborAssignmentsTotal(project.laborAssignments ?? []);
+  const legacyLabor = Number(project.laborHours) * Number(project.laborRate);
+  const labor = project.laborAssignments?.length ? assignedLabor : legacyLabor;
   const subtotal = materials + labor;
   const tax = subtotal * (Number(project.taxRate) / 100);
   const discount = Math.max(0, Number(project.discountAmount));

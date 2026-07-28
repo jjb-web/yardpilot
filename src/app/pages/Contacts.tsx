@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import {
   Building2,
   FileText,
-  ImagePlus,
+  Link2,
   Mail,
   MapPin,
   Phone,
@@ -107,6 +107,7 @@ export default function Contacts() {
     deleteProperty,
     uploadPropertyPhoto,
     deletePropertyPhoto,
+    updateProject,
   } = useApp();
 
   const [search, setSearch] = useState("");
@@ -126,6 +127,10 @@ export default function Contacts() {
   const [propertySaving, setPropertySaving] = useState(false);
   const [propertyError, setPropertyError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [linkProjectId, setLinkProjectId] = useState("");
+  const [linkPropertyId, setLinkPropertyId] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkMessage, setLinkMessage] = useState("");
 
   const filteredContacts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -172,6 +177,9 @@ export default function Contacts() {
     setDraft(emptyContact());
     setActiveTab("details");
     setModalError("");
+    setLinkProjectId("");
+    setLinkPropertyId("");
+    setLinkMessage("");
     setModalOpen(true);
   }
 
@@ -192,6 +200,9 @@ export default function Contacts() {
     });
     setActiveTab("details");
     setModalError("");
+    setLinkProjectId("");
+    setLinkPropertyId("");
+    setLinkMessage("");
     setModalOpen(true);
   }
 
@@ -201,6 +212,9 @@ export default function Contacts() {
     setSelected(null);
     setDraft(emptyContact());
     setModalError("");
+    setLinkProjectId("");
+    setLinkPropertyId("");
+    setLinkMessage("");
   }
 
   async function saveContact() {
@@ -230,7 +244,7 @@ export default function Contacts() {
         setSelected(saved);
       } else {
         if (!activeWorkspaceId) throw new Error("Workspace is still loading.");
-        const saved = await addContact({
+        await addContact({
           id: uid(),
           workspaceId: activeWorkspaceId,
           ...draft,
@@ -245,10 +259,13 @@ export default function Contacts() {
           createdAt: now,
           updatedAt: now,
         });
-        setSelected(saved);
-        setDraft({ ...draft, name: saved.name });
-        setActiveTab("properties");
       }
+      setModalOpen(false);
+      setSelected(null);
+      setDraft(emptyContact());
+      setLinkProjectId("");
+      setLinkPropertyId("");
+      setLinkMessage("");
     } catch (error) {
       setModalError(error instanceof Error ? error.message : "The contact could not be saved.");
     } finally {
@@ -333,7 +350,7 @@ export default function Contacts() {
         setSelectedProperty(saved);
       } else {
         if (!activeWorkspaceId) throw new Error("Workspace is still loading.");
-        const saved = await addProperty({
+        await addProperty({
           id: uid(),
           workspaceId: activeWorkspaceId,
           contactId: selected.id,
@@ -342,8 +359,11 @@ export default function Contacts() {
           createdAt: now,
           updatedAt: now,
         });
-        setSelectedProperty(saved);
       }
+      setPropertyModalOpen(false);
+      setSelectedProperty(null);
+      setPropertyDraft(emptyProperty());
+      setPropertyError("");
     } catch (error) {
       setPropertyError(error instanceof Error ? error.message : "The property could not be saved.");
     } finally {
@@ -365,6 +385,51 @@ export default function Contacts() {
       setPropertyError(error instanceof Error ? error.message : "The property could not be deleted.");
     } finally {
       setPropertySaving(false);
+    }
+  }
+
+  async function linkEstimate() {
+    if (!selected || !linkProjectId) return;
+    const project = projects.find((item) => item.id === linkProjectId);
+    if (!project) {
+      setLinkMessage("Choose an estimate to link.");
+      return;
+    }
+
+    const linkedProperty = linkPropertyId
+      ? properties.find(
+          (property) =>
+            property.id === linkPropertyId && property.contactId === selected.id
+        ) ?? null
+      : null;
+
+    setLinking(true);
+    setLinkMessage("");
+    try {
+      await updateProject({
+        ...project,
+        contactId: selected.id,
+        propertyId: linkedProperty?.id ?? null,
+        client: selected.name,
+        address:
+          propertyAddress(linkedProperty) ||
+          contactAddress(selected) ||
+          project.address,
+        updatedAt: new Date().toISOString(),
+      });
+      setLinkMessage(
+        linkedProperty
+          ? `Linked to ${selected.name} and ${linkedProperty.name}.`
+          : `Linked to ${selected.name}.`
+      );
+      setLinkProjectId("");
+      setLinkPropertyId("");
+    } catch (error) {
+      setLinkMessage(
+        error instanceof Error ? error.message : "The estimate could not be linked."
+      );
+    } finally {
+      setLinking(false);
     }
   }
 
@@ -464,9 +529,9 @@ export default function Contacts() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) closeContactModal(); }}>
-          <div className="w-full max-w-5xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-2xl flex flex-col">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+        <div className="fixed inset-0 z-[70] bg-black/55 flex items-stretch sm:items-center justify-center p-0 sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) closeContactModal(); }}>
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] overflow-hidden bg-white sm:rounded-2xl shadow-2xl flex flex-col">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{selected ? selected.name : "Add Contact"}</h2>
                 <p className="text-sm text-gray-500 mt-0.5">Manage contact details and linked properties.</p>
@@ -474,12 +539,12 @@ export default function Contacts() {
               <button type="button" onClick={closeContactModal} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 cursor-pointer"><X size={20} /></button>
             </div>
 
-            <div className="px-6 pt-4 border-b border-gray-100 flex gap-2">
+            <div className="px-4 sm:px-6 pt-3 sm:pt-4 border-b border-gray-100 flex gap-2 overflow-x-auto shrink-0">
               <button type="button" onClick={() => setActiveTab("details")} className={`px-4 py-2.5 text-sm font-semibold border-b-2 cursor-pointer ${activeTab === "details" ? "border-green-700 text-green-700" : "border-transparent text-gray-500"}`}>Contact Details</button>
               <button type="button" disabled={!selected} onClick={() => setActiveTab("properties")} className={`px-4 py-2.5 text-sm font-semibold border-b-2 cursor-pointer disabled:opacity-40 ${activeTab === "properties" ? "border-green-700 text-green-700" : "border-transparent text-gray-500"}`}>Properties & History</button>
             </div>
 
-            <div className="p-6 overflow-y-auto">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
               {modalError && <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{modalError}</div>}
 
               {activeTab === "details" ? (
@@ -519,23 +584,68 @@ export default function Contacts() {
                       })}
                     </div>
                   )}
+
+                  <div className="mt-6 border-t border-gray-100 pt-6">
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="w-9 h-9 rounded-lg bg-green-50 text-green-700 flex items-center justify-center shrink-0">
+                        <Link2 size={17} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-900">Link an existing estimate</h3>
+                        <p className="text-sm text-gray-500 mt-1">Use this when the estimate was created before the contact or property.</p>
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                      <div>
+                        <label className={labelClass}>Estimate</label>
+                        <select value={linkProjectId} onChange={(event) => setLinkProjectId(event.target.value)} className={inputClass}>
+                          <option value="">Choose estimate...</option>
+                          {projects.map((project) => (
+                            <option key={project.id} value={project.id}>
+                              {project.estimateNumber} — {project.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Property (optional)</label>
+                        <select value={linkPropertyId} onChange={(event) => setLinkPropertyId(event.target.value)} className={inputClass}>
+                          <option value="">Contact only</option>
+                          {selectedProperties.map((property) => (
+                            <option key={property.id} value={property.id}>{property.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void linkEstimate()}
+                        disabled={!linkProjectId || linking}
+                        className="h-[42px] px-4 rounded-lg bg-green-700 text-white text-sm font-semibold disabled:opacity-50 cursor-pointer"
+                      >
+                        {linking ? "Linking..." : "Link Estimate"}
+                      </button>
+                    </div>
+                    {linkMessage && (
+                      <p className={`mt-3 text-sm ${linkMessage.startsWith("Linked") ? "text-green-700" : "text-red-600"}`}>{linkMessage}</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div>{selected && <button type="button" onClick={() => void removeContact()} className="inline-flex items-center gap-2 text-red-600 text-sm font-semibold cursor-pointer"><Trash2 size={15} /> Delete</button>}</div>
-              <div className="flex gap-2"><button type="button" onClick={closeContactModal} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveContact()} disabled={saving} className="px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{saving ? "Saving..." : selected ? "Update Contact" : "Create Contact"}</button></div>
+              <div className="flex w-full sm:w-auto gap-2"><button type="button" onClick={closeContactModal} className="flex-1 sm:flex-none px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveContact()} disabled={saving} className="flex-1 sm:flex-none px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{saving ? "Saving..." : selected ? "Update Contact" : "Create Contact"}</button></div>
             </div>
           </div>
         </div>
       )}
 
       {propertyModalOpen && selected && (
-        <div className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center"><div><h2 className="text-xl font-bold text-gray-900">{selectedProperty ? selectedProperty.name : "Add Property"}</h2><p className="text-sm text-gray-500 mt-0.5">Linked to {selected.name}</p></div><button type="button" onClick={closePropertyModal} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg cursor-pointer"><X size={20} /></button></div>
-            <div className="p-6 overflow-y-auto space-y-6">
+        <div className="fixed inset-0 z-[90] bg-black/60 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-4xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0"><div><h2 className="text-xl font-bold text-gray-900">{selectedProperty ? selectedProperty.name : "Add Property"}</h2><p className="text-sm text-gray-500 mt-0.5">Linked to {selected.name}</p></div><button type="button" onClick={closePropertyModal} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg cursor-pointer"><X size={20} /></button></div>
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
               {propertyError && <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{propertyError}</div>}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2"><label className={labelClass}>Property Name / Label</label><input value={propertyDraft.name} onChange={(event) => setPropertyField("name", event.target.value)} placeholder="Primary Home, Rental, Commercial Site..." className={inputClass} /></div>
@@ -548,7 +658,24 @@ export default function Contacts() {
               </div>
 
               <div className="border-t border-gray-100 pt-6">
-                <div className="flex items-center justify-between gap-4 mb-4"><div><h3 className="font-bold text-gray-900">Property photos</h3><p className="text-sm text-gray-500 mt-1">These photos appear in the downloaded or shared estimate.</p></div>{selectedProperty && <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 rounded-lg text-sm font-semibold cursor-pointer"><ImagePlus size={16} />{uploading ? "Uploading..." : "Upload Photos"}<input type="file" accept="image/*" multiple className="hidden" disabled={uploading} onChange={(event) => { void uploadPhotos(event.target.files); event.currentTarget.value = ""; }} /></label>}</div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4"><div><h3 className="font-bold text-gray-900">Property photos</h3><p className="text-sm text-gray-500 mt-1">These photos appear in the downloaded or shared estimate.</p></div>{selectedProperty && (
+                  <div className="w-full sm:w-auto">
+                    <label className="sr-only" htmlFor="property-photo-upload">Upload property photos</label>
+                    <input
+                      id="property-photo-upload"
+                      type="file"
+                      accept="image/*,.heic,.heif"
+                      multiple
+                      disabled={uploading}
+                      onChange={(event) => {
+                        void uploadPhotos(event.target.files);
+                        event.currentTarget.value = "";
+                      }}
+                      className="block w-full max-w-sm text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-50 file:px-4 file:py-2.5 file:font-semibold file:text-green-700 hover:file:bg-green-100 disabled:opacity-60"
+                    />
+                    {uploading && <p className="mt-1 text-xs text-green-700">Uploading photos...</p>}
+                  </div>
+                )}</div>
                 {!selectedProperty ? <p className="text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl p-6 text-center">Save the property first, then upload photos.</p> : selectedPropertyPhotos.length === 0 ? <p className="text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl p-6 text-center">No photos uploaded.</p> : <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{selectedPropertyPhotos.map((photo) => <div key={photo.id} className="relative group"><img src={photo.url} alt={photo.caption || "Property"} className="w-full aspect-square object-cover rounded-lg border border-gray-200" /><button type="button" onClick={() => void deletePropertyPhoto(photo)} className="absolute top-2 right-2 p-1.5 rounded-md bg-black/65 text-white opacity-0 group-hover:opacity-100 cursor-pointer"><Trash2 size={14} /></button></div>)}</div>}
               </div>
 
@@ -559,7 +686,7 @@ export default function Contacts() {
                 </div>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between"><div>{selectedProperty && <button type="button" onClick={() => void removeProperty()} className="inline-flex items-center gap-2 text-red-600 text-sm font-semibold cursor-pointer"><Trash2 size={15} /> Delete Property</button>}</div><div className="flex gap-2"><button type="button" onClick={closePropertyModal} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveProperty()} disabled={propertySaving} className="px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{propertySaving ? "Saving..." : selectedProperty ? "Update Property" : "Create Property"}</button></div></div>
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]"><div>{selectedProperty && <button type="button" onClick={() => void removeProperty()} className="inline-flex items-center gap-2 text-red-600 text-sm font-semibold cursor-pointer"><Trash2 size={15} /> Delete Property</button>}</div><div className="flex w-full sm:w-auto gap-2"><button type="button" onClick={closePropertyModal} className="flex-1 sm:flex-none px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveProperty()} disabled={propertySaving} className="flex-1 sm:flex-none px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{propertySaving ? "Saving..." : selectedProperty ? "Update Property" : "Create Property"}</button></div></div>
           </div>
         </div>
       )}

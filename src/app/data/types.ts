@@ -6,7 +6,13 @@ export type EstimateStatus =
   | "accepted"
   | "declined";
 
-export type WorkspaceRole = "owner" | "partner" | "employee";
+export type WorkspaceRole =
+  | "owner"
+  | "co_owner"
+  | "manager"
+  | "employee";
+
+export type WorkspaceKind = "personal" | "company";
 
 export type LineItem = {
   id: string;
@@ -14,6 +20,13 @@ export type LineItem = {
   qty: number;
   unit: string;
   unitCost: number;
+};
+
+export type LaborAssignment = {
+  userId: string;
+  name: string;
+  hours: number;
+  hourlyRate: number;
 };
 
 export type Project = {
@@ -34,6 +47,7 @@ export type Project = {
   squareFootage: number;
   laborRate: number;
   laborHours: number;
+  laborAssignments: LaborAssignment[];
   lineItems: LineItem[];
   aiEstimate: string | null;
   scopeDescription: string;
@@ -45,6 +59,14 @@ export type Project = {
   notes: string;
   shareToken: string;
   shareEnabled: boolean;
+  sentAt: string | null;
+  viewedAt: string | null;
+  respondedAt: string | null;
+  acceptedAt: string | null;
+  declinedAt: string | null;
+  responseName: string;
+  responseMessage: string;
+  signatureData: string;
   scheduledStart: string | null;
   scheduledEnd: string | null;
   followUpAt: string | null;
@@ -103,6 +125,9 @@ export type PropertyPhoto = {
 export type Workspace = {
   id: string;
   name: string;
+  slug: string;
+  kind: WorkspaceKind;
+  isPersonal: boolean;
   createdBy: string;
   role: WorkspaceRole;
   createdAt: string;
@@ -117,6 +142,8 @@ export type WorkspaceMember = {
   email: string;
   company: string;
   phone: string;
+  positionTitle: string;
+  hourlyRate: number;
   createdAt: string;
 };
 

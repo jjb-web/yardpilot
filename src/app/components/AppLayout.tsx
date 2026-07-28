@@ -39,67 +39,67 @@ const nav: NavItem[] = [
     to: "/app/dashboard",
     icon: LayoutDashboard,
     label: "Dashboard",
-    roles: ["owner", "partner", "employee"],
+    roles: ["owner", "co_owner", "manager", "employee"],
   },
   {
     to: "/app/contacts",
     icon: Users,
     label: "Contacts",
-    roles: ["owner", "partner"],
+    roles: ["owner", "co_owner", "manager"],
   },
   {
     to: "/app/estimates",
     icon: FileText,
     label: "Estimates",
-    roles: ["owner", "partner"],
+    roles: ["owner", "co_owner", "manager"],
   },
   {
     to: "/app/estimate/new",
     icon: PlusCircle,
     label: "New Estimate",
-    roles: ["owner", "partner"],
+    roles: ["owner", "co_owner", "manager"],
   },
   {
     to: "/app/projects/current",
     icon: FolderOpen,
     label: "Jobs",
-    roles: ["owner", "partner", "employee"],
+    roles: ["owner", "co_owner", "manager", "employee"],
   },
   {
     to: "/app/projects/past",
     icon: Archive,
     label: "Past Projects",
-    roles: ["owner", "partner"],
+    roles: ["owner", "co_owner", "manager"],
   },
   {
     to: "/app/invoices",
     icon: ReceiptText,
     label: "Invoices",
-    roles: ["owner", "partner"],
+    roles: ["owner", "co_owner", "manager"],
   },
   {
     to: "/app/schedule",
     icon: CalendarDays,
     label: "Schedule",
-    roles: ["owner", "partner", "employee"],
+    roles: ["owner", "co_owner", "manager", "employee"],
   },
   {
     to: "/app/follow-ups",
     icon: BellRing,
     label: "Follow-ups",
-    roles: ["owner", "partner", "employee"],
+    roles: ["owner", "co_owner", "manager", "employee"],
   },
   {
     to: "/app/team",
     icon: Users,
     label: "Team",
-    roles: ["owner", "partner", "employee"],
+    roles: ["owner", "co_owner", "manager", "employee"],
   },
   {
     to: "/app/account",
     icon: User,
     label: "Account",
-    roles: ["owner", "partner", "employee"],
+    roles: ["owner", "co_owner", "manager", "employee"],
   },
 ];
 
@@ -112,6 +112,7 @@ function initialDarkMode() {
 
 function roleLabel(role: WorkspaceRole | null) {
   if (!role) return "Loading";
+  if (role === "co_owner") return "Co-owner";
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
@@ -166,7 +167,7 @@ export default function AppLayout() {
     <div className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5 px-1">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-9 h-9 bg-green-400 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
             <img
               src="/yardpilot-logo.png"
               alt="YardPilotUSA logo"
@@ -195,7 +196,7 @@ export default function AppLayout() {
           >
             {workspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id} className="text-gray-900">
-                {workspace.name} · {workspace.role}
+                {workspace.name} · {roleLabel(workspace.role)}
               </option>
             ))}
           </select>

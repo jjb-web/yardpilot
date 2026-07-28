@@ -36,7 +36,7 @@ type InvoiceDraft = {
   issueDate: string;
   dueDate: string;
   status: InvoiceStatus;
-  amount: number;
+  amount: string;
   notes: string;
 };
 
@@ -50,7 +50,7 @@ function blankDraft(): InvoiceDraft {
     issueDate: today.toISOString().slice(0, 10),
     dueDate: addDays(today, 14),
     status: "draft",
-    amount: 0,
+    amount: "",
     notes: "",
   };
 }
@@ -139,7 +139,7 @@ export default function Invoices() {
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
       status: invoice.status,
-      amount: invoice.amount,
+      amount: String(invoice.amount),
       notes: invoice.notes,
     });
     setModalError("");
@@ -153,7 +153,7 @@ export default function Invoices() {
       projectId,
       contactId: project?.contactId ?? current.contactId,
       propertyId: project?.propertyId ?? current.propertyId,
-      amount: project?.totalEstimate ?? current.amount,
+      amount: project ? String(project.totalEstimate) : current.amount,
       notes: current.notes || project?.name || "",
     }));
   }
@@ -415,9 +415,9 @@ export default function Invoices() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="fixed inset-0 z-[70] flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h2 className="font-bold text-gray-900">
                 {selected ? "Edit Invoice" : "New Invoice"}
               </h2>
@@ -425,7 +425,7 @@ export default function Invoices() {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 grid sm:grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 grid sm:grid-cols-2 gap-4 overflow-y-auto flex-1">
               {modalError && (
                 <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {modalError}
@@ -517,11 +517,15 @@ export default function Invoices() {
               <div>
                 <label className={labelClass}>Amount</label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={draft.amount}
-                  onChange={(event) => setDraft((current) => ({ ...current, amount: Number(event.target.value) }))}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (/^\d*(?:\.\d{0,2})?$/.test(value)) {
+                      setDraft((current) => ({ ...current, amount: value }));
+                    }
+                  }}
                   className={inputClass}
                 />
               </div>
@@ -535,7 +539,7 @@ export default function Invoices() {
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div>
                 {selected && (
                   <button
@@ -548,15 +552,15 @@ export default function Invoices() {
                   </button>
                 )}
               </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 cursor-pointer">
+              <div className="flex w-full sm:w-auto gap-2">
+                <button type="button" onClick={() => setModalOpen(false)} className="flex-1 sm:flex-none px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 cursor-pointer">
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => void saveInvoice()}
                   disabled={saving}
-                  className="px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
+                  className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
                 >
                   {saving ? "Saving..." : selected ? "Update Invoice" : "Create Invoice"}
                 </button>
