@@ -183,23 +183,26 @@ export default function Login() {
   }
 
   async function handleGoogleLogin() {
-    setError("");
-    setMessage("");
-    setLoading(true);
+  setError("");
+  setMessage("");
+  setLoading(true);
 
-    const { error: googleError } =
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/login`,
+  const { error: googleError } =
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/login`,
+        queryParams: {
+          prompt: "select_account",
         },
-      });
+      },
+    });
 
-    if (googleError) {
-      setLoading(false);
-      setError(googleError.message);
-    }
+  if (googleError) {
+    setLoading(false);
+    setError(googleError.message);
   }
+}
 
   const inputClass =
     "w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/40 transition";
