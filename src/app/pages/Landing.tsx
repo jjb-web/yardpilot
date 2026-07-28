@@ -258,14 +258,14 @@ export default function Landing() {
               J
             </div>
             <p className="text-gray-700 leading-relaxed text-lg mb-4">
-              "Hi — I'm building YardPilotUSA after spending time with landscaping crews and seeing firsthand how much time goes into creating estimates and chasing down customers.
+              Hi — I'm building YardPilotUSA after spending time with landscaping crews and seeing firsthand how much time goes into creating estimates and chasing down customers.
             </p>
             <p className="text-gray-700 leading-relaxed mb-6">
               Before we write another line of code, I want to hear from real landscapers. What's actually slowing you down? What would make the biggest difference? Your input shapes what we build first."
             </p>
             <div>
-              <p className="font-semibold text-gray-900">Jordan M.</p>
-              <p className="text-sm text-gray-500">Founder, YardPilotUSA</p>
+              <p className="font-semibold text-gray-900">William B.</p>
+              <p className="text-sm text-gray-500">Co-Founder, YardPilotUSA</p>
             </div>
           </div>
         </div>
