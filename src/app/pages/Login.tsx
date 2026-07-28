@@ -221,7 +221,11 @@ export default function Login() {
           className="flex items-center gap-2 justify-center mb-8"
         >
           <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center">
-            <Leaf size={18} className="text-white" />
+            <img
+             src="/yardpilot-logo.png"
+             alt="YardPilotUSA"
+             className="w-8 h-8 object-contain"
+            />
           </div>
 
           <span
