@@ -1,71 +1,179 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { Leaf } from "lucide-react";
-import { useApp } from "../context/AppContext";
-import type { User } from "../data/types";
 import { supabase } from "../lib/supabase";
 
+type FormData = {
+  name: string;
+  email: string;
+  company: string;
+  phone: string;
+  password: string;
+};
+
 export default function Login() {
-  const { login, register } = useApp();
   const navigate = useNavigate();
+
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", company: "", phone: "", password: "" });
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function set(key: string, val: string) { setForm((f) => ({ ...f, [key]: val })); }
+  const [form, setForm] = useState<FormData>({
+    name: "",
+    email: "",
+    company: "",
+    phone: "",
+    password: "",
+  });
 
-  function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    const ok = login(form.email, form.password);
-    if (ok) { navigate("/app/dashboard"); }
-    else { setError("No account found. Try demo@greenedge.app with any password."); }
+  function set(key: keyof FormData, value: string) {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
   }
 
-  function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
-    const u: User = { name: form.name, email: form.email, company: form.company, phone: form.phone };
-    register(u, form.password);
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setLoading(true);
+
+    const { error: loginError } =
+      await supabase.auth.signInWithPassword({
+        email: form.email.trim(),
+        password: form.password,
+      });
+
+    setLoading(false);
+
+    if (loginError) {
+      setError(loginError.message);
+      return;
+    }
+
     navigate("/app/dashboard");
   }
 
-async function signInWithGoogle() {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: window.location.origin,
-    },
-  });
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setLoading(true);
 
-  if (error) {
-    console.error("Google login failed:", error.message);
+    const { data, error: signupError } = await supabase.auth.signUp({
+      email: form.email.trim(),
+      password: form.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/app/dashboard`,
+        data: {
+          full_name: form.name.trim(),
+          company: form.company.trim(),
+          phone: form.phone.trim(),
+        },
+      },
+    });
+
+    setLoading(false);
+
+    if (signupError) {
+      setError(signupError.message);
+      return;
+    }
+
+    if (data.session) {
+      navigate("/app/dashboard");
+      return;
+    }
+
+    setMessage(
+      "Account created. Check your email and click the confirmation link."
+    );
   }
-}
 
+  async function handleGoogleLogin() {
+    setError("");
+    setMessage("");
+    setLoading(true);
 
-  const inputClass = "w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/40 transition";
-  const labelClass = "block text-sm font-medium text-gray-700 mb-1.5";
+    const { error: googleError } =
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/app/dashboard`,
+        },
+      });
+
+    if (googleError) {
+      setLoading(false);
+      setError(googleError.message);
+    }
+  }
+
+  const inputClass =
+    "w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/40 transition";
+
+  const labelClass =
+    "block text-sm font-medium text-gray-700 mb-1.5";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div
+      className="min-h-screen bg-gray-50 flex items-center justify-center px-4"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 justify-center mb-8">
+        <Link
+          to="/"
+          className="flex items-center gap-2 justify-center mb-8"
+        >
           <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center">
             <Leaf size={18} className="text-white" />
           </div>
-          <span className="font-bold text-gray-900 text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>GreenEdge</span>
+
+          <span
+            className="font-bold text-gray-900 text-lg"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            GreenEdge
+          </span>
         </Link>
 
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-7">
-          {/* Toggle */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            Continue with Google
+          </button>
+
+          <div className="flex items-center gap-3 my-5">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs text-gray-400">or</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+
           <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
-            {(["login", "register"] as const).map((m) => (
+            {(["login", "register"] as const).map((currentMode) => (
               <button
-                key={m}
-                onClick={() => { setMode(m); setError(""); }}
-                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${mode === m ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                type="button"
+                key={currentMode}
+                onClick={() => {
+                  setMode(currentMode);
+                  setError("");
+                  setMessage("");
+                }}
+                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${
+                  mode === currentMode
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
               >
-                {m === "login" ? "Sign In" : "Create Account"}
+                {currentMode === "login"
+                  ? "Sign In"
+                  : "Create Account"}
               </button>
             ))}
           </div>
@@ -74,51 +182,161 @@ async function signInWithGoogle() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className={labelClass}>Email</label>
-                <input required type="email" placeholder="you@example.com" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputClass} />
+                <input
+                  required
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={(event) =>
+                    set("email", event.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
+
               <div>
                 <label className={labelClass}>Password</label>
-                <input required type="password" placeholder="••••••••" value={form.password} onChange={(e) => set("password", e.target.value)} className={inputClass} />
+                <input
+                  required
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={form.password}
+                  onChange={(event) =>
+                    set("password", event.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
-              {error && <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-              <button type="submit" className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors">
-                Sign In
+
+              {error && (
+                <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
+
+              {message && (
+                <p className="text-green-700 text-xs bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  {message}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors disabled:opacity-60"
+              >
+                {loading ? "Signing in..." : "Sign In"}
               </button>
-              <p className="text-center text-xs text-gray-400">
-                Demo: <span className="font-mono text-gray-600">demo@greenedge.app</span> / any password
-              </p>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className={labelClass}>Full Name</label>
-                <input required type="text" placeholder="Alex Rivera" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputClass} />
+                <input
+                  required
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Alex Rivera"
+                  value={form.name}
+                  onChange={(event) =>
+                    set("name", event.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
+
               <div>
                 <label className={labelClass}>Company</label>
-                <input required type="text" placeholder="Green Edge Lawn & Landscape" value={form.company} onChange={(e) => set("company", e.target.value)} className={inputClass} />
+                <input
+                  required
+                  type="text"
+                  autoComplete="organization"
+                  placeholder="Green Edge Lawn & Landscape"
+                  value={form.company}
+                  onChange={(event) =>
+                    set("company", event.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
+
               <div>
                 <label className={labelClass}>Email</label>
-                <input required type="email" placeholder="you@company.com" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputClass} />
+                <input
+                  required
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@company.com"
+                  value={form.email}
+                  onChange={(event) =>
+                    set("email", event.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
+
               <div>
                 <label className={labelClass}>Phone</label>
-                <input type="tel" placeholder="(512) 555-0100" value={form.phone} onChange={(e) => set("phone", e.target.value)} className={inputClass} />
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="(512) 555-0100"
+                  value={form.phone}
+                  onChange={(event) =>
+                    set("phone", event.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
+
               <div>
                 <label className={labelClass}>Password</label>
-                <input required type="password" placeholder="Choose a password" value={form.password} onChange={(e) => set("password", e.target.value)} className={inputClass} />
+                <input
+                  required
+                  minLength={6}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Choose a password"
+                  value={form.password}
+                  onChange={(event) =>
+                    set("password", event.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
-              <button type="submit" className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors">
-                Create Account
+
+              {error && (
+                <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
+
+              {message && (
+                <p className="text-green-700 text-xs bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  {message}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors disabled:opacity-60"
+              >
+                {loading ? "Creating account..." : "Create Account"}
               </button>
             </form>
           )}
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          <Link to="/" className="hover:text-gray-600 transition-colors">← Back to home</Link>
+          <Link
+            to="/"
+            className="hover:text-gray-600 transition-colors"
+          >
+            ← Back to home
+          </Link>
         </p>
       </div>
     </div>
