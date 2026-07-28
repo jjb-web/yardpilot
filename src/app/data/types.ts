@@ -26,6 +26,24 @@ export type Project = {
   updatedAt: string;
 };
 
+export type ContactStatus = "lead" | "active" | "customer" | "inactive";
+
+export type Contact = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  status: ContactStatus;
+  source: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type User = {
   name: string;
   email: string;

@@ -8,6 +8,7 @@ import AppLayout from "./components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
 import Projects from "./pages/Projects";
+import Contacts from "./pages/Contacts";
 import Account from "./pages/Account";
 import { useApp } from "./context/AppContext";
 
@@ -56,6 +57,10 @@ export const router = createBrowserRouter([
       {
         path: "dashboard",
         Component: Dashboard,
+      },
+      {
+        path: "contacts",
+        Component: Contacts,
       },
       {
         path: "estimate/new",

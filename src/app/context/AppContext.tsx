@@ -11,6 +11,8 @@ import type {
 } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type {
+  Contact,
+  ContactStatus,
   LineItem,
   Project,
   ProjectStatus,
@@ -23,6 +25,9 @@ type AppContextType = {
   projects: Project[];
   projectsLoading: boolean;
   projectsError: string;
+  contacts: Contact[];
+  contactsLoading: boolean;
+  contactsError: string;
   login: (
     email: string,
     password: string
@@ -36,6 +41,10 @@ type AppContextType = {
   addProject: (project: Project) => Promise<Project>;
   updateProject: (project: Project) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
+  refreshContacts: () => Promise<void>;
+  addContact: (contact: Contact) => Promise<Contact>;
+  updateContact: (contact: Contact) => Promise<Contact>;
+  deleteContact: (id: string) => Promise<void>;
 };
 
 type ProfileRow = {
@@ -59,6 +68,23 @@ type ProjectRow = {
   line_items: unknown;
   estimate_summary: string | null;
   total_estimate: number | string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ContactRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  status: ContactStatus;
+  source: string;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -154,6 +180,62 @@ function rowToProject(row: ProjectRow): Project {
   };
 }
 
+function rowToContact(row: ContactRow): Contact {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    zip: row.zip,
+    status: row.status,
+    source: row.source,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function contactToDatabase(
+  contact: Contact,
+  userId: string
+) {
+  return {
+    id: contact.id,
+    user_id: userId,
+    name: contact.name,
+    email: contact.email,
+    phone: contact.phone,
+    address: contact.address,
+    city: contact.city,
+    state: contact.state,
+    zip: contact.zip,
+    status: contact.status,
+    source: contact.source,
+    notes: contact.notes,
+    created_at: contact.createdAt,
+    updated_at: contact.updatedAt,
+  };
+}
+
+function contactUpdates(contact: Contact) {
+  return {
+    name: contact.name,
+    email: contact.email,
+    phone: contact.phone,
+    address: contact.address,
+    city: contact.city,
+    state: contact.state,
+    zip: contact.zip,
+    status: contact.status,
+    source: contact.source,
+    notes: contact.notes,
+    updated_at: contact.updatedAt,
+  };
+}
+
 function projectToDatabase(
   project: Project,
   userId: string
@@ -213,6 +295,13 @@ export function AppProvider({
     useState(false);
   const [projectsError, setProjectsError] =
     useState("");
+  const [contacts, setContacts] = useState<
+    Contact[]
+  >([]);
+  const [contactsLoading, setContactsLoading] =
+    useState(false);
+  const [contactsError, setContactsError] =
+    useState("");
 
   const authUserIdRef = useRef<string | null>(
     null
@@ -226,6 +315,9 @@ export function AppProvider({
     setProjects([]);
     setProjectsError("");
     setProjectsLoading(false);
+    setContacts([]);
+    setContactsError("");
+    setContactsLoading(false);
     setAuthLoading(false);
 
     // Remove the old Figma demo data if it still
@@ -307,6 +399,42 @@ export function AppProvider({
     setProjectsLoading(false);
   }
 
+  async function loadContacts(
+    userId: string,
+    requestId: number
+  ) {
+    setContactsLoading(true);
+    setContactsError("");
+
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", {
+        ascending: false,
+      });
+
+    if (
+      requestId !== authRequestRef.current
+    ) {
+      return;
+    }
+
+    if (error) {
+      setContacts([]);
+      setContactsError(error.message);
+      setContactsLoading(false);
+      return;
+    }
+
+    const loadedContacts = (
+      (data ?? []) as ContactRow[]
+    ).map(rowToContact);
+
+    setContacts(loadedContacts);
+    setContactsLoading(false);
+  }
+
   async function loadAccount(
     authUser: SupabaseAuthUser
   ) {
@@ -317,10 +445,12 @@ export function AppProvider({
     setAuthLoading(true);
     setUser(userFromAuth(authUser));
     setProjects([]);
+    setContacts([]);
 
     await Promise.all([
       loadProfile(authUser, requestId),
       loadProjects(authUser.id, requestId),
+      loadContacts(authUser.id, requestId),
     ]);
 
     if (
@@ -461,6 +591,20 @@ export function AppProvider({
     await loadProjects(userId, requestId);
   }
 
+  async function refreshContacts() {
+    const userId = authUserIdRef.current;
+
+    if (!userId) {
+      setContacts([]);
+      return;
+    }
+
+    const requestId =
+      authRequestRef.current;
+
+    await loadContacts(userId, requestId);
+  }
+
   async function addProject(
     project: Project
   ): Promise<Project> {
@@ -573,6 +717,118 @@ export function AppProvider({
     );
   }
 
+  async function addContact(
+    contact: Contact
+  ): Promise<Contact> {
+    const userId = authUserIdRef.current;
+
+    if (!userId) {
+      throw new Error(
+        "You must be signed in to add a contact."
+      );
+    }
+
+    setContactsError("");
+
+    const { data, error } = await supabase
+      .from("contacts")
+      .insert(
+        contactToDatabase(contact, userId)
+      )
+      .select("*")
+      .single();
+
+    if (error) {
+      setContactsError(error.message);
+      throw new Error(error.message);
+    }
+
+    const savedContact = rowToContact(
+      data as ContactRow
+    );
+
+    setContacts((previous) => [
+      savedContact,
+      ...previous.filter(
+        (item) => item.id !== savedContact.id
+      ),
+    ]);
+
+    return savedContact;
+  }
+
+  async function updateContact(
+    contact: Contact
+  ): Promise<Contact> {
+    const userId = authUserIdRef.current;
+
+    if (!userId) {
+      throw new Error(
+        "You must be signed in to update a contact."
+      );
+    }
+
+    setContactsError("");
+
+    const { data, error } = await supabase
+      .from("contacts")
+      .update(contactUpdates(contact))
+      .eq("id", contact.id)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    if (error) {
+      setContactsError(error.message);
+      throw new Error(error.message);
+    }
+
+    const savedContact = rowToContact(
+      data as ContactRow
+    );
+
+    setContacts((previous) =>
+      previous.map((item) =>
+        item.id === savedContact.id
+          ? savedContact
+          : item
+      )
+    );
+
+    return savedContact;
+  }
+
+  async function deleteContact(
+    id: string
+  ): Promise<void> {
+    const userId = authUserIdRef.current;
+
+    if (!userId) {
+      throw new Error(
+        "You must be signed in to delete a contact."
+      );
+    }
+
+    setContactsError("");
+
+    const { error } = await supabase
+      .from("contacts")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setContactsError(error.message);
+      throw new Error(error.message);
+    }
+
+    setContacts((previous) =>
+      previous.filter(
+        (contact) => contact.id !== id
+      )
+    );
+  }
+
   return (
     <AppContext.Provider
       value={{
@@ -581,6 +837,9 @@ export function AppProvider({
         projects,
         projectsLoading,
         projectsError,
+        contacts,
+        contactsLoading,
+        contactsError,
         login,
         logout,
         register,
@@ -588,6 +847,10 @@ export function AppProvider({
         addProject,
         updateProject,
         deleteProject,
+        refreshContacts,
+        addContact,
+        updateContact,
+        deleteContact,
       }}
     >
       {children}

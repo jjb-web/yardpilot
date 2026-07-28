@@ -79,8 +79,12 @@ export default function Landing() {
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-green-100">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-green-700 rounded-lg flex items-center justify-center">
-              <Leaf size={16} className="text-white" />
+            <div className="w-8 h-8 rounded-lg overflow-hidden">
+              <img
+                src="/yardpilot-logo.png"
+                alt="YardPilotUSA logo"
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilotUSA</span>
           </div>

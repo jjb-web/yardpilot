@@ -1,142 +1,253 @@
 import { useState } from "react";
-import { Link, Outlet, useLocation } from "react-router";
-import { ShoppingCart, Menu, X } from "lucide-react";
-import { useCart } from "../context/CartContext";
+import {
+  Link,
+  Outlet,
+  useLocation,
+  useNavigate,
+  Navigate,
+} from "react-router";
+import {
+  LayoutDashboard,
+  FolderOpen,
+  Archive,
+  PlusCircle,
+  User,
+  Users,
+  Leaf,
+  Menu,
+  X,
+  LogOut,
+  ChevronRight,
+} from "lucide-react";
+import { useApp } from "../context/AppContext";
 
-const navLinks = [
-  { to: "/", label: "Home" },
-  { to: "/market", label: "Market" },
-  { to: "/privacy", label: "Privacy Policy" },
-  { to: "/terms", label: "Terms & Conditions" },
+const nav = [
+  {
+    to: "/app/dashboard",
+    icon: LayoutDashboard,
+    label: "Dashboard",
+  },
+  {
+    to: "/app/contacts",
+    icon: Users,
+    label: "Contacts",
+  },
+  {
+    to: "/app/estimate/new",
+    icon: PlusCircle,
+    label: "New Estimate",
+  },
+  {
+    to: "/app/projects/current",
+    icon: FolderOpen,
+    label: "Current Jobs",
+  },
+  {
+    to: "/app/projects/past",
+    icon: Archive,
+    label: "Past Projects",
+  },
+  {
+    to: "/app/account",
+    icon: User,
+    label: "Account",
+  },
 ];
 
-export default function Layout() {
-  const { items } = useCart();
+export default function AppLayout() {
+  const { user, logout } = useApp();
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const count = items.reduce((sum, i) => sum + i.qty, 0);
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] =
+    useState(false);
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("Could not sign out:", error);
+    }
+  }
+
+  const Sidebar = ({
+    mobile = false,
+  }: {
+    mobile?: boolean;
+  }) => (
+    <div className="flex flex-col h-full">
+      <div className="px-5 py-5 border-b border-white/10">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-green-400 rounded-lg flex items-center justify-center shrink-0">
+            <Leaf
+              size={16}
+              className="text-green-950"
+            />
+          </div>
+          <div>
+            <p
+              className="text-white font-bold text-sm"
+              style={{
+                fontFamily:
+                  "'Plus Jakarta Sans', sans-serif",
+              }}
+            >
+              YardPilotUSA
+            </p>
+            <p className="text-green-400 text-xs truncate max-w-[140px]">
+              {user.company}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {nav.map(({ to, icon: Icon, label }) => {
+          const active =
+            location.pathname === to ||
+            (to !== "/app/dashboard" &&
+              location.pathname.startsWith(to));
+
+          return (
+            <Link
+              key={to}
+              to={to}
+              onClick={() =>
+                setSidebarOpen(false)
+              }
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                active
+                  ? "bg-green-500/20 text-white"
+                  : "text-green-200/70 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <Icon
+                size={17}
+                className={
+                  active
+                    ? "text-green-400"
+                    : "text-green-400/50"
+                }
+              />
+              {label}
+              {active && (
+                <ChevronRight
+                  size={14}
+                  className="ml-auto text-green-400"
+                />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="px-3 py-4 border-t border-white/10">
+        <div className="flex items-center gap-3 px-3 py-2 mb-1">
+          <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {user.name.charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-xs font-semibold truncate">
+              {user.name}
+            </p>
+            <p className="text-green-400/60 text-xs truncate">
+              {user.email}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleLogout()}
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-green-200/60 hover:bg-white/5 hover:text-white transition-colors cursor-pointer"
+        >
+          <LogOut size={15} /> Sign out
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div
-      className="min-h-screen bg-background text-foreground flex flex-col"
-      style={{ fontFamily: "'Inter', sans-serif" }}
+      className="flex h-screen bg-gray-50 overflow-hidden"
+      style={{
+        fontFamily: "'Inter', sans-serif",
+      }}
     >
-      {/* Nav */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <aside className="hidden md:flex flex-col w-56 bg-green-950 shrink-0">
+        <Sidebar />
+      </aside>
 
-          {/* Logo */}
-          <Link
-            to="/"
-            className="font-bold text-foreground shrink-0"
-            style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.1rem" }}
-            onClick={() => setMenuOpen(false)}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div className="w-64 bg-green-950 flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+              <span
+                className="text-white font-bold"
+                style={{
+                  fontFamily:
+                    "'Plus Jakarta Sans', sans-serif",
+                }}
+              >
+                Menu
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSidebarOpen(false)
+                }
+                className="text-white/60 hover:text-white cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <Sidebar mobile />
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="flex-1 bg-black/40 cursor-default"
+            onClick={() =>
+              setSidebarOpen(false)
+            }
+          />
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white border-b border-gray-200 px-6 py-3.5 flex items-center justify-between shrink-0">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
           >
-            Hank Dillard &amp; Sons
+            <Menu size={20} />
+          </button>
+          <div className="hidden md:block">
+            <p className="text-sm text-gray-500">
+              Welcome back, {" "}
+              <span className="font-semibold text-gray-900">
+                {user.name.split(" ")[0]}
+              </span>
+            </p>
+          </div>
+          <Link
+            to="/app/estimate/new"
+            className="flex items-center gap-1.5 px-4 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 transition-colors"
+          >
+            <PlusCircle size={15} /> New Estimate
           </Link>
+        </header>
 
-          {/* Desktop nav links */}
-          <nav className="hidden md:flex items-center gap-6">
-            {navLinks.slice(0, 2).map(({ to, label }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`text-sm font-medium transition-colors ${
-                  location.pathname === to
-                    ? "text-amber-700"
-                    : "text-foreground/70 hover:text-foreground"
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Right side: cart (always visible) + hamburger (mobile only) */}
-          <div className="flex items-center gap-3">
-            {/* Cart — always visible */}
-            <Link
-              to="/cart"
-              className="relative flex items-center gap-1.5 px-3 py-2 rounded-sm border border-border bg-card hover:border-amber-700/50 transition-colors"
-            >
-              <ShoppingCart size={17} className="text-foreground/80" />
-              {count > 0 ? (
-                <span className="text-xs font-bold text-amber-700 tabular-nums">
-                  {count}
-                </span>
-              ) : (
-                <span className="hidden sm:inline text-xs text-muted-foreground">Cart</span>
-              )}
-              {count > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-700 text-white text-[10px] flex items-center justify-center font-bold leading-none">
-                  {count}
-                </span>
-              )}
-            </Link>
-
-            {/* Hamburger — mobile only */}
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden flex items-center justify-center w-9 h-9 rounded-sm border border-border bg-card hover:border-amber-700/50 transition-colors"
-              aria-label="Toggle menu"
-            >
-              {menuOpen ? <X size={18} /> : <Menu size={18} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile off-canvas drawer */}
-        <div
-          style={{
-            maxHeight: menuOpen ? "400px" : "0",
-            overflow: "hidden",
-            transition: "max-height 0.3s cubic-bezier(0.4,0,0.2,1)",
-          }}
-          className="md:hidden border-t border-border bg-card"
-        >
-          <nav className="max-w-5xl mx-auto px-6 py-4 flex flex-col gap-1">
-            {navLinks.map(({ to, label }) => (
-              <Link
-                key={to}
-                to={to}
-                onClick={() => setMenuOpen(false)}
-                className={`px-3 py-3 rounded-sm text-sm font-medium transition-colors ${
-                  location.pathname === to
-                    ? "bg-amber-50 text-amber-800 border border-amber-200"
-                    : "text-foreground/80 hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
-            <Link
-              to="/cart"
-              onClick={() => setMenuOpen(false)}
-              className="mt-2 px-3 py-3 rounded-sm text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors flex items-center gap-2"
-            >
-              <ShoppingCart size={15} />
-              Cart {count > 0 && <span className="text-amber-700 font-bold">({count})</span>}
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      <main className="flex-1">
-        <Outlet />
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-card py-8 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground">
-            © 2025 Hank Dillard &amp; Sons Farm · Valley County, Idaho
-          </p>
-          <div className="flex gap-6 text-xs text-muted-foreground">
-            <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
-            <Link to="/terms" className="hover:text-foreground transition-colors">Terms &amp; Conditions</Link>
-          </div>
-        </div>
-      </footer>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
