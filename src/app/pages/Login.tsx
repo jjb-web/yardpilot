@@ -10,7 +10,6 @@ import {
 } from "react-router";
 import { Leaf } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { createClient } from "@supabase/supabase-js";
 
 type FormData = {
   name: string;
@@ -22,34 +21,11 @@ type FormData = {
 
 export default function Login() {
   const navigate = useNavigate();
-  useEffect(() => {
-  let active = true;
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  supabase.auth.getSession().then(({ data }) => {
-    if (active && data.session) {
-      navigate("/app/dashboard", { replace: true });
-    }
-  });
-
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (session) {
-      navigate("/app/dashboard", { replace: true });
-    }
-  });
-
-  return () => {
-    active = false;
-    subscription.unsubscribe();
-  };
-}, [navigate]);
-  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<"login" | "register">(
-  searchParams.get("mode") === "register"
-    ? "register"
-    : "login"
-);
+    searchParams.get("mode") === "register" ? "register" : "login"
+  );
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -62,6 +38,68 @@ export default function Login() {
     password: "",
   });
 
+  useEffect(() => {
+    let active = true;
+
+    async function finishLogin() {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (!active) return;
+
+      if (sessionError) {
+        setError(sessionError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (session) {
+        // Remove OAuth tokens from the visible URL before leaving this page.
+        if (window.location.hash) {
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname + window.location.search
+          );
+        }
+
+        navigate("/app/dashboard", { replace: true });
+      }
+    }
+
+    void finishLogin();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+
+      if (
+        session &&
+        (event === "INITIAL_SESSION" ||
+          event === "SIGNED_IN" ||
+          event === "TOKEN_REFRESHED")
+      ) {
+        if (window.location.hash) {
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname + window.location.search
+          );
+        }
+
+        navigate("/app/dashboard", { replace: true });
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
   function set(key: keyof FormData, value: string) {
     setForm((current) => ({
       ...current,
@@ -69,7 +107,21 @@ export default function Login() {
     }));
   }
 
-  async function handleLogin(event: SyntheticEvent<HTMLFormElement>) {
+  function changeMode(nextMode: "login" | "register") {
+    setMode(nextMode);
+    setError("");
+    setMessage("");
+
+    if (nextMode === "register") {
+      setSearchParams({ mode: "register" });
+    } else {
+      setSearchParams({});
+    }
+  }
+
+  async function handleLogin(
+    event: SyntheticEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
     setError("");
     setMessage("");
@@ -88,27 +140,30 @@ export default function Login() {
       return;
     }
 
-    navigate("/app/dashboard");
+    navigate("/app/dashboard", { replace: true });
   }
 
-  async function handleRegister(event: SyntheticEvent<HTMLFormElement>) {
+  async function handleRegister(
+    event: SyntheticEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
     setError("");
     setMessage("");
     setLoading(true);
 
-    const { data, error: signupError } = await supabase.auth.signUp({
-      email: form.email.trim(),
-      password: form.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/app/dashboard`,
-        data: {
-          full_name: form.name.trim(),
-          company: form.company.trim(),
-          phone: form.phone.trim(),
+    const { data, error: signupError } =
+      await supabase.auth.signUp({
+        email: form.email.trim(),
+        password: form.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login?confirmed=true`,
+          data: {
+            full_name: form.name.trim(),
+            company: form.company.trim(),
+            phone: form.phone.trim(),
+          },
         },
-      },
-    });
+      });
 
     setLoading(false);
 
@@ -118,7 +173,7 @@ export default function Login() {
     }
 
     if (data.session) {
-      navigate("/app/dashboard");
+      navigate("/app/dashboard", { replace: true });
       return;
     }
 
@@ -128,23 +183,23 @@ export default function Login() {
   }
 
   async function handleGoogleLogin() {
-  setError("");
-  setMessage("");
-  setLoading(true);
+    setError("");
+    setMessage("");
+    setLoading(true);
 
-  const { error: googleError } =
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/login`,
-      },
-    });
+    const { error: googleError } =
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/login`,
+        },
+      });
 
-  if (googleError) {
-    setLoading(false);
-    setError(googleError.message);
+    if (googleError) {
+      setLoading(false);
+      setError(googleError.message);
+    }
   }
-}
 
   const inputClass =
     "w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/40 transition";
@@ -168,9 +223,11 @@ export default function Login() {
 
           <span
             className="font-bold text-gray-900 text-lg"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            style={{
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+            }}
           >
-            GreenEdge
+            YardPilotUSA
           </span>
         </Link>
 
@@ -179,9 +236,9 @@ export default function Login() {
             type="button"
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
+            className="w-full py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Continue with Google
+            {loading ? "Signing in..." : "Continue with Google"}
           </button>
 
           <div className="flex items-center gap-3 my-5">
@@ -191,30 +248,31 @@ export default function Login() {
           </div>
 
           <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
-            {(["login", "register"] as const).map((currentMode) => (
-              <button
-                type="button"
-                key={currentMode}
-                onClick={() => {
-                  setMode(currentMode);
-                  setError("");
-                  setMessage("");
-                }}
-                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${
-                  mode === currentMode
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {currentMode === "login"
-                  ? "Sign In"
-                  : "Create Account"}
-              </button>
-            ))}
+            {(["login", "register"] as const).map(
+              (currentMode) => (
+                <button
+                  type="button"
+                  key={currentMode}
+                  onClick={() => changeMode(currentMode)}
+                  className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all cursor-pointer ${
+                    mode === currentMode
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {currentMode === "login"
+                    ? "Sign In"
+                    : "Create Account"}
+                </button>
+              )
+            )}
           </div>
 
           {mode === "login" ? (
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form
+              onSubmit={handleLogin}
+              className="space-y-4"
+            >
               <div>
                 <label className={labelClass}>Email</label>
                 <input
@@ -231,7 +289,9 @@ export default function Login() {
               </div>
 
               <div>
-                <label className={labelClass}>Password</label>
+                <label className={labelClass}>
+                  Password
+                </label>
                 <input
                   required
                   type="password"
@@ -260,15 +320,20 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors disabled:opacity-60"
+                className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Signing in..." : "Sign In"}
               </button>
             </form>
           ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
+            <form
+              onSubmit={handleRegister}
+              className="space-y-4"
+            >
               <div>
-                <label className={labelClass}>Full Name</label>
+                <label className={labelClass}>
+                  Full Name
+                </label>
                 <input
                   required
                   type="text"
@@ -327,7 +392,9 @@ export default function Login() {
               </div>
 
               <div>
-                <label className={labelClass}>Password</label>
+                <label className={labelClass}>
+                  Password
+                </label>
                 <input
                   required
                   minLength={6}
@@ -357,9 +424,11 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors disabled:opacity-60"
+                className="w-full py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-800 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Creating account..." : "Create Account"}
+                {loading
+                  ? "Creating account..."
+                  : "Create Account"}
               </button>
             </form>
           )}

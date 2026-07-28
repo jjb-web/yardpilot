@@ -33,7 +33,7 @@ export default function AppLayout() {
             <Leaf size={16} className="text-green-950" />
           </div>
           <div>
-            <p className="text-white font-bold text-sm" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>GreenEdge</p>
+            <p className="text-white font-bold text-sm" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilotUSA</p>
             <p className="text-green-400 text-xs truncate max-w-[140px]">{user.company}</p>
           </div>
         </div>

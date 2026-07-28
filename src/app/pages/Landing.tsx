@@ -35,7 +35,7 @@ function DashboardMockup() {
         <div className="w-2.5 h-2.5 rounded-full bg-green-400/60" />
         <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/60" />
         <div className="w-2.5 h-2.5 rounded-full bg-red-400/60" />
-        <span className="ml-3 text-green-200 text-xs font-medium">GreenEdge — Estimate Builder</span>
+        <span className="ml-3 text-green-200 text-xs font-medium">YardPilotUSA — Estimate Builder</span>
       </div>
       {/* Mockup body */}
       <div className="p-4 space-y-3 bg-gray-50">
@@ -82,7 +82,7 @@ export default function Landing() {
             <div className="w-8 h-8 bg-green-700 rounded-lg flex items-center justify-center">
               <Leaf size={16} className="text-white" />
             </div>
-            <span className="font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>GreenEdge</span>
+            <span className="font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilotUSA</span>
           </div>
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
@@ -166,7 +166,7 @@ export default function Landing() {
             className="text-3xl lg:text-4xl font-extrabold text-white mb-4"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            Meet GreenEdge
+            Meet YardPilotUSA
           </h2>
           <p className="text-green-100 text-lg mb-10 max-w-xl mx-auto">
             An AI-powered estimating platform designed specifically for landscaping businesses.
@@ -258,14 +258,14 @@ export default function Landing() {
               J
             </div>
             <p className="text-gray-700 leading-relaxed text-lg mb-4">
-              "Hi — I'm building GreenEdge after spending time with landscaping crews and seeing firsthand how much time goes into creating estimates and chasing down customers.
+              "Hi — I'm building YardPilotUSA after spending time with landscaping crews and seeing firsthand how much time goes into creating estimates and chasing down customers.
             </p>
             <p className="text-gray-700 leading-relaxed mb-6">
               Before we write another line of code, I want to hear from real landscapers. What's actually slowing you down? What would make the biggest difference? Your input shapes what we build first."
             </p>
             <div>
               <p className="font-semibold text-gray-900">Jordan M.</p>
-              <p className="text-sm text-gray-500">Founder, GreenEdge</p>
+              <p className="text-sm text-gray-500">Founder, YardPilotUSA</p>
             </div>
           </div>
         </div>
@@ -360,7 +360,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="bg-gray-950 border-t border-white/5 py-6 px-6 text-center">
         <p className="text-gray-600 text-xs">
-          © 2025 GreenEdge · Built for landscapers · All rights reserved
+          © 2025 YardPilotUSA · Built for landscapers · All rights reserved
         </p>
       </footer>
     </div>

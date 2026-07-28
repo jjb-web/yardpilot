@@ -58,7 +58,7 @@ export default function Account() {
           <h2 className="font-bold text-gray-900">AI Configuration</h2>
         </div>
         <p className="text-sm text-gray-500 mb-4">
-          Add your Anthropic API key to enable real AI estimates. Without a key, GreenEdge uses a built-in estimation engine.
+          Add your Anthropic API key to enable real AI estimates. Without a key, YardPilotUSA uses a built-in estimation engine.
         </p>
         <div className="mb-4">
           <label className={labelClass}>Anthropic API Key</label>
@@ -87,7 +87,7 @@ export default function Account() {
 
       {/* App info */}
       <div className="bg-green-50 border border-green-100 rounded-xl p-5 text-sm text-gray-600">
-        <p className="font-semibold text-gray-800 mb-1">GreenEdge Beta</p>
+        <p className="font-semibold text-gray-800 mb-1">YardPilotUSA Beta</p>
         <p>This is an early-access build. Data is saved locally in your browser. Cloud sync, team features, and PDF export are coming in the full release.</p>
       </div>
     </div>
