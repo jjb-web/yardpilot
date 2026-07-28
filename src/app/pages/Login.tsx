@@ -3,9 +3,14 @@ import {
   useState,
   type SyntheticEvent,
 } from "react";
-import { Link, useNavigate } from "react-router";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router";
 import { Leaf } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 type FormData = {
   name: string;
@@ -39,8 +44,12 @@ export default function Login() {
     subscription.unsubscribe();
   };
 }, [navigate]);
-
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<"login" | "register">(
+  searchParams.get("mode") === "register"
+    ? "register"
+    : "login"
+);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
