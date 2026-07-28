@@ -1,4 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type SyntheticEvent,
+} from "react";
 import { Link, useNavigate } from "react-router";
 import { Leaf } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -14,17 +18,13 @@ type FormData = {
 export default function Login() {
   const navigate = useNavigate();
   useEffect(() => {
-  async function checkSession() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+  let active = true;
 
-    if (session) {
+  supabase.auth.getSession().then(({ data }) => {
+    if (active && data.session) {
       navigate("/app/dashboard", { replace: true });
     }
-  }
-
-  checkSession();
+  });
 
   const {
     data: { subscription },
@@ -35,6 +35,7 @@ export default function Login() {
   });
 
   return () => {
+    active = false;
     subscription.unsubscribe();
   };
 }, [navigate]);
@@ -59,7 +60,7 @@ export default function Login() {
     }));
   }
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setMessage("");
@@ -81,7 +82,7 @@ export default function Login() {
     navigate("/app/dashboard");
   }
 
-  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+  async function handleRegister(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setMessage("");
@@ -118,23 +119,23 @@ export default function Login() {
   }
 
   async function handleGoogleLogin() {
-    setError("");
-    setMessage("");
-    setLoading(true);
+  setError("");
+  setMessage("");
+  setLoading(true);
 
-    const { error: googleError } =
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/app/dashboard`,
-        },
-      });
+  const { error: googleError } =
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/login`,
+      },
+    });
 
-    if (googleError) {
-      setLoading(false);
-      setError(googleError.message);
-    }
+  if (googleError) {
+    setLoading(false);
+    setError(googleError.message);
   }
+}
 
   const inputClass =
     "w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/40 transition";
