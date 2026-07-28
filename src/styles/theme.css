@@ -179,3 +179,157 @@
     line-height: 1.5;
   }
 }
+
+/* YardPilot application dark mode overrides. The existing exported pages use
+   fixed Tailwind gray/white utility classes, so these scoped rules make the
+   full signed-in app switch cleanly without rewriting every page. */
+.dark .app-shell {
+  background: #07100a;
+  color: #e5e7eb;
+}
+
+.dark .app-shell .bg-white {
+  background-color: #111827 !important;
+}
+
+.dark .app-shell .bg-gray-50 {
+  background-color: #0b1410 !important;
+}
+
+.dark .app-shell .bg-gray-100 {
+  background-color: #1f2937 !important;
+}
+
+.dark .app-shell .bg-green-50 {
+  background-color: rgba(20, 83, 45, 0.26) !important;
+}
+
+.dark .app-shell .bg-blue-50,
+.dark .app-shell .bg-emerald-50,
+.dark .app-shell .bg-violet-50 {
+  background-color: rgba(31, 41, 55, 0.9) !important;
+}
+
+.dark .app-shell .text-gray-900,
+.dark .app-shell .text-gray-800,
+.dark .app-shell .text-gray-700 {
+  color: #f3f4f6 !important;
+}
+
+.dark .app-shell .text-gray-600,
+.dark .app-shell .text-gray-500 {
+  color: #aeb8c6 !important;
+}
+
+.dark .app-shell .text-gray-400 {
+  color: #8290a3 !important;
+}
+
+.dark .app-shell .border-gray-50,
+.dark .app-shell .border-gray-100,
+.dark .app-shell .border-gray-200,
+.dark .app-shell .border-gray-300 {
+  border-color: #2c394a !important;
+}
+
+.dark .app-shell input,
+.dark .app-shell textarea,
+.dark .app-shell select {
+  background-color: #0f172a !important;
+  color: #f3f4f6 !important;
+  border-color: #334155 !important;
+  color-scheme: dark;
+}
+
+.dark .app-shell input::placeholder,
+.dark .app-shell textarea::placeholder {
+  color: #64748b !important;
+}
+
+.dark .app-shell .hover\:bg-gray-50:hover,
+.dark .app-shell .hover\:bg-gray-100:hover {
+  background-color: #1f2937 !important;
+}
+
+.dark .app-shell .divide-gray-50 > :not(:last-child),
+.dark .app-shell .divide-gray-100 > :not(:last-child) {
+  border-color: #2c394a !important;
+}
+
+/* The estimate itself is intentionally always a white client document. */
+.dark .estimate-print-root,
+.dark .estimate-print-root .bg-white {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+.dark .estimate-print-root .text-gray-900,
+.dark .estimate-print-root .text-gray-800,
+.dark .estimate-print-root .text-gray-700 {
+  color: #111827 !important;
+}
+
+.dark .estimate-print-root .text-gray-600,
+.dark .estimate-print-root .text-gray-500 {
+  color: #4b5563 !important;
+}
+
+.dark .estimate-print-root .text-gray-400 {
+  color: #9ca3af !important;
+}
+
+.dark .estimate-print-root .bg-gray-50 {
+  background-color: #f9fafb !important;
+}
+
+.dark .estimate-print-root .bg-gray-100 {
+  background-color: #f3f4f6 !important;
+}
+
+.dark .estimate-print-root .border-gray-100,
+.dark .estimate-print-root .border-gray-200 {
+  border-color: #e5e7eb !important;
+}
+
+@page {
+  size: letter;
+  margin: 0.45in;
+}
+
+@media print {
+  html,
+  body {
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .estimate-print-root,
+  .estimate-print-root * {
+    visibility: visible;
+  }
+
+  .estimate-print-root {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .estimate-print-root table,
+  .estimate-print-root figure,
+  .estimate-print-root section {
+    break-inside: avoid;
+  }
+}

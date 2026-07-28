@@ -40,8 +40,8 @@ const SOURCE_OPTIONS = [
   "Other",
 ];
 
-type ContactDraft = Omit<Contact, "id" | "createdAt" | "updatedAt">;
-type PropertyDraft = Omit<Property, "id" | "contactId" | "createdAt" | "updatedAt">;
+type ContactDraft = Omit<Contact, "id" | "workspaceId" | "createdAt" | "updatedAt">;
+type PropertyDraft = Omit<Property, "id" | "workspaceId" | "contactId" | "createdAt" | "updatedAt">;
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
@@ -91,6 +91,7 @@ function activityClasses(status: ContactActivity) {
 
 export default function Contacts() {
   const {
+    activeWorkspaceId,
     contacts,
     contactsLoading,
     contactsError,
@@ -228,8 +229,10 @@ export default function Contacts() {
         });
         setSelected(saved);
       } else {
+        if (!activeWorkspaceId) throw new Error("Workspace is still loading.");
         const saved = await addContact({
           id: uid(),
+          workspaceId: activeWorkspaceId,
           ...draft,
           name: draft.name.trim(),
           email: draft.email.trim(),
@@ -259,7 +262,10 @@ export default function Contacts() {
     setSaving(true);
     try {
       await deleteContact(selected.id);
-      closeContactModal();
+      setModalOpen(false);
+      setSelected(null);
+      setDraft(emptyContact());
+      setModalError("");
     } catch (error) {
       setModalError(error instanceof Error ? error.message : "The contact could not be deleted.");
     } finally {
@@ -326,8 +332,10 @@ export default function Contacts() {
         });
         setSelectedProperty(saved);
       } else {
+        if (!activeWorkspaceId) throw new Error("Workspace is still loading.");
         const saved = await addProperty({
           id: uid(),
+          workspaceId: activeWorkspaceId,
           contactId: selected.id,
           ...propertyDraft,
           name: propertyDraft.name.trim(),
@@ -349,7 +357,10 @@ export default function Contacts() {
     setPropertySaving(true);
     try {
       await deleteProperty(selectedProperty.id);
-      closePropertyModal();
+      setPropertyModalOpen(false);
+      setSelectedProperty(null);
+      setPropertyDraft(emptyProperty());
+      setPropertyError("");
     } catch (error) {
       setPropertyError(error instanceof Error ? error.message : "The property could not be deleted.");
     } finally {

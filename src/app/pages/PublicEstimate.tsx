@@ -45,6 +45,8 @@ function mapLineItems(value: unknown): LineItem[] {
 function mapProject(row: Record<string, unknown>): Project {
   return {
     id: text(row.id),
+    workspaceId: text(row.workspace_id),
+    createdBy: text(row.created_by) || text(row.user_id),
     name: text(row.name),
     client: text(row.client),
     address: text(row.address),
@@ -70,6 +72,10 @@ function mapProject(row: Record<string, unknown>): Project {
     notes: "",
     shareToken: text(row.share_token),
     shareEnabled: true,
+    scheduledStart: text(row.scheduled_start) || null,
+    scheduledEnd: text(row.scheduled_end) || null,
+    followUpAt: text(row.follow_up_at) || null,
+    assignedMemberIds: [],
     createdAt: text(row.created_at),
     updatedAt: text(row.updated_at),
   };
@@ -88,6 +94,7 @@ function mapContact(row: Record<string, unknown> | null): Contact | null {
   if (!row || !text(row.id)) return null;
   return {
     id: text(row.id),
+    workspaceId: text(row.workspace_id),
     name: text(row.name),
     email: text(row.email),
     phone: text(row.phone),
@@ -108,6 +115,7 @@ function mapProperty(row: Record<string, unknown> | null): Property | null {
   if (!row || !text(row.id)) return null;
   return {
     id: text(row.id),
+    workspaceId: text(row.workspace_id),
     contactId: text(row.contact_id),
     name: text(row.name),
     address: text(row.address),
@@ -163,6 +171,7 @@ export default function PublicEstimate() {
             .createSignedUrl(storagePath, 60 * 60);
           return {
             id: text(row.id),
+            workspaceId: text(row.workspace_id),
             propertyId: text(row.property_id),
             storagePath,
             caption: text(row.caption),

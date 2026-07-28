@@ -123,6 +123,17 @@ export default function EstimateDocument({
           )}
         </section>
 
+        {project.aiEstimate && (
+          <section className="rounded-xl border border-green-200 bg-green-50 p-5">
+            <p className="text-xs uppercase tracking-wider font-bold text-green-700 mb-2">
+              Estimate overview
+            </p>
+            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {project.aiEstimate}
+            </p>
+          </section>
+        )}
+
         <section>
           <div className="flex items-end justify-between gap-4 mb-3">
             <div>

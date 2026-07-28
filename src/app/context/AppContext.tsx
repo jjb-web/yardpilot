@@ -13,17 +13,42 @@ import type {
   ContactActivity,
   ContactType,
   EstimateStatus,
+  FollowUp,
+  FollowUpChannel,
+  FollowUpStatus,
+  FollowUpType,
+  Invoice,
+  InvoiceStatus,
+  JobRequest,
+  JobRequestStatus,
   LineItem,
   Project,
   ProjectStatus,
   Property,
   PropertyPhoto,
+  ScheduleEvent,
+  ScheduleEventStatus,
+  ScheduleSourceType,
   User,
+  Workspace,
+  WorkspaceInvite,
+  WorkspaceMember,
+  WorkspaceRole,
 } from "../data/types";
 
 type AppContextType = {
   user: User | null;
+  authUserId: string | null;
   authLoading: boolean;
+
+  workspaces: Workspace[];
+  activeWorkspace: Workspace | null;
+  activeWorkspaceId: string | null;
+  role: WorkspaceRole | null;
+  workspaceMembers: WorkspaceMember[];
+  workspaceInvites: WorkspaceInvite[];
+  workspaceLoading: boolean;
+  workspaceError: string;
 
   projects: Project[];
   projectsLoading: boolean;
@@ -38,15 +63,46 @@ type AppContextType = {
   propertiesLoading: boolean;
   propertiesError: string;
 
+  invoices: Invoice[];
+  invoicesLoading: boolean;
+  invoicesError: string;
+
+  scheduleEvents: ScheduleEvent[];
+  scheduleLoading: boolean;
+  scheduleError: string;
+
+  followUps: FollowUp[];
+  followUpsLoading: boolean;
+  followUpsError: string;
+
+  jobRequests: JobRequest[];
+  jobRequestsLoading: boolean;
+  jobRequestsError: string;
+
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   register: (user: User, password: string) => Promise<boolean>;
+
+  switchWorkspace: (workspaceId: string) => Promise<void>;
+  refreshWorkspaces: () => Promise<void>;
+  createWorkspaceInvite: (
+    email: string,
+    role: Exclude<WorkspaceRole, "owner">
+  ) => Promise<WorkspaceInvite>;
+  revokeWorkspaceInvite: (id: string) => Promise<void>;
+  acceptWorkspaceInvite: (code: string) => Promise<string>;
+  updateWorkspaceMemberRole: (
+    membershipId: string,
+    role: Exclude<WorkspaceRole, "owner">
+  ) => Promise<void>;
+  removeWorkspaceMember: (membershipId: string) => Promise<void>;
 
   refreshProjects: () => Promise<void>;
   addProject: (project: Project) => Promise<Project>;
   updateProject: (project: Project) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
   setProjectSharing: (id: string, enabled: boolean) => Promise<Project>;
+  assignSelfToProject: (projectId: string) => Promise<void>;
 
   refreshContacts: () => Promise<void>;
   addContact: (contact: Contact) => Promise<Contact>;
@@ -63,6 +119,28 @@ type AppContextType = {
     caption?: string
   ) => Promise<PropertyPhoto>;
   deletePropertyPhoto: (photo: PropertyPhoto) => Promise<void>;
+
+  refreshInvoices: () => Promise<void>;
+  addInvoice: (invoice: Invoice) => Promise<Invoice>;
+  updateInvoice: (invoice: Invoice) => Promise<Invoice>;
+  deleteInvoice: (id: string) => Promise<void>;
+
+  refreshSchedule: () => Promise<void>;
+  addScheduleEvent: (event: ScheduleEvent) => Promise<ScheduleEvent>;
+  updateScheduleEvent: (event: ScheduleEvent) => Promise<ScheduleEvent>;
+  deleteScheduleEvent: (id: string) => Promise<void>;
+
+  refreshFollowUps: () => Promise<void>;
+  addFollowUp: (followUp: FollowUp) => Promise<FollowUp>;
+  updateFollowUp: (followUp: FollowUp) => Promise<FollowUp>;
+  deleteFollowUp: (id: string) => Promise<void>;
+
+  refreshJobRequests: () => Promise<void>;
+  addJobRequest: (request: JobRequest) => Promise<JobRequest>;
+  updateJobRequest: (request: JobRequest) => Promise<JobRequest>;
+  approveJobRequest: (id: string) => Promise<string>;
+  declineJobRequest: (id: string, notes?: string) => Promise<void>;
+  deleteJobRequest: (id: string) => Promise<void>;
 };
 
 type ProfileRow = {
@@ -72,9 +150,42 @@ type ProfileRow = {
   company: string | null;
 };
 
+type WorkspaceRow = {
+  id: string;
+  name: string;
+  created_by: string;
+  role: WorkspaceRole;
+  created_at: string;
+};
+
+type WorkspaceMemberRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  full_name: string;
+  email: string;
+  company: string;
+  phone: string;
+  created_at: string;
+};
+
+type WorkspaceInviteRow = {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: Exclude<WorkspaceRole, "owner">;
+  token: string;
+  status: WorkspaceInvite["status"];
+  expires_at: string;
+  created_at: string;
+};
+
 type ProjectRow = {
   id: string;
   user_id: string;
+  workspace_id: string;
+  created_by: string | null;
   name: string;
   client: string;
   address: string;
@@ -100,6 +211,10 @@ type ProjectRow = {
   notes: string;
   share_token: string;
   share_enabled: boolean;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  follow_up_at: string | null;
+  assigned_member_ids?: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -107,6 +222,7 @@ type ProjectRow = {
 type ContactRow = {
   id: string;
   user_id: string;
+  workspace_id: string;
   name: string;
   email: string;
   phone: string;
@@ -125,6 +241,7 @@ type ContactRow = {
 type PropertyRow = {
   id: string;
   user_id: string;
+  workspace_id: string;
   contact_id: string;
   name: string;
   address: string;
@@ -141,18 +258,91 @@ type PropertyRow = {
 type PropertyPhotoRow = {
   id: string;
   user_id: string;
+  workspace_id: string;
   property_id: string;
   storage_path: string;
   caption: string;
   created_at: string;
 };
 
+type InvoiceRow = {
+  id: string;
+  workspace_id: string;
+  created_by: string;
+  project_id: string | null;
+  contact_id: string | null;
+  property_id: string | null;
+  invoice_number: string;
+  issue_date: string;
+  due_date: string;
+  status: InvoiceStatus;
+  amount: number | string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ScheduleEventRow = {
+  id: string;
+  workspace_id: string;
+  created_by: string;
+  title: string;
+  description: string;
+  start_at: string;
+  end_at: string | null;
+  all_day: boolean;
+  source_type: ScheduleSourceType;
+  project_id: string | null;
+  invoice_id: string | null;
+  contact_id: string | null;
+  assigned_user_id: string | null;
+  status: ScheduleEventStatus;
+  auto_key: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type FollowUpRow = {
+  id: string;
+  workspace_id: string;
+  created_by: string;
+  title: string;
+  notes: string;
+  due_at: string;
+  type: FollowUpType;
+  status: FollowUpStatus;
+  channel: FollowUpChannel;
+  contact_id: string | null;
+  project_id: string | null;
+  invoice_id: string | null;
+  assigned_user_id: string | null;
+  auto_key: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type JobRequestRow = {
+  id: string;
+  workspace_id: string;
+  requested_by: string;
+  title: string;
+  client: string;
+  address: string;
+  scope_description: string;
+  proposed_start: string | null;
+  status: JobRequestStatus;
+  manager_notes: string;
+  created_project_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const AppContext = createContext<AppContextType | null>(null);
 
 function userFromAuth(authUser: SupabaseAuthUser): User {
   const metadata = authUser.user_metadata ?? {};
-
   return {
+    id: authUser.id,
     name:
       metadata.full_name ??
       metadata.name ??
@@ -169,8 +359,8 @@ function userFromProfile(
   profile: ProfileRow
 ): User {
   const fallback = userFromAuth(authUser);
-
   return {
+    id: authUser.id,
     name: profile.full_name || fallback.name,
     email: profile.email || fallback.email,
     company: profile.company || fallback.company,
@@ -179,16 +369,12 @@ function userFromProfile(
 }
 
 function normalizeLineItems(value: unknown): LineItem[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
+  if (!Array.isArray(value)) return [];
   return value.map((item, index) => {
     const candidate =
       typeof item === "object" && item !== null
         ? (item as Partial<LineItem>)
         : {};
-
     return {
       id:
         typeof candidate.id === "string"
@@ -200,17 +386,57 @@ function normalizeLineItems(value: unknown): LineItem[] {
           : "",
       qty: Number(candidate.qty ?? 0),
       unit:
-        typeof candidate.unit === "string"
-          ? candidate.unit
-          : "each",
+        typeof candidate.unit === "string" ? candidate.unit : "each",
       unitCost: Number(candidate.unitCost ?? 0),
     };
   });
 }
 
-function rowToProject(row: ProjectRow): Project {
+function rowToWorkspace(row: WorkspaceRow): Workspace {
   return {
     id: row.id,
+    name: row.name,
+    createdBy: row.created_by,
+    role: row.role,
+    createdAt: row.created_at,
+  };
+}
+
+function rowToWorkspaceMember(row: WorkspaceMemberRow): WorkspaceMember {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    userId: row.user_id,
+    role: row.role,
+    name: row.full_name || row.email.split("@")[0] || "Team member",
+    email: row.email,
+    company: row.company,
+    phone: row.phone,
+    createdAt: row.created_at,
+  };
+}
+
+function rowToWorkspaceInvite(row: WorkspaceInviteRow): WorkspaceInvite {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    email: row.email,
+    role: row.role,
+    token: row.token,
+    status: row.status,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  };
+}
+
+function rowToProject(
+  row: ProjectRow,
+  assignments: string[] = row.assigned_member_ids ?? []
+): Project {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    createdBy: row.created_by ?? row.user_id,
     name: row.name,
     client: row.client,
     address: row.address,
@@ -232,10 +458,14 @@ function rowToProject(row: ProjectRow): Project {
     terms: row.terms ?? "",
     taxRate: Number(row.tax_rate ?? 0),
     discountAmount: Number(row.discount_amount ?? 0),
-    totalEstimate: Number(row.total_estimate),
-    notes: row.notes,
+    totalEstimate: Number(row.total_estimate ?? 0),
+    notes: row.notes ?? "",
     shareToken: row.share_token,
     shareEnabled: Boolean(row.share_enabled),
+    scheduledStart: row.scheduled_start,
+    scheduledEnd: row.scheduled_end,
+    followUpAt: row.follow_up_at,
+    assignedMemberIds: assignments,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -244,6 +474,7 @@ function rowToProject(row: ProjectRow): Project {
 function rowToContact(row: ContactRow): Contact {
   return {
     id: row.id,
+    workspaceId: row.workspace_id,
     name: row.name,
     email: row.email,
     phone: row.phone,
@@ -263,6 +494,7 @@ function rowToContact(row: ContactRow): Contact {
 function rowToProperty(row: PropertyRow): Property {
   return {
     id: row.id,
+    workspaceId: row.workspace_id,
     contactId: row.contact_id,
     name: row.name,
     address: row.address,
@@ -283,9 +515,9 @@ async function rowToPropertyPhoto(
   const { data, error } = await supabase.storage
     .from("property-photos")
     .createSignedUrl(row.storage_path, 60 * 60);
-
   return {
     id: row.id,
+    workspaceId: row.workspace_id,
     propertyId: row.property_id,
     storagePath: row.storage_path,
     caption: row.caption,
@@ -294,109 +526,119 @@ async function rowToPropertyPhoto(
   };
 }
 
-function projectToDatabase(project: Project, userId: string) {
+function rowToInvoice(row: InvoiceRow): Invoice {
   return {
-    id: project.id,
-    user_id: userId,
-    name: project.name,
-    client: project.client,
-    address: project.address,
-    contact_id: project.contactId,
-    property_id: project.propertyId,
-    status: project.status,
-    estimate_status: project.estimateStatus,
-    estimate_number: project.estimateNumber,
-    issue_date: project.issueDate,
-    valid_until: project.validUntil || null,
-    project_type: project.projectType,
-    square_footage: project.squareFootage,
-    labor_rate: project.laborRate,
-    labor_hours: project.laborHours,
-    line_items: project.lineItems,
-    estimate_summary: project.aiEstimate,
-    scope_description: project.scopeDescription,
-    client_notes: project.clientNotes,
-    terms: project.terms,
-    tax_rate: project.taxRate,
-    discount_amount: project.discountAmount,
-    total_estimate: project.totalEstimate,
-    notes: project.notes,
-    share_token: project.shareToken,
-    share_enabled: project.shareEnabled,
-    created_at: project.createdAt,
-    updated_at: project.updatedAt,
+    id: row.id,
+    workspaceId: row.workspace_id,
+    createdBy: row.created_by,
+    projectId: row.project_id,
+    contactId: row.contact_id,
+    propertyId: row.property_id,
+    invoiceNumber: row.invoice_number,
+    issueDate: row.issue_date,
+    dueDate: row.due_date,
+    status: row.status,
+    amount: Number(row.amount),
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
-function projectUpdates(project: Project) {
-  const { user_id: _userId, id: _id, created_at: _createdAt, ...updates } =
-    projectToDatabase(project, "00000000-0000-0000-0000-000000000000");
-  return updates;
-}
-
-function contactToDatabase(contact: Contact, userId: string) {
+function rowToScheduleEvent(row: ScheduleEventRow): ScheduleEvent {
   return {
-    id: contact.id,
-    user_id: userId,
-    name: contact.name,
-    email: contact.email,
-    phone: contact.phone,
-    address: contact.address,
-    city: contact.city,
-    state: contact.state,
-    zip: contact.zip,
-    contact_type: contact.contactType,
-    activity_status: contact.activityStatus,
-    source: contact.source,
-    notes: contact.notes,
-    created_at: contact.createdAt,
-    updated_at: contact.updatedAt,
+    id: row.id,
+    workspaceId: row.workspace_id,
+    createdBy: row.created_by,
+    title: row.title,
+    description: row.description,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    allDay: row.all_day,
+    sourceType: row.source_type,
+    projectId: row.project_id,
+    invoiceId: row.invoice_id,
+    contactId: row.contact_id,
+    assignedUserId: row.assigned_user_id,
+    status: row.status,
+    autoKey: row.auto_key,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
-function contactUpdates(contact: Contact) {
-  const { user_id: _userId, id: _id, created_at: _createdAt, ...updates } =
-    contactToDatabase(contact, "00000000-0000-0000-0000-000000000000");
-  return updates;
-}
-
-function propertyToDatabase(property: Property, userId: string) {
+function rowToFollowUp(row: FollowUpRow): FollowUp {
   return {
-    id: property.id,
-    user_id: userId,
-    contact_id: property.contactId,
-    name: property.name,
-    address: property.address,
-    city: property.city,
-    state: property.state,
-    zip: property.zip,
-    description: property.description,
-    internal_notes: property.internalNotes,
-    client_notes: property.clientNotes,
-    created_at: property.createdAt,
-    updated_at: property.updatedAt,
+    id: row.id,
+    workspaceId: row.workspace_id,
+    createdBy: row.created_by,
+    title: row.title,
+    notes: row.notes,
+    dueAt: row.due_at,
+    type: row.type,
+    status: row.status,
+    channel: row.channel,
+    contactId: row.contact_id,
+    projectId: row.project_id,
+    invoiceId: row.invoice_id,
+    assignedUserId: row.assigned_user_id,
+    autoKey: row.auto_key,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
-function propertyUpdates(property: Property) {
-  const { user_id: _userId, id: _id, created_at: _createdAt, ...updates } =
-    propertyToDatabase(property, "00000000-0000-0000-0000-000000000000");
-  return updates;
+function rowToJobRequest(
+  row: JobRequestRow,
+  members: WorkspaceMember[]
+): JobRequest {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    requestedBy: row.requested_by,
+    requestedByName:
+      members.find((member) => member.userId === row.requested_by)?.name ??
+      "Team member",
+    title: row.title,
+    client: row.client,
+    address: row.address,
+    scopeDescription: row.scope_description,
+    proposedStart: row.proposed_start,
+    status: row.status,
+    managerNotes: row.manager_notes,
+    createdProjectId: row.created_project_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function getFileExtension(file: File) {
-  const fromName = file.name.split(".").pop()?.toLowerCase();
-  if (fromName && /^[a-z0-9]+$/.test(fromName)) {
-    return fromName;
-  }
-
-  const fromType = file.type.split("/").pop()?.toLowerCase();
-  return fromType && /^[a-z0-9]+$/.test(fromType) ? fromType : "jpg";
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension && /^[a-z0-9]+$/.test(extension)) return extension;
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  if (file.type === "image/heic") return "heic";
+  if (file.type === "image/heif") return "heif";
+  return "jpg";
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
+    null
+  );
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
+    []
+  );
+  const [workspaceInvites, setWorkspaceInvites] = useState<WorkspaceInvite[]>(
+    []
+  );
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -411,157 +653,336 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [propertiesLoading, setPropertiesLoading] = useState(false);
   const [propertiesError, setPropertiesError] = useState("");
 
-  const authUserIdRef = useRef<string | null>(null);
-  const authRequestRef = useRef(0);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState("");
 
-  function clearAccount() {
-    authRequestRef.current += 1;
-    authUserIdRef.current = null;
-    setUser(null);
+  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
+
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [followUpsLoading, setFollowUpsLoading] = useState(false);
+  const [followUpsError, setFollowUpsError] = useState("");
+
+  const [jobRequests, setJobRequests] = useState<JobRequest[]>([]);
+  const [jobRequestsLoading, setJobRequestsLoading] = useState(false);
+  const [jobRequestsError, setJobRequestsError] = useState("");
+
+  const authUserIdRef = useRef<string | null>(null);
+  const activeWorkspaceIdRef = useRef<string | null>(null);
+  const workspaceRequestRef = useRef(0);
+
+  const activeWorkspace =
+    workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
+  const role = activeWorkspace?.role ?? null;
+
+  function clearWorkspaceData() {
+    setWorkspaceMembers([]);
+    setWorkspaceInvites([]);
     setProjects([]);
     setContacts([]);
     setProperties([]);
     setPropertyPhotos([]);
+    setInvoices([]);
+    setScheduleEvents([]);
+    setFollowUps([]);
+    setJobRequests([]);
     setProjectsError("");
     setContactsError("");
     setPropertiesError("");
-    setProjectsLoading(false);
-    setContactsLoading(false);
-    setPropertiesLoading(false);
-    setAuthLoading(false);
+    setInvoicesError("");
+    setScheduleError("");
+    setFollowUpsError("");
+    setJobRequestsError("");
+  }
 
+  function clearAccount() {
+    workspaceRequestRef.current += 1;
+    authUserIdRef.current = null;
+    activeWorkspaceIdRef.current = null;
+    setAuthUserId(null);
+    setUser(null);
+    setWorkspaces([]);
+    setActiveWorkspaceId(null);
+    clearWorkspaceData();
+    setAuthLoading(false);
+    setWorkspaceLoading(false);
     localStorage.removeItem("ls_projects");
     localStorage.removeItem("ls_user");
     localStorage.removeItem("ls_registered");
   }
 
-  async function loadProfile(authUser: SupabaseAuthUser, requestId: number) {
+  function currentWorkspaceOrThrow() {
+    const workspaceId = activeWorkspaceIdRef.current;
+    if (!workspaceId) throw new Error("Choose a workspace first.");
+    return workspaceId;
+  }
+
+  function currentUserOrThrow() {
+    const userId = authUserIdRef.current;
+    if (!userId) throw new Error("You must be signed in.");
+    return userId;
+  }
+
+  function ensureManager() {
+    if (role !== "owner" && role !== "partner") {
+      throw new Error("Only an owner or partner can do that.");
+    }
+  }
+
+  async function loadProfile(authUser: SupabaseAuthUser) {
     const { data, error } = await supabase
       .from("profiles")
       .select("email, phone, full_name, company")
       .eq("id", authUser.id)
       .maybeSingle();
 
-    if (requestId !== authRequestRef.current) return;
-
     if (error) {
       console.error("Could not load profile:", error.message);
+      setUser(userFromAuth(authUser));
       return;
     }
 
-    if (data) {
-      setUser(userFromProfile(authUser, data as ProfileRow));
-    }
+    setUser(data ? userFromProfile(authUser, data as ProfileRow) : userFromAuth(authUser));
   }
 
-  async function loadProjects(userId: string, requestId: number) {
+  async function fetchWorkspaces(): Promise<Workspace[]> {
+    const { data, error } = await supabase.rpc("get_my_workspaces");
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as WorkspaceRow[]).map(rowToWorkspace);
+  }
+
+  async function loadMembers(workspaceId: string): Promise<WorkspaceMember[]> {
+    const { data, error } = await supabase.rpc("get_workspace_members", {
+      requested_workspace_id: workspaceId,
+    });
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as WorkspaceMemberRow[]).map(rowToWorkspaceMember);
+  }
+
+  async function loadWorkspaceBundle(
+    workspaceId: string,
+    workspaceRole: WorkspaceRole
+  ) {
+    const requestId = ++workspaceRequestRef.current;
+    setWorkspaceLoading(true);
+    setWorkspaceError("");
     setProjectsLoading(true);
-    setProjectsError("");
+    setContactsLoading(workspaceRole !== "employee");
+    setPropertiesLoading(workspaceRole !== "employee");
+    setInvoicesLoading(workspaceRole !== "employee");
+    setScheduleLoading(true);
+    setFollowUpsLoading(true);
+    setJobRequestsLoading(true);
+    clearWorkspaceData();
 
-    const { data, error } = await supabase
-      .from("projects")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: false });
+    try {
+      const members = await loadMembers(workspaceId);
+      if (requestId !== workspaceRequestRef.current) return;
+      setWorkspaceMembers(members);
 
-    if (requestId !== authRequestRef.current) return;
+      const manager = workspaceRole === "owner" || workspaceRole === "partner";
 
-    if (error) {
-      setProjects([]);
-      setProjectsError(error.message);
-      setProjectsLoading(false);
-      return;
+      const projectPromise: Promise<any> = manager
+        ? Promise.all([
+            supabase
+              .from("projects")
+              .select("*")
+              .eq("workspace_id", workspaceId)
+              .order("updated_at", { ascending: false }),
+            supabase
+              .from("project_assignments")
+              .select("project_id, user_id")
+              .eq("workspace_id", workspaceId),
+          ])
+        : supabase.rpc("get_employee_projects", {
+            requested_workspace_id: workspaceId,
+          });
+
+      const [
+        projectResult,
+        contactResult,
+        propertyResult,
+        photoResult,
+        invoiceResult,
+        scheduleResult,
+        followUpResult,
+        requestResult,
+        inviteResult,
+      ] = await Promise.all([
+        projectPromise,
+        manager
+          ? supabase
+              .from("contacts")
+              .select("*")
+              .eq("workspace_id", workspaceId)
+              .order("updated_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+        manager
+          ? supabase
+              .from("properties")
+              .select("*")
+              .eq("workspace_id", workspaceId)
+              .order("updated_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+        manager
+          ? supabase
+              .from("property_photos")
+              .select("*")
+              .eq("workspace_id", workspaceId)
+              .order("created_at", { ascending: true })
+          : Promise.resolve({ data: [], error: null }),
+        manager
+          ? supabase
+              .from("invoices")
+              .select("*")
+              .eq("workspace_id", workspaceId)
+              .order("due_date", { ascending: true })
+          : Promise.resolve({ data: [], error: null }),
+        supabase
+          .from("schedule_events")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("start_at", { ascending: true }),
+        supabase
+          .from("follow_ups")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("due_at", { ascending: true }),
+        supabase
+          .from("job_requests")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: false }),
+        manager
+          ? supabase
+              .from("workspace_invites")
+              .select("*")
+              .eq("workspace_id", workspaceId)
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (requestId !== workspaceRequestRef.current) return;
+
+      if (manager) {
+        const [projectsQuery, assignmentsQuery] = projectResult as [
+          { data: unknown[] | null; error: { message: string } | null },
+          { data: unknown[] | null; error: { message: string } | null }
+        ];
+        if (projectsQuery.error) throw new Error(projectsQuery.error.message);
+        if (assignmentsQuery.error) throw new Error(assignmentsQuery.error.message);
+        const assignmentMap = new Map<string, string[]>();
+        for (const row of assignmentsQuery.data ?? []) {
+          const candidate = row as { project_id: string; user_id: string };
+          assignmentMap.set(candidate.project_id, [
+            ...(assignmentMap.get(candidate.project_id) ?? []),
+            candidate.user_id,
+          ]);
+        }
+        setProjects(
+          ((projectsQuery.data ?? []) as ProjectRow[]).map((row) =>
+            rowToProject(row, assignmentMap.get(row.id) ?? [])
+          )
+        );
+      } else {
+        const employeeResult = projectResult as {
+          data: unknown[] | null;
+          error: { message: string } | null;
+        };
+        if (employeeResult.error) throw new Error(employeeResult.error.message);
+        setProjects(((employeeResult.data ?? []) as ProjectRow[]).map((row) => rowToProject(row)));
+      }
+
+      if (contactResult.error) setContactsError(contactResult.error.message);
+      else setContacts(((contactResult.data ?? []) as ContactRow[]).map(rowToContact));
+
+      if (propertyResult.error) setPropertiesError(propertyResult.error.message);
+      else setProperties(((propertyResult.data ?? []) as PropertyRow[]).map(rowToProperty));
+
+      if (photoResult.error) {
+        setPropertiesError(photoResult.error.message);
+      } else {
+        const loadedPhotos = await Promise.all(
+          ((photoResult.data ?? []) as PropertyPhotoRow[]).map(rowToPropertyPhoto)
+        );
+        if (requestId !== workspaceRequestRef.current) return;
+        setPropertyPhotos(loadedPhotos);
+      }
+
+      if (invoiceResult.error) setInvoicesError(invoiceResult.error.message);
+      else setInvoices(((invoiceResult.data ?? []) as InvoiceRow[]).map(rowToInvoice));
+
+      if (scheduleResult.error) setScheduleError(scheduleResult.error.message);
+      else
+        setScheduleEvents(
+          ((scheduleResult.data ?? []) as ScheduleEventRow[]).map(rowToScheduleEvent)
+        );
+
+      if (followUpResult.error) setFollowUpsError(followUpResult.error.message);
+      else setFollowUps(((followUpResult.data ?? []) as FollowUpRow[]).map(rowToFollowUp));
+
+      if (requestResult.error) setJobRequestsError(requestResult.error.message);
+      else
+        setJobRequests(
+          ((requestResult.data ?? []) as JobRequestRow[]).map((row) =>
+            rowToJobRequest(row, members)
+          )
+        );
+
+      if (inviteResult.error) setWorkspaceError(inviteResult.error.message);
+      else
+        setWorkspaceInvites(
+          ((inviteResult.data ?? []) as WorkspaceInviteRow[]).map(rowToWorkspaceInvite)
+        );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load workspace.";
+      setWorkspaceError(message);
+      setProjectsError(message);
+    } finally {
+      if (requestId === workspaceRequestRef.current) {
+        setWorkspaceLoading(false);
+        setProjectsLoading(false);
+        setContactsLoading(false);
+        setPropertiesLoading(false);
+        setInvoicesLoading(false);
+        setScheduleLoading(false);
+        setFollowUpsLoading(false);
+        setJobRequestsLoading(false);
+      }
     }
-
-    setProjects(((data ?? []) as ProjectRow[]).map(rowToProject));
-    setProjectsLoading(false);
-  }
-
-  async function loadContacts(userId: string, requestId: number) {
-    setContactsLoading(true);
-    setContactsError("");
-
-    const { data, error } = await supabase
-      .from("contacts")
-      .select("*")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: false });
-
-    if (requestId !== authRequestRef.current) return;
-
-    if (error) {
-      setContacts([]);
-      setContactsError(error.message);
-      setContactsLoading(false);
-      return;
-    }
-
-    setContacts(((data ?? []) as ContactRow[]).map(rowToContact));
-    setContactsLoading(false);
-  }
-
-  async function loadProperties(userId: string, requestId: number) {
-    setPropertiesLoading(true);
-    setPropertiesError("");
-
-    const [propertiesResult, photosResult] = await Promise.all([
-      supabase
-        .from("properties")
-        .select("*")
-        .eq("user_id", userId)
-        .order("updated_at", { ascending: false }),
-      supabase
-        .from("property_photos")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true }),
-    ]);
-
-    if (requestId !== authRequestRef.current) return;
-
-    if (propertiesResult.error || photosResult.error) {
-      setProperties([]);
-      setPropertyPhotos([]);
-      setPropertiesError(
-        propertiesResult.error?.message ??
-          photosResult.error?.message ??
-          "Could not load properties."
-      );
-      setPropertiesLoading(false);
-      return;
-    }
-
-    const loadedPhotos = await Promise.all(
-      ((photosResult.data ?? []) as PropertyPhotoRow[]).map(rowToPropertyPhoto)
-    );
-
-    if (requestId !== authRequestRef.current) return;
-
-    setProperties(
-      ((propertiesResult.data ?? []) as PropertyRow[]).map(rowToProperty)
-    );
-    setPropertyPhotos(loadedPhotos);
-    setPropertiesLoading(false);
   }
 
   async function loadAccount(authUser: SupabaseAuthUser) {
-    const requestId = ++authRequestRef.current;
-    authUserIdRef.current = authUser.id;
     setAuthLoading(true);
+    authUserIdRef.current = authUser.id;
+    setAuthUserId(authUser.id);
     setUser(userFromAuth(authUser));
-    setProjects([]);
-    setContacts([]);
-    setProperties([]);
-    setPropertyPhotos([]);
+    await loadProfile(authUser);
 
-    await Promise.all([
-      loadProfile(authUser, requestId),
-      loadProjects(authUser.id, requestId),
-      loadContacts(authUser.id, requestId),
-      loadProperties(authUser.id, requestId),
-    ]);
+    try {
+      const loadedWorkspaces = await fetchWorkspaces();
+      setWorkspaces(loadedWorkspaces);
+      const saved = localStorage.getItem("yardpilot-workspace");
+      const selected =
+        loadedWorkspaces.find((workspace) => workspace.id === saved) ??
+        loadedWorkspaces[0] ??
+        null;
 
-    if (requestId === authRequestRef.current) {
+      if (selected) {
+        activeWorkspaceIdRef.current = selected.id;
+        setActiveWorkspaceId(selected.id);
+        localStorage.setItem("yardpilot-workspace", selected.id);
+        await loadWorkspaceBundle(selected.id, selected.role);
+      } else {
+        setWorkspaceError("No YardPilot workspace was found for this account.");
+      }
+    } catch (error) {
+      setWorkspaceError(
+        error instanceof Error ? error.message : "Could not load workspaces."
+      );
+    } finally {
       setAuthLoading(false);
     }
   }
@@ -574,20 +995,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         data: { session },
         error,
       } = await supabase.auth.getSession();
-
       if (!mounted) return;
-
       if (error) {
-        console.error("Could not restore session:", error.message);
         clearAccount();
         return;
       }
-
-      if (session?.user) {
-        await loadAccount(session.user);
-      } else {
-        clearAccount();
-      }
+      if (session?.user) await loadAccount(session.user);
+      else clearAccount();
     }
 
     void initializeAuth();
@@ -596,12 +1010,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-
       if (event === "SIGNED_OUT" || !session?.user) {
         clearAccount();
         return;
       }
-
       if (
         event === "INITIAL_SESSION" ||
         event === "SIGNED_IN" ||
@@ -649,293 +1061,433 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return !error;
   }
 
+  async function refreshWorkspaces() {
+    const loaded = await fetchWorkspaces();
+    setWorkspaces(loaded);
+  }
+
+  async function switchWorkspace(workspaceId: string) {
+    const workspace = workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) throw new Error("Workspace not found.");
+    activeWorkspaceIdRef.current = workspaceId;
+    setActiveWorkspaceId(workspaceId);
+    localStorage.setItem("yardpilot-workspace", workspaceId);
+    await loadWorkspaceBundle(workspaceId, workspace.role);
+  }
+
+  async function refreshCurrentBundle() {
+    const workspace = workspaces.find(
+      (item) => item.id === activeWorkspaceIdRef.current
+    );
+    if (workspace) await loadWorkspaceBundle(workspace.id, workspace.role);
+  }
+
+  async function createWorkspaceInvite(
+    email: string,
+    inviteRole: Exclude<WorkspaceRole, "owner">
+  ) {
+    ensureManager();
+    const workspaceId = currentWorkspaceOrThrow();
+    const userId = currentUserOrThrow();
+    const { data, error } = await supabase
+      .from("workspace_invites")
+      .insert({
+        workspace_id: workspaceId,
+        email: email.trim().toLowerCase(),
+        role: inviteRole,
+        invited_by: userId,
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const invite = rowToWorkspaceInvite(data as WorkspaceInviteRow);
+    setWorkspaceInvites((previous) => [invite, ...previous]);
+    return invite;
+  }
+
+  async function revokeWorkspaceInvite(id: string) {
+    ensureManager();
+    const workspaceId = currentWorkspaceOrThrow();
+    const { error } = await supabase
+      .from("workspace_invites")
+      .update({ status: "revoked" })
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    setWorkspaceInvites((previous) =>
+      previous.map((invite) =>
+        invite.id === id ? { ...invite, status: "revoked" } : invite
+      )
+    );
+  }
+
+  async function acceptWorkspaceInvite(code: string) {
+    const { data, error } = await supabase.rpc("accept_workspace_invite", {
+      invite_code: code.trim(),
+    });
+    if (error) throw new Error(error.message);
+    const workspaceId = String(data);
+    const loaded = await fetchWorkspaces();
+    setWorkspaces(loaded);
+    const joined = loaded.find((workspace) => workspace.id === workspaceId);
+    if (joined) {
+      activeWorkspaceIdRef.current = joined.id;
+      setActiveWorkspaceId(joined.id);
+      localStorage.setItem("yardpilot-workspace", joined.id);
+      await loadWorkspaceBundle(joined.id, joined.role);
+    }
+    return workspaceId;
+  }
+
+  async function updateWorkspaceMemberRole(
+    membershipId: string,
+    memberRole: Exclude<WorkspaceRole, "owner">
+  ) {
+    ensureManager();
+    const workspaceId = currentWorkspaceOrThrow();
+    const { error } = await supabase
+      .from("workspace_memberships")
+      .update({ role: memberRole })
+      .eq("id", membershipId)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    setWorkspaceMembers((previous) =>
+      previous.map((member) =>
+        member.id === membershipId ? { ...member, role: memberRole } : member
+      )
+    );
+  }
+
+  async function removeWorkspaceMember(membershipId: string) {
+    ensureManager();
+    const workspaceId = currentWorkspaceOrThrow();
+    const { error } = await supabase
+      .from("workspace_memberships")
+      .delete()
+      .eq("id", membershipId)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    setWorkspaceMembers((previous) =>
+      previous.filter((member) => member.id !== membershipId)
+    );
+  }
+
+  function projectToDatabase(project: Project) {
+    return {
+      id: project.id,
+      user_id: currentUserOrThrow(),
+      workspace_id: currentWorkspaceOrThrow(),
+      created_by: project.createdBy || currentUserOrThrow(),
+      name: project.name,
+      client: project.client,
+      address: project.address,
+      contact_id: project.contactId,
+      property_id: project.propertyId,
+      status: project.status,
+      estimate_status: project.estimateStatus,
+      estimate_number: project.estimateNumber,
+      issue_date: project.issueDate,
+      valid_until: project.validUntil || null,
+      project_type: project.projectType,
+      square_footage: project.squareFootage,
+      labor_rate: project.laborRate,
+      labor_hours: project.laborHours,
+      line_items: project.lineItems,
+      estimate_summary: project.aiEstimate,
+      scope_description: project.scopeDescription,
+      client_notes: project.clientNotes,
+      terms: project.terms,
+      tax_rate: project.taxRate,
+      discount_amount: project.discountAmount,
+      total_estimate: project.totalEstimate,
+      notes: project.notes,
+      share_token: project.shareToken,
+      share_enabled: project.shareEnabled,
+      scheduled_start: project.scheduledStart,
+      scheduled_end: project.scheduledEnd,
+      follow_up_at: project.followUpAt,
+      created_at: project.createdAt,
+      updated_at: project.updatedAt,
+    };
+  }
+
+  function projectUpdates(project: Project) {
+    const {
+      id: _id,
+      user_id: _userId,
+      workspace_id: _workspaceId,
+      created_at: _createdAt,
+      ...updates
+    } = projectToDatabase(project);
+    return updates;
+  }
+
+  async function syncProjectAssignments(project: Project) {
+    const workspaceId = currentWorkspaceOrThrow();
+    const userId = currentUserOrThrow();
+    const { error: deleteError } = await supabase
+      .from("project_assignments")
+      .delete()
+      .eq("project_id", project.id)
+      .eq("workspace_id", workspaceId);
+    if (deleteError) throw new Error(deleteError.message);
+
+    const uniqueIds = [...new Set(project.assignedMemberIds)].filter(Boolean);
+    if (!uniqueIds.length) return;
+
+    const { error } = await supabase.from("project_assignments").insert(
+      uniqueIds.map((memberId) => ({
+        workspace_id: workspaceId,
+        project_id: project.id,
+        user_id: memberId,
+        assigned_by: userId,
+      }))
+    );
+    if (error) throw new Error(error.message);
+  }
+
   async function refreshProjects() {
-    const userId = authUserIdRef.current;
-    if (!userId) {
-      setProjects([]);
-      return;
-    }
-    await loadProjects(userId, authRequestRef.current);
-  }
-
-  async function refreshContacts() {
-    const userId = authUserIdRef.current;
-    if (!userId) {
-      setContacts([]);
-      return;
-    }
-    await loadContacts(userId, authRequestRef.current);
-  }
-
-  async function refreshProperties() {
-    const userId = authUserIdRef.current;
-    if (!userId) {
-      setProperties([]);
-      setPropertyPhotos([]);
-      return;
-    }
-    await loadProperties(userId, authRequestRef.current);
+    await refreshCurrentBundle();
   }
 
   async function addProject(project: Project) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to save an estimate.");
-
-    setProjectsError("");
+    ensureManager();
     const { data, error } = await supabase
       .from("projects")
-      .insert(projectToDatabase(project, userId))
+      .insert(projectToDatabase(project))
       .select("*")
       .single();
-
-    if (error) {
-      setProjectsError(error.message);
-      throw new Error(error.message);
-    }
-
-    const savedProject = rowToProject(data as ProjectRow);
-    setProjects((previous) => [
-      savedProject,
-      ...previous.filter((item) => item.id !== savedProject.id),
-    ]);
-    return savedProject;
+    if (error) throw new Error(error.message);
+    await syncProjectAssignments(project);
+    const saved = rowToProject(data as ProjectRow, project.assignedMemberIds);
+    setProjects((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
+    await Promise.all([refreshSchedule(), refreshFollowUps()]);
+    return saved;
   }
 
   async function updateProject(project: Project) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to update an estimate.");
-
-    setProjectsError("");
+    ensureManager();
+    const workspaceId = currentWorkspaceOrThrow();
     const { data, error } = await supabase
       .from("projects")
       .update(projectUpdates(project))
       .eq("id", project.id)
-      .eq("user_id", userId)
+      .eq("workspace_id", workspaceId)
       .select("*")
       .single();
-
-    if (error) {
-      setProjectsError(error.message);
-      throw new Error(error.message);
-    }
-
-    const savedProject = rowToProject(data as ProjectRow);
+    if (error) throw new Error(error.message);
+    await syncProjectAssignments(project);
+    const saved = rowToProject(data as ProjectRow, project.assignedMemberIds);
     setProjects((previous) =>
-      previous.map((item) =>
-        item.id === savedProject.id ? savedProject : item
-      )
+      previous.map((item) => (item.id === saved.id ? saved : item))
     );
-    return savedProject;
+    await Promise.all([refreshSchedule(), refreshFollowUps()]);
+    return saved;
   }
 
   async function setProjectSharing(id: string, enabled: boolean) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to share an estimate.");
-
+    ensureManager();
+    const workspaceId = currentWorkspaceOrThrow();
     const { data, error } = await supabase
       .from("projects")
       .update({ share_enabled: enabled, updated_at: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", userId)
+      .eq("workspace_id", workspaceId)
       .select("*")
       .single();
-
     if (error) throw new Error(error.message);
-
-    const savedProject = rowToProject(data as ProjectRow);
+    const existing = projects.find((project) => project.id === id);
+    const saved = rowToProject(data as ProjectRow, existing?.assignedMemberIds ?? []);
     setProjects((previous) =>
-      previous.map((item) =>
-        item.id === savedProject.id ? savedProject : item
-      )
+      previous.map((project) => (project.id === id ? saved : project))
     );
-    return savedProject;
+    return saved;
   }
 
   async function deleteProject(id: string) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to delete a project.");
-
+    ensureManager();
+    const workspaceId = currentWorkspaceOrThrow();
     const { error } = await supabase
       .from("projects")
       .delete()
       .eq("id", id)
-      .eq("user_id", userId);
-
+      .eq("workspace_id", workspaceId);
     if (error) throw new Error(error.message);
     setProjects((previous) => previous.filter((project) => project.id !== id));
+    await Promise.all([refreshSchedule(), refreshFollowUps()]);
+  }
+
+  async function assignSelfToProject(projectId: string) {
+    const { error } = await supabase.rpc("employee_claim_project", {
+      requested_project_id: projectId,
+    });
+    if (error) throw new Error(error.message);
+    await refreshCurrentBundle();
+  }
+
+  function contactToDatabase(contact: Contact) {
+    return {
+      id: contact.id,
+      user_id: currentUserOrThrow(),
+      workspace_id: currentWorkspaceOrThrow(),
+      name: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+      address: contact.address,
+      city: contact.city,
+      state: contact.state,
+      zip: contact.zip,
+      contact_type: contact.contactType,
+      activity_status: contact.activityStatus,
+      source: contact.source,
+      notes: contact.notes,
+      created_at: contact.createdAt,
+      updated_at: contact.updatedAt,
+    };
+  }
+
+  async function refreshContacts() {
+    await refreshCurrentBundle();
   }
 
   async function addContact(contact: Contact) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to add a contact.");
-
-    setContactsError("");
+    ensureManager();
     const { data, error } = await supabase
       .from("contacts")
-      .insert(contactToDatabase(contact, userId))
+      .insert(contactToDatabase(contact))
       .select("*")
       .single();
-
-    if (error) {
-      setContactsError(error.message);
-      throw new Error(error.message);
-    }
-
-    const savedContact = rowToContact(data as ContactRow);
-    setContacts((previous) => [
-      savedContact,
-      ...previous.filter((item) => item.id !== savedContact.id),
-    ]);
-    return savedContact;
+    if (error) throw new Error(error.message);
+    const saved = rowToContact(data as ContactRow);
+    setContacts((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
+    return saved;
   }
 
   async function updateContact(contact: Contact) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to update a contact.");
-
-    setContactsError("");
+    ensureManager();
+    const { id: _id, user_id: _userId, workspace_id: _workspaceId, created_at: _createdAt, ...updates } =
+      contactToDatabase(contact);
     const { data, error } = await supabase
       .from("contacts")
-      .update(contactUpdates(contact))
+      .update(updates)
       .eq("id", contact.id)
-      .eq("user_id", userId)
+      .eq("workspace_id", currentWorkspaceOrThrow())
       .select("*")
       .single();
-
-    if (error) {
-      setContactsError(error.message);
-      throw new Error(error.message);
-    }
-
-    const savedContact = rowToContact(data as ContactRow);
+    if (error) throw new Error(error.message);
+    const saved = rowToContact(data as ContactRow);
     setContacts((previous) =>
-      previous.map((item) =>
-        item.id === savedContact.id ? savedContact : item
-      )
+      previous.map((item) => (item.id === saved.id ? saved : item))
     );
-    return savedContact;
+    return saved;
   }
 
   async function deleteContact(id: string) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to delete a contact.");
-
+    ensureManager();
     const propertyIds = properties
       .filter((property) => property.contactId === id)
       .map((property) => property.id);
-    const storagePaths = propertyPhotos
+    const paths = propertyPhotos
       .filter((photo) => propertyIds.includes(photo.propertyId))
       .map((photo) => photo.storagePath);
-
-    if (storagePaths.length) {
+    if (paths.length) {
       const { error: storageError } = await supabase.storage
         .from("property-photos")
-        .remove(storagePaths);
+        .remove(paths);
       if (storageError) throw new Error(storageError.message);
     }
-
     const { error } = await supabase
       .from("contacts")
       .delete()
       .eq("id", id)
-      .eq("user_id", userId);
-
+      .eq("workspace_id", currentWorkspaceOrThrow());
     if (error) throw new Error(error.message);
-
     setContacts((previous) => previous.filter((contact) => contact.id !== id));
-    setProperties((previous) =>
-      previous.filter((property) => property.contactId !== id)
-    );
+    setProperties((previous) => previous.filter((property) => property.contactId !== id));
     setPropertyPhotos((previous) =>
       previous.filter((photo) => !propertyIds.includes(photo.propertyId))
     );
   }
 
-  async function addProperty(property: Property) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to add a property.");
+  function propertyToDatabase(property: Property) {
+    return {
+      id: property.id,
+      user_id: currentUserOrThrow(),
+      workspace_id: currentWorkspaceOrThrow(),
+      contact_id: property.contactId,
+      name: property.name,
+      address: property.address,
+      city: property.city,
+      state: property.state,
+      zip: property.zip,
+      description: property.description,
+      internal_notes: property.internalNotes,
+      client_notes: property.clientNotes,
+      created_at: property.createdAt,
+      updated_at: property.updatedAt,
+    };
+  }
 
-    setPropertiesError("");
+  async function refreshProperties() {
+    await refreshCurrentBundle();
+  }
+
+  async function addProperty(property: Property) {
+    ensureManager();
     const { data, error } = await supabase
       .from("properties")
-      .insert(propertyToDatabase(property, userId))
+      .insert(propertyToDatabase(property))
       .select("*")
       .single();
-
-    if (error) {
-      setPropertiesError(error.message);
-      throw new Error(error.message);
-    }
-
-    const savedProperty = rowToProperty(data as PropertyRow);
-    setProperties((previous) => [
-      savedProperty,
-      ...previous.filter((item) => item.id !== savedProperty.id),
-    ]);
-    return savedProperty;
+    if (error) throw new Error(error.message);
+    const saved = rowToProperty(data as PropertyRow);
+    setProperties((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
+    return saved;
   }
 
   async function updateProperty(property: Property) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to update a property.");
-
-    setPropertiesError("");
+    ensureManager();
+    const {
+      id: _id,
+      user_id: _userId,
+      workspace_id: _workspaceId,
+      created_at: _createdAt,
+      ...updates
+    } = propertyToDatabase(property);
     const { data, error } = await supabase
       .from("properties")
-      .update(propertyUpdates(property))
+      .update(updates)
       .eq("id", property.id)
-      .eq("user_id", userId)
+      .eq("workspace_id", currentWorkspaceOrThrow())
       .select("*")
       .single();
-
-    if (error) {
-      setPropertiesError(error.message);
-      throw new Error(error.message);
-    }
-
-    const savedProperty = rowToProperty(data as PropertyRow);
+    if (error) throw new Error(error.message);
+    const saved = rowToProperty(data as PropertyRow);
     setProperties((previous) =>
-      previous.map((item) =>
-        item.id === savedProperty.id ? savedProperty : item
-      )
+      previous.map((item) => (item.id === saved.id ? saved : item))
     );
-    return savedProperty;
+    return saved;
   }
 
   async function deleteProperty(id: string) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to delete a property.");
-
-    const storagePaths = propertyPhotos
+    ensureManager();
+    const paths = propertyPhotos
       .filter((photo) => photo.propertyId === id)
       .map((photo) => photo.storagePath);
-
-    if (storagePaths.length) {
+    if (paths.length) {
       const { error: storageError } = await supabase.storage
         .from("property-photos")
-        .remove(storagePaths);
+        .remove(paths);
       if (storageError) throw new Error(storageError.message);
     }
-
     const { error } = await supabase
       .from("properties")
       .delete()
       .eq("id", id)
-      .eq("user_id", userId);
-
+      .eq("workspace_id", currentWorkspaceOrThrow());
     if (error) throw new Error(error.message);
-
     setProperties((previous) => previous.filter((property) => property.id !== id));
-    setPropertyPhotos((previous) =>
-      previous.filter((photo) => photo.propertyId !== id)
-    );
-    setProjects((previous) =>
-      previous.map((project) =>
-        project.propertyId === id
-          ? { ...project, propertyId: null }
-          : project
-      )
-    );
+    setPropertyPhotos((previous) => previous.filter((photo) => photo.propertyId !== id));
   }
 
   async function uploadPropertyPhoto(
@@ -943,18 +1495,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     file: File,
     caption = ""
   ) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to upload a photo.");
-    if (!file.type.startsWith("image/")) {
-      throw new Error("Choose an image file.");
-    }
+    ensureManager();
+    const userId = currentUserOrThrow();
+    const workspaceId = currentWorkspaceOrThrow();
+    if (!file.type.startsWith("image/")) throw new Error("Choose an image file.");
     if (file.size > 10 * 1024 * 1024) {
       throw new Error("Each photo must be 10 MB or smaller.");
     }
-
     const photoId = globalThis.crypto.randomUUID();
     const path = `${userId}/${propertyId}/${photoId}.${getFileExtension(file)}`;
-
     const { error: uploadError } = await supabase.storage
       .from("property-photos")
       .upload(path, file, {
@@ -962,15 +1511,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         upsert: false,
         contentType: file.type,
       });
-
     if (uploadError) throw new Error(uploadError.message);
-
     const now = new Date().toISOString();
     const { data, error } = await supabase
       .from("property_photos")
       .insert({
         id: photoId,
         user_id: userId,
+        workspace_id: workspaceId,
         property_id: propertyId,
         storage_path: path,
         caption: caption.trim(),
@@ -978,43 +1526,398 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
       .select("*")
       .single();
-
     if (error) {
       await supabase.storage.from("property-photos").remove([path]);
       throw new Error(error.message);
     }
-
-    const savedPhoto = await rowToPropertyPhoto(data as PropertyPhotoRow);
-    setPropertyPhotos((previous) => [...previous, savedPhoto]);
-    return savedPhoto;
+    const saved = await rowToPropertyPhoto(data as PropertyPhotoRow);
+    setPropertyPhotos((previous) => [...previous, saved]);
+    return saved;
   }
 
   async function deletePropertyPhoto(photo: PropertyPhoto) {
-    const userId = authUserIdRef.current;
-    if (!userId) throw new Error("You must be signed in to delete a photo.");
-
+    ensureManager();
     const { error: storageError } = await supabase.storage
       .from("property-photos")
       .remove([photo.storagePath]);
     if (storageError) throw new Error(storageError.message);
-
     const { error } = await supabase
       .from("property_photos")
       .delete()
       .eq("id", photo.id)
-      .eq("user_id", userId);
+      .eq("workspace_id", currentWorkspaceOrThrow());
     if (error) throw new Error(error.message);
+    setPropertyPhotos((previous) => previous.filter((item) => item.id !== photo.id));
+  }
 
-    setPropertyPhotos((previous) =>
-      previous.filter((item) => item.id !== photo.id)
+  function invoiceToDatabase(invoice: Invoice) {
+    return {
+      id: invoice.id,
+      workspace_id: currentWorkspaceOrThrow(),
+      created_by: invoice.createdBy || currentUserOrThrow(),
+      project_id: invoice.projectId,
+      contact_id: invoice.contactId,
+      property_id: invoice.propertyId,
+      invoice_number: invoice.invoiceNumber,
+      issue_date: invoice.issueDate,
+      due_date: invoice.dueDate,
+      status: invoice.status,
+      amount: invoice.amount,
+      notes: invoice.notes,
+      created_at: invoice.createdAt,
+      updated_at: invoice.updatedAt,
+    };
+  }
+
+  async function refreshInvoices() {
+    const workspaceId = currentWorkspaceOrThrow();
+    if (role === "employee") {
+      setInvoices([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("due_date", { ascending: true });
+    if (error) throw new Error(error.message);
+    setInvoices(((data ?? []) as InvoiceRow[]).map(rowToInvoice));
+  }
+
+  async function addInvoice(invoice: Invoice) {
+    ensureManager();
+    const { data, error } = await supabase
+      .from("invoices")
+      .insert(invoiceToDatabase(invoice))
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToInvoice(data as InvoiceRow);
+    setInvoices((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
+    await Promise.all([refreshSchedule(), refreshFollowUps()]);
+    return saved;
+  }
+
+  async function updateInvoice(invoice: Invoice) {
+    ensureManager();
+    const {
+      id: _id,
+      workspace_id: _workspaceId,
+      created_by: _createdBy,
+      created_at: _createdAt,
+      ...updates
+    } = invoiceToDatabase(invoice);
+    const { data, error } = await supabase
+      .from("invoices")
+      .update(updates)
+      .eq("id", invoice.id)
+      .eq("workspace_id", currentWorkspaceOrThrow())
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToInvoice(data as InvoiceRow);
+    setInvoices((previous) =>
+      previous.map((item) => (item.id === saved.id ? saved : item))
     );
+    await Promise.all([refreshSchedule(), refreshFollowUps()]);
+    return saved;
+  }
+
+  async function deleteInvoice(id: string) {
+    ensureManager();
+    const { error } = await supabase
+      .from("invoices")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", currentWorkspaceOrThrow());
+    if (error) throw new Error(error.message);
+    setInvoices((previous) => previous.filter((invoice) => invoice.id !== id));
+    await Promise.all([refreshSchedule(), refreshFollowUps()]);
+  }
+
+  function scheduleToDatabase(event: ScheduleEvent) {
+    return {
+      id: event.id,
+      workspace_id: currentWorkspaceOrThrow(),
+      created_by: event.createdBy || currentUserOrThrow(),
+      title: event.title,
+      description: event.description,
+      start_at: event.startAt,
+      end_at: event.endAt,
+      all_day: event.allDay,
+      source_type: event.sourceType,
+      project_id: event.projectId,
+      invoice_id: event.invoiceId,
+      contact_id: event.contactId,
+      assigned_user_id: event.assignedUserId,
+      status: event.status,
+      auto_key: event.autoKey,
+      created_at: event.createdAt,
+      updated_at: event.updatedAt,
+    };
+  }
+
+  async function refreshSchedule() {
+    const workspaceId = currentWorkspaceOrThrow();
+    const { data, error } = await supabase
+      .from("schedule_events")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("start_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    setScheduleEvents(((data ?? []) as ScheduleEventRow[]).map(rowToScheduleEvent));
+  }
+
+  async function addScheduleEvent(event: ScheduleEvent) {
+    const { data, error } = await supabase
+      .from("schedule_events")
+      .insert(scheduleToDatabase(event))
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToScheduleEvent(data as ScheduleEventRow);
+    setScheduleEvents((previous) => [...previous, saved].sort((a, b) => a.startAt.localeCompare(b.startAt)));
+    return saved;
+  }
+
+  async function updateScheduleEvent(event: ScheduleEvent) {
+    const {
+      id: _id,
+      workspace_id: _workspaceId,
+      created_by: _createdBy,
+      created_at: _createdAt,
+      ...updates
+    } = scheduleToDatabase(event);
+    const { data, error } = await supabase
+      .from("schedule_events")
+      .update(updates)
+      .eq("id", event.id)
+      .eq("workspace_id", currentWorkspaceOrThrow())
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToScheduleEvent(data as ScheduleEventRow);
+    setScheduleEvents((previous) =>
+      previous.map((item) => (item.id === saved.id ? saved : item))
+    );
+    return saved;
+  }
+
+  async function deleteScheduleEvent(id: string) {
+    const { error } = await supabase
+      .from("schedule_events")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", currentWorkspaceOrThrow());
+    if (error) throw new Error(error.message);
+    setScheduleEvents((previous) => previous.filter((event) => event.id !== id));
+  }
+
+  function followUpToDatabase(followUp: FollowUp) {
+    return {
+      id: followUp.id,
+      workspace_id: currentWorkspaceOrThrow(),
+      created_by: followUp.createdBy || currentUserOrThrow(),
+      title: followUp.title,
+      notes: followUp.notes,
+      due_at: followUp.dueAt,
+      type: followUp.type,
+      status: followUp.status,
+      channel: followUp.channel,
+      contact_id: followUp.contactId,
+      project_id: followUp.projectId,
+      invoice_id: followUp.invoiceId,
+      assigned_user_id: followUp.assignedUserId,
+      auto_key: followUp.autoKey,
+      created_at: followUp.createdAt,
+      updated_at: followUp.updatedAt,
+    };
+  }
+
+  async function refreshFollowUps() {
+    const workspaceId = currentWorkspaceOrThrow();
+    const { data, error } = await supabase
+      .from("follow_ups")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("due_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    setFollowUps(((data ?? []) as FollowUpRow[]).map(rowToFollowUp));
+  }
+
+  async function addFollowUp(followUp: FollowUp) {
+    const { data, error } = await supabase
+      .from("follow_ups")
+      .insert(followUpToDatabase(followUp))
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToFollowUp(data as FollowUpRow);
+    setFollowUps((previous) => [...previous, saved].sort((a, b) => a.dueAt.localeCompare(b.dueAt)));
+    return saved;
+  }
+
+  async function updateFollowUp(followUp: FollowUp) {
+    const {
+      id: _id,
+      workspace_id: _workspaceId,
+      created_by: _createdBy,
+      created_at: _createdAt,
+      ...updates
+    } = followUpToDatabase(followUp);
+    const { data, error } = await supabase
+      .from("follow_ups")
+      .update(updates)
+      .eq("id", followUp.id)
+      .eq("workspace_id", currentWorkspaceOrThrow())
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToFollowUp(data as FollowUpRow);
+    setFollowUps((previous) =>
+      previous.map((item) => (item.id === saved.id ? saved : item))
+    );
+    return saved;
+  }
+
+  async function deleteFollowUp(id: string) {
+    const { error } = await supabase
+      .from("follow_ups")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", currentWorkspaceOrThrow());
+    if (error) throw new Error(error.message);
+    setFollowUps((previous) => previous.filter((followUp) => followUp.id !== id));
+  }
+
+  function jobRequestToDatabase(request: JobRequest) {
+    return {
+      id: request.id,
+      workspace_id: currentWorkspaceOrThrow(),
+      requested_by: request.requestedBy || currentUserOrThrow(),
+      title: request.title,
+      client: request.client,
+      address: request.address,
+      scope_description: request.scopeDescription,
+      proposed_start: request.proposedStart,
+      status: request.status,
+      manager_notes: request.managerNotes,
+      created_project_id: request.createdProjectId,
+      created_at: request.createdAt,
+      updated_at: request.updatedAt,
+    };
+  }
+
+  async function refreshJobRequests() {
+    const workspaceId = currentWorkspaceOrThrow();
+    const { data, error } = await supabase
+      .from("job_requests")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    setJobRequests(
+      ((data ?? []) as JobRequestRow[]).map((row) =>
+        rowToJobRequest(row, workspaceMembers)
+      )
+    );
+  }
+
+  async function addJobRequest(request: JobRequest) {
+    const { data, error } = await supabase
+      .from("job_requests")
+      .insert(jobRequestToDatabase(request))
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToJobRequest(data as JobRequestRow, workspaceMembers);
+    setJobRequests((previous) => [saved, ...previous]);
+    return saved;
+  }
+
+  async function updateJobRequest(request: JobRequest) {
+    const {
+      id: _id,
+      workspace_id: _workspaceId,
+      requested_by: _requestedBy,
+      created_at: _createdAt,
+      ...updates
+    } = jobRequestToDatabase(request);
+    const { data, error } = await supabase
+      .from("job_requests")
+      .update(updates)
+      .eq("id", request.id)
+      .eq("workspace_id", currentWorkspaceOrThrow())
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToJobRequest(data as JobRequestRow, workspaceMembers);
+    setJobRequests((previous) =>
+      previous.map((item) => (item.id === saved.id ? saved : item))
+    );
+    return saved;
+  }
+
+  async function approveJobRequest(id: string) {
+    ensureManager();
+    const { data, error } = await supabase.rpc("approve_job_request", {
+      requested_job_request_id: id,
+    });
+    if (error) throw new Error(error.message);
+    await refreshCurrentBundle();
+    return String(data);
+  }
+
+  async function declineJobRequest(id: string, notes = "") {
+    ensureManager();
+    const { error } = await supabase
+      .from("job_requests")
+      .update({
+        status: "declined",
+        manager_notes: notes.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("workspace_id", currentWorkspaceOrThrow());
+    if (error) throw new Error(error.message);
+    setJobRequests((previous) =>
+      previous.map((request) =>
+        request.id === id
+          ? {
+              ...request,
+              status: "declined",
+              managerNotes: notes.trim(),
+              updatedAt: new Date().toISOString(),
+            }
+          : request
+      )
+    );
+  }
+
+  async function deleteJobRequest(id: string) {
+    const { error } = await supabase
+      .from("job_requests")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", currentWorkspaceOrThrow());
+    if (error) throw new Error(error.message);
+    setJobRequests((previous) => previous.filter((request) => request.id !== id));
   }
 
   return (
     <AppContext.Provider
       value={{
         user,
+        authUserId,
         authLoading,
+        workspaces,
+        activeWorkspace,
+        activeWorkspaceId,
+        role,
+        workspaceMembers,
+        workspaceInvites,
+        workspaceLoading,
+        workspaceError,
         projects,
         projectsLoading,
         projectsError,
@@ -1025,14 +1928,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         propertyPhotos,
         propertiesLoading,
         propertiesError,
+        invoices,
+        invoicesLoading,
+        invoicesError,
+        scheduleEvents,
+        scheduleLoading,
+        scheduleError,
+        followUps,
+        followUpsLoading,
+        followUpsError,
+        jobRequests,
+        jobRequestsLoading,
+        jobRequestsError,
         login,
         logout,
         register,
+        switchWorkspace,
+        refreshWorkspaces,
+        createWorkspaceInvite,
+        revokeWorkspaceInvite,
+        acceptWorkspaceInvite,
+        updateWorkspaceMemberRole,
+        removeWorkspaceMember,
         refreshProjects,
         addProject,
         updateProject,
         deleteProject,
         setProjectSharing,
+        assignSelfToProject,
         refreshContacts,
         addContact,
         updateContact,
@@ -1043,6 +1966,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteProperty,
         uploadPropertyPhoto,
         deletePropertyPhoto,
+        refreshInvoices,
+        addInvoice,
+        updateInvoice,
+        deleteInvoice,
+        refreshSchedule,
+        addScheduleEvent,
+        updateScheduleEvent,
+        deleteScheduleEvent,
+        refreshFollowUps,
+        addFollowUp,
+        updateFollowUp,
+        deleteFollowUp,
+        refreshJobRequests,
+        addJobRequest,
+        updateJobRequest,
+        approveJobRequest,
+        declineJobRequest,
+        deleteJobRequest,
       }}
     >
       {children}
@@ -1052,8 +1993,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 export function useApp() {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error("useApp must be used within AppProvider");
-  }
+  if (!context) throw new Error("useApp must be used within AppProvider");
   return context;
 }
