@@ -41,6 +41,8 @@ export default function Account() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeMessage, setStripeMessage] = useState("");
+  const [stripeError, setStripeError] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
@@ -66,11 +68,53 @@ export default function Account() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (!params.has("stripe")) return;
-    void refreshWorkspaces().then(() => {
-      setMessage("Stripe payment settings refreshed.");
-      window.history.replaceState({}, document.title, window.location.pathname);
-    });
+    const stripeState = params.get("stripe");
+    if (!stripeState) return;
+
+    let cancelled = false;
+
+    async function handleStripeRedirect() {
+      setStripeError("");
+      setStripeLoading(true);
+
+      try {
+        if (stripeState === "refresh") {
+          setStripeMessage("Refreshing your Stripe setup link…");
+          const url = await startStripeOnboarding();
+          if (!cancelled) window.location.replace(url);
+          return;
+        }
+
+        await refreshWorkspaces();
+        if (cancelled) return;
+
+        setStripeMessage(
+          params.get("connected") === "1"
+            ? "Stripe is already connected for this workspace."
+            : "Returned from Stripe. Payment settings were refreshed."
+        );
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname
+        );
+      } catch (stripeRedirectError) {
+        if (cancelled) return;
+        setStripeError(
+          stripeRedirectError instanceof Error
+            ? stripeRedirectError.message
+            : "Stripe setup could not be refreshed."
+        );
+      } finally {
+        if (!cancelled) setStripeLoading(false);
+      }
+    }
+
+    void handleStripeRedirect();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const cardClass = "rounded-xl border border-gray-200 bg-white p-5 sm:p-6";
@@ -123,16 +167,19 @@ export default function Account() {
   }
 
   async function connectStripe() {
-    setError("");
-    setMessage("");
+    setStripeError("");
+    setStripeMessage("Creating a secure Stripe setup link…");
     setStripeLoading(true);
+
     try {
       const url = await startStripeOnboarding();
-      window.location.assign(url);
-    } catch (stripeError) {
-      setError(
-        stripeError instanceof Error
-          ? stripeError.message
+      setStripeMessage("Redirecting to Stripe…");
+      window.location.replace(url);
+    } catch (stripeConnectError) {
+      setStripeMessage("");
+      setStripeError(
+        stripeConnectError instanceof Error
+          ? stripeConnectError.message
           : "Stripe onboarding could not be started."
       );
       setStripeLoading(false);
@@ -387,6 +434,16 @@ export default function Account() {
           </div>
           {activeWorkspace?.isPersonal && (
             <p className="mt-3 text-xs text-amber-700">Create or switch to a company/workgroup before enabling payments.</p>
+          )}
+          {stripeError && (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {stripeError}
+            </p>
+          )}
+          {stripeMessage && !stripeError && (
+            <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+              {stripeMessage}
+            </p>
           )}
         </div>
       </div>

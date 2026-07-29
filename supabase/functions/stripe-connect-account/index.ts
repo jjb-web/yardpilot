@@ -3,8 +3,52 @@ import Stripe from "npm:stripe@^22";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
+
+function json(body: Record<string, unknown>, status = 200) {
+  return Response.json(body, {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function usableBrowserOrigin(value: string | null) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const isLocal =
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+    return url.protocol === "https:" || isLocal ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function redirectUrl(
+  supplied: unknown,
+  browserOrigin: string,
+  fallbackPath: string
+) {
+  const fallback = new URL(fallbackPath, `${browserOrigin}/`).toString();
+  if (typeof supplied !== "string" || !supplied.trim()) return fallback;
+
+  try {
+    const candidate = new URL(supplied);
+    return candidate.origin === browserOrigin ? candidate.toString() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function isMissingStripeAccount(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const record = error as Record<string, unknown>;
+  return record.code === "resource_missing";
+}
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
@@ -16,7 +60,9 @@ Deno.serve(async (request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const appUrl = (Deno.env.get("YARDPILOT_APP_URL") || "https://yardpilotusa.com").replace(/\/$/, "");
+    const configuredAppUrl = (
+      Deno.env.get("YARDPILOT_APP_URL") || "https://yardpilotusa.com"
+    ).replace(/\/$/, "");
 
     if (!stripeKey || !supabaseUrl || !anonKey || !serviceRoleKey) {
       throw new Error("The payment service is not configured.");
@@ -24,7 +70,7 @@ Deno.serve(async (request) => {
 
     const authorization = request.headers.get("Authorization") || "";
     if (!authorization) {
-      return Response.json({ error: "Sign in before connecting Stripe." }, { status: 401, headers: corsHeaders });
+      return json({ error: "Sign in before connecting Stripe." }, 401);
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -36,14 +82,32 @@ Deno.serve(async (request) => {
       error: userError,
     } = await userClient.auth.getUser();
     if (userError || !user) {
-      return Response.json({ error: "Your session is invalid." }, { status: 401, headers: corsHeaders });
+      return json({ error: "Your session is invalid." }, 401);
     }
 
     const body = await request.json().catch(() => ({}));
-    const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId : "";
+    const workspaceId =
+      typeof body.workspaceId === "string" ? body.workspaceId : "";
     if (!workspaceId) {
-      return Response.json({ error: "Choose a workspace first." }, { status: 400, headers: corsHeaders });
+      return json({ error: "Choose a workspace first." }, 400);
     }
+
+    // Prefer the real browser origin used to invoke the function. This keeps
+    // Vercel custom-domain and preview deployments from returning to a stale URL.
+    const browserOrigin =
+      usableBrowserOrigin(request.headers.get("Origin")) ||
+      usableBrowserOrigin(configuredAppUrl) ||
+      "https://yardpilotusa.com";
+    const returnUrl = redirectUrl(
+      body.returnUrl,
+      browserOrigin,
+      "/app/account?stripe=return"
+    );
+    const refreshUrl = redirectUrl(
+      body.refreshUrl,
+      browserOrigin,
+      "/app/account?stripe=refresh"
+    );
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -57,9 +121,9 @@ Deno.serve(async (request) => {
       .maybeSingle();
 
     if (!membership || !["owner", "co_owner"].includes(membership.role)) {
-      return Response.json(
+      return json(
         { error: "Only an owner or co-owner can connect the payment account." },
-        { status: 403, headers: corsHeaders }
+        403
       );
     }
 
@@ -70,7 +134,9 @@ Deno.serve(async (request) => {
       .single();
     if (workspaceError || !workspace) throw new Error("Workspace not found.");
     if (workspace.kind === "personal") {
-      throw new Error("Create a Company or Workgroup before accepting customer payments.");
+      throw new Error(
+        "Create a Company or Workgroup before accepting customer payments."
+      );
     }
 
     const { data: profile } = await admin
@@ -84,25 +150,39 @@ Deno.serve(async (request) => {
     });
 
     let accountId = workspace.stripe_account_id as string | null;
-    let account: Stripe.Account;
+    let account: Stripe.Account | null = null;
 
     if (accountId) {
-      account = await stripe.accounts.retrieve(accountId);
-    } else {
+      try {
+        account = await stripe.accounts.retrieve(accountId);
+      } catch (error) {
+        if (!isMissingStripeAccount(error)) throw error;
+
+        // This commonly happens after changing Stripe test/live keys. Remove the
+        // stale ID so the workspace can create a fresh account in the active mode.
+        accountId = null;
+        await admin
+          .from("workspaces")
+          .update({
+            stripe_account_id: null,
+            stripe_onboarding_complete: false,
+            stripe_charges_enabled: false,
+            stripe_payouts_enabled: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", workspaceId);
+      }
+    }
+
+    if (!accountId || !account) {
       account = await stripe.accounts.create({
         country: "US",
         email: profile?.email || user.email || undefined,
         controller: {
-          fees: {
-            payer: "account",
-          },
-          losses: {
-            payments: "stripe",
-          },
+          fees: { payer: "account" },
+          losses: { payments: "stripe" },
           requirement_collection: "stripe",
-          stripe_dashboard: {
-            type: "express",
-          },
+          stripe_dashboard: { type: "express" },
         },
         business_profile: {
           name: workspace.name,
@@ -130,28 +210,32 @@ Deno.serve(async (request) => {
       })
       .eq("id", workspaceId);
 
-    if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
-      return Response.json(
-        { url: `${appUrl}/app/account?stripe=return&connected=1`, alreadyConnected: true },
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (
+      account.details_submitted &&
+      account.charges_enabled &&
+      account.payouts_enabled
+    ) {
+      const connectedUrl = new URL(returnUrl);
+      connectedUrl.searchParams.set("connected", "1");
+      return json({ url: connectedUrl.toString(), alreadyConnected: true });
     }
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${appUrl}/app/account?stripe=refresh`,
-      return_url: `${appUrl}/app/account?stripe=return`,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
       type: "account_onboarding",
     });
 
-    return Response.json(
-      { url: accountLink.url },
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ url: accountLink.url });
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Stripe setup failed." },
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    console.error("stripe-connect-account failed", error);
+    return json(
+      {
+        error:
+          error instanceof Error ? error.message : "Stripe setup failed.",
+      },
+      400
     );
   }
 });

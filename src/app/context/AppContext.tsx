@@ -6,7 +6,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
+import {
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+  type User as SupabaseAuthUser,
+} from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type {
   Contact,
@@ -406,6 +411,39 @@ type JobRequestRow = {
   created_at: string;
   updated_at: string;
 };
+
+async function edgeFunctionErrorMessage(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    const response = error.context;
+
+    try {
+      const payload = (await response.clone().json()) as Record<string, unknown>;
+      const message = payload.error ?? payload.message;
+      if (typeof message === "string" && message.trim()) return message;
+    } catch {
+      try {
+        const message = await response.clone().text();
+        if (message.trim()) return message;
+      } catch {
+        // Fall through to the status-based message below.
+      }
+    }
+
+    return `The payment service returned HTTP ${response.status}.`;
+  }
+
+  if (error instanceof FunctionsRelayError) {
+    return `Supabase could not relay the payment request: ${error.message}`;
+  }
+
+  if (error instanceof FunctionsFetchError) {
+    return `The browser could not reach the payment service: ${error.message}`;
+  }
+
+  return error instanceof Error
+    ? error.message
+    : "The payment service returned an unknown error.";
+}
 
 const AppContext = createContext<AppContextType | null>(null);
 
@@ -1514,14 +1552,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function startStripeOnboarding() {
     ensureAdmin();
-    const { data, error } = await supabase.functions.invoke("stripe-connect-account", {
-      body: {
-        workspaceId: currentWorkspaceOrThrow(),
-        returnUrl: `${window.location.origin}/app/account?stripe=return`,
-        refreshUrl: `${window.location.origin}/app/account?stripe=refresh`,
-      },
-    });
-    if (error) throw new Error(error.message);
+
+    const { data, error } = await supabase.functions.invoke(
+      "stripe-connect-account",
+      {
+        body: {
+          workspaceId: currentWorkspaceOrThrow(),
+          returnUrl: `${window.location.origin}/app/account?stripe=return`,
+          refreshUrl: `${window.location.origin}/app/account?stripe=refresh`,
+        },
+      }
+    );
+
+    if (error) {
+      throw new Error(await edgeFunctionErrorMessage(error));
+    }
+
+    if (typeof data?.error === "string" && data.error.trim()) {
+      throw new Error(data.error);
+    }
+
     const url = typeof data?.url === "string" ? data.url : "";
     if (!url) throw new Error("Stripe did not return an onboarding link.");
     return url;
