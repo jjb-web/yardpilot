@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CreditCard, Download, Loader2 } from "lucide-react";
 import { useParams, useSearchParams } from "react-router";
 import InvoiceDocument from "../components/InvoiceDocument";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type {
   Contact,
@@ -13,6 +14,19 @@ import type {
   User,
 } from "../data/types";
 import { formatMoney } from "../lib/estimate";
+
+async function edgeFunctionMessage(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = (await error.context.clone().json()) as Record<string, unknown>;
+      const message = payload.error ?? payload.message;
+      if (typeof message === "string" && message.trim()) return message;
+    } catch {
+      // Fall through to the normal error message.
+    }
+  }
+  return error instanceof Error ? error.message : "The payment request failed.";
+}
 
 function text(value: unknown) {
   return typeof value === "string" ? value : "";
@@ -288,7 +302,16 @@ export default function PublicInvoice() {
         "create-invoice-checkout",
         { body: { shareToken: token } }
       );
-      if (functionError) throw new Error(functionError.message);
+      if (functionError) throw new Error(await edgeFunctionMessage(functionError));
+      if (data?.paid === true) {
+        setPaymentMessage("This invoice has already been paid.");
+        await load();
+        setPaying(false);
+        return;
+      }
+      if (typeof data?.error === "string" && data.error.trim()) {
+        throw new Error(data.error);
+      }
       const url = typeof data?.url === "string" ? data.url : "";
       if (!url) throw new Error("Stripe did not return a payment page.");
       window.location.assign(url);

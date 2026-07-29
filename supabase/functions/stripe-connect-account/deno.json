@@ -1,6 +1,16 @@
 {
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.window", "deno.ns"]
+  },
   "imports": {
-    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
-    "stripe": "npm:stripe@^22"
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.110.9",
+    "stripe": "npm:stripe@22.3.2"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
   }
 }

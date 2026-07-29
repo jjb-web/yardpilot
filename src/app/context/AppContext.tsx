@@ -113,6 +113,7 @@ type AppContextType = {
   removeWorkspaceMember: (membershipId: string) => Promise<void>;
   leaveWorkspace: (workspaceId: string) => Promise<void>;
   startStripeOnboarding: () => Promise<string>;
+  refreshStripeConnection: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   updateMyWorkspaceRate: (
     positionTitle: string,
@@ -1558,6 +1559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {
         body: {
           workspaceId: currentWorkspaceOrThrow(),
+          action: "onboard",
           returnUrl: `${window.location.origin}/app/account?stripe=return`,
           refreshUrl: `${window.location.origin}/app/account?stripe=refresh`,
         },
@@ -1575,6 +1577,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const url = typeof data?.url === "string" ? data.url : "";
     if (!url) throw new Error("Stripe did not return an onboarding link.");
     return url;
+  }
+
+  async function refreshStripeConnection() {
+    ensureAdmin();
+
+    const { data, error } = await supabase.functions.invoke(
+      "stripe-connect-account",
+      {
+        body: {
+          workspaceId: currentWorkspaceOrThrow(),
+          action: "status",
+        },
+      }
+    );
+
+    if (error) {
+      throw new Error(await edgeFunctionErrorMessage(error));
+    }
+
+    if (typeof data?.error === "string" && data.error.trim()) {
+      throw new Error(data.error);
+    }
+
+    await refreshWorkspaces();
   }
 
   async function deleteAccount() {
@@ -2500,6 +2526,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         removeWorkspaceMember,
         leaveWorkspace,
         startStripeOnboarding,
+        refreshStripeConnection,
         deleteAccount,
         updateMyWorkspaceRate,
         refreshProjects,
