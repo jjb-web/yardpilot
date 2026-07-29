@@ -10,35 +10,42 @@ const corsHeaders = {
 function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+    },
   });
 }
 
-function usableBrowserOrigin(value: string | null) {
+function usableOrigin(value: string | null) {
   if (!value) return null;
 
   try {
     const url = new URL(value);
-    const isLocal =
+    const local =
       url.protocol === "http:" &&
       (url.hostname === "localhost" || url.hostname === "127.0.0.1");
-    return url.protocol === "https:" || isLocal ? url.origin : null;
+
+    return url.protocol === "https:" || local ? url.origin : null;
   } catch {
     return null;
   }
 }
 
-function redirectUrl(
+function safeRedirect(
   supplied: unknown,
-  browserOrigin: string,
+  allowedOrigin: string,
   fallbackPath: string
 ) {
-  const fallback = new URL(fallbackPath, `${browserOrigin}/`).toString();
-  if (typeof supplied !== "string" || !supplied.trim()) return fallback;
+  const fallback = new URL(fallbackPath, `${allowedOrigin}/`).toString();
+
+  if (typeof supplied !== "string" || !supplied.trim()) {
+    return fallback;
+  }
 
   try {
     const candidate = new URL(supplied);
-    return candidate.origin === browserOrigin ? candidate.toString() : fallback;
+    return candidate.origin === allowedOrigin ? candidate.toString() : fallback;
   } catch {
     return fallback;
   }
@@ -46,8 +53,7 @@ function redirectUrl(
 
 function isMissingStripeAccount(error: unknown) {
   if (!error || typeof error !== "object") return false;
-  const record = error as Record<string, unknown>;
-  return record.code === "resource_missing";
+  return (error as Record<string, unknown>).code === "resource_missing";
 }
 
 Deno.serve(async (request) => {
@@ -65,7 +71,13 @@ Deno.serve(async (request) => {
     ).replace(/\/$/, "");
 
     if (!stripeKey || !supabaseUrl || !anonKey || !serviceRoleKey) {
-      throw new Error("The payment service is not configured.");
+      console.error("Missing required Edge Function secrets", {
+        hasStripeKey: Boolean(stripeKey),
+        hasSupabaseUrl: Boolean(supabaseUrl),
+        hasAnonKey: Boolean(anonKey),
+        hasServiceRoleKey: Boolean(serviceRoleKey),
+      });
+      return json({ error: "The payment service is not configured." }, 500);
     }
 
     const authorization = request.headers.get("Authorization") || "";
@@ -75,75 +87,171 @@ Deno.serve(async (request) => {
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
-      auth: { persistSession: false },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     });
+
     const {
       data: { user },
       error: userError,
     } = await userClient.auth.getUser();
+
     if (userError || !user) {
-      return json({ error: "Your session is invalid." }, 401);
+      console.error("Stripe Connect user verification failed", userError);
+      return json({ error: "Your session is invalid. Sign in again." }, 401);
     }
 
     const body = await request.json().catch(() => ({}));
     const workspaceId =
-      typeof body.workspaceId === "string" ? body.workspaceId : "";
+      typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
+
     if (!workspaceId) {
       return json({ error: "Choose a workspace first." }, 400);
     }
 
-    // Prefer the real browser origin used to invoke the function. This keeps
-    // Vercel custom-domain and preview deployments from returning to a stale URL.
+    console.log("stripe-connect-account request", {
+      userId: user.id,
+      userEmail: user.email,
+      workspaceId,
+    });
+
     const browserOrigin =
-      usableBrowserOrigin(request.headers.get("Origin")) ||
-      usableBrowserOrigin(configuredAppUrl) ||
+      usableOrigin(request.headers.get("Origin")) ||
+      usableOrigin(configuredAppUrl) ||
       "https://yardpilotusa.com";
-    const returnUrl = redirectUrl(
+
+    const returnUrl = safeRedirect(
       body.returnUrl,
       browserOrigin,
       "/app/account?stripe=return"
     );
-    const refreshUrl = redirectUrl(
+    const refreshUrl = safeRedirect(
       body.refreshUrl,
       browserOrigin,
       "/app/account?stripe=refresh"
     );
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     });
 
-    const { data: membership } = await admin
+    const {
+      data: membership,
+      error: membershipError,
+    } = await admin
       .from("workspace_memberships")
-      .select("role")
+      .select("id, workspace_id, user_id, role")
       .eq("workspace_id", workspaceId)
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!membership || !["owner", "co_owner"].includes(membership.role)) {
+    if (membershipError) {
+      console.error("Workspace membership lookup failed", {
+        userId: user.id,
+        workspaceId,
+        code: membershipError.code,
+        message: membershipError.message,
+        details: membershipError.details,
+        hint: membershipError.hint,
+      });
+
       return json(
-        { error: "Only an owner or co-owner can connect the payment account." },
+        {
+          error: `Could not verify workspace permissions: ${membershipError.message}`,
+        },
+        500
+      );
+    }
+
+    if (!membership) {
+      console.warn("No membership matched Stripe Connect request", {
+        userId: user.id,
+        userEmail: user.email,
+        workspaceId,
+      });
+
+      return json(
+        {
+          error:
+            "Your signed-in account is not a member of the selected workspace.",
+        },
         403
       );
     }
 
-    const { data: workspace, error: workspaceError } = await admin
+    if (!["owner", "co_owner"].includes(membership.role)) {
+      console.warn("Stripe Connect rejected workspace role", {
+        userId: user.id,
+        workspaceId,
+        actualRole: membership.role,
+      });
+
+      return json(
+        {
+          error: `Your actual workspace role is "${membership.role}". Only an owner or co-owner can connect Stripe.`,
+        },
+        403
+      );
+    }
+
+    const {
+      data: workspace,
+      error: workspaceError,
+    } = await admin
       .from("workspaces")
       .select("id, name, kind, stripe_account_id")
       .eq("id", workspaceId)
       .single();
-    if (workspaceError || !workspace) throw new Error("Workspace not found.");
-    if (workspace.kind === "personal") {
-      throw new Error(
-        "Create a Company or Workgroup before accepting customer payments."
+
+    if (workspaceError || !workspace) {
+      console.error("Workspace lookup failed", {
+        userId: user.id,
+        workspaceId,
+        error: workspaceError,
+      });
+
+      return json(
+        {
+          error: workspaceError
+            ? `Could not load the workspace: ${workspaceError.message}`
+            : "Workspace not found.",
+        },
+        404
       );
     }
 
-    const { data: profile } = await admin
+    if (workspace.kind === "personal") {
+      return json(
+        {
+          error:
+            "Create or switch to a Company or Workgroup before accepting customer payments.",
+        },
+        400
+      );
+    }
+
+    const {
+      data: profile,
+      error: profileError,
+    } = await admin
       .from("profiles")
       .select("email")
       .eq("id", user.id)
       .maybeSingle();
+
+    if (profileError) {
+      // Do not block Stripe onboarding. Supabase Auth still provides user.email.
+      console.warn("Could not load profile email for Stripe", {
+        userId: user.id,
+        code: profileError.code,
+        message: profileError.message,
+      });
+    }
 
     const stripe = new Stripe(stripeKey, {
       httpClient: Stripe.createFetchHttpClient(),
@@ -158,10 +266,14 @@ Deno.serve(async (request) => {
       } catch (error) {
         if (!isMissingStripeAccount(error)) throw error;
 
-        // This commonly happens after changing Stripe test/live keys. Remove the
-        // stale ID so the workspace can create a fresh account in the active mode.
+        console.warn("Removing stale Stripe account ID", {
+          workspaceId,
+          accountId,
+        });
+
         accountId = null;
-        await admin
+
+        const { error: clearError } = await admin
           .from("workspaces")
           .update({
             stripe_account_id: null,
@@ -171,6 +283,12 @@ Deno.serve(async (request) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", workspaceId);
+
+        if (clearError) {
+          throw new Error(
+            `Could not clear the stale Stripe account: ${clearError.message}`
+          );
+        }
       }
     }
 
@@ -186,7 +304,8 @@ Deno.serve(async (request) => {
         },
         business_profile: {
           name: workspace.name,
-          product_description: "Landscaping and property-service invoices",
+          product_description:
+            "Landscaping and property-service invoices",
         },
         capabilities: {
           card_payments: { requested: true },
@@ -196,10 +315,11 @@ Deno.serve(async (request) => {
           yardpilot_workspace_id: workspaceId,
         },
       });
+
       accountId = account.id;
     }
 
-    await admin
+    const { error: workspaceUpdateError } = await admin
       .from("workspaces")
       .update({
         stripe_account_id: accountId,
@@ -210,6 +330,12 @@ Deno.serve(async (request) => {
       })
       .eq("id", workspaceId);
 
+    if (workspaceUpdateError) {
+      throw new Error(
+        `Stripe account was created, but the workspace could not be updated: ${workspaceUpdateError.message}`
+      );
+    }
+
     if (
       account.details_submitted &&
       account.charges_enabled &&
@@ -217,7 +343,11 @@ Deno.serve(async (request) => {
     ) {
       const connectedUrl = new URL(returnUrl);
       connectedUrl.searchParams.set("connected", "1");
-      return json({ url: connectedUrl.toString(), alreadyConnected: true });
+
+      return json({
+        url: connectedUrl.toString(),
+        alreadyConnected: true,
+      });
     }
 
     const accountLink = await stripe.accountLinks.create({
@@ -227,9 +357,16 @@ Deno.serve(async (request) => {
       type: "account_onboarding",
     });
 
+    console.log("Stripe onboarding link created", {
+      userId: user.id,
+      workspaceId,
+      stripeAccountId: accountId,
+    });
+
     return json({ url: accountLink.url });
   } catch (error) {
     console.error("stripe-connect-account failed", error);
+
     return json(
       {
         error:
