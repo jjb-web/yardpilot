@@ -177,13 +177,13 @@ export default function AppLayout() {
         fontFamily: "'Inter', sans-serif",
       }}
     >
-      <aside className="hidden md:flex flex-col w-56 bg-green-950 shrink-0">
+      <aside className="hidden md:flex flex-col w-56 shrink-0">
         <Sidebar />
       </aside>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="w-64 bg-green-950 flex flex-col">
+          <div className="w-64 flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <span
                 className="text-white font-bold"

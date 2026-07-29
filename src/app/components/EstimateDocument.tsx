@@ -36,7 +36,7 @@ export default function EstimateDocument({
 
   return (
     <article className="estimate-print-root mx-auto w-full max-w-[850px] bg-white text-gray-900 shadow-sm border border-gray-200 rounded-2xl overflow-hidden print:max-w-none print:shadow-none print:border-0 print:rounded-none">
-      <div className="bg-green-950 text-white px-8 py-7 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between print:bg-green-950 print:text-white">
+      <div className="text-white px-8 py-7 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between print:bg-green-950 print:text-white">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-xl bg-white/95 overflow-hidden flex items-center justify-center shrink-0">
             <img
