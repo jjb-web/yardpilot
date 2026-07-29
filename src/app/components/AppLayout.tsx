@@ -68,7 +68,7 @@ const nav: NavItem[] = [
   {
     to: "/app/projects/past",
     icon: Archive,
-    label: "Past Projects",
+    label: "Past Jobs",
     roles: ["owner", "co_owner", "manager"],
   },
   {
@@ -172,7 +172,7 @@ export default function AppLayout() {
     <div className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5 px-1">
-          <div className="w-9 h-9 rounded-lg border border-white/15 bg-[#2c3531] flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-9 h-9 rounded-lg border border-white/15 bg-[#353c38] flex items-center justify-center shrink-0 overflow-hidden">
             <img
               src="/yardpilot-logo.png"
               alt="YardPilotUSA logo"
@@ -201,7 +201,7 @@ export default function AppLayout() {
           >
             {workspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id} className="text-gray-900">
-                {workspace.name} · {roleLabel(workspace.role)}
+                {workspace.name} · {workspace.kind === "workgroup" ? "Workgroup" : workspace.kind === "company" ? "Company" : "Personal"} · {roleLabel(workspace.role)}
               </option>
             ))}
           </select>
@@ -268,22 +268,28 @@ export default function AppLayout() {
         >
           <LogOut size={15} /> Sign out
         </button>
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 px-3 text-[10px] text-[#8f9a94]">
+          <Link to="/terms" className="hover:text-white">Terms</Link>
+          <Link to="/privacy" className="hover:text-white">Privacy</Link>
+          <Link to="/faq" className="hover:text-white">FAQ</Link>
+          <Link to="/contact" className="hover:text-white">Contact</Link>
+        </div>
       </div>
     </div>
   );
 
   return (
     <div
-      className="app-shell flex h-[100dvh] min-h-0 bg-[#e9ecea] overflow-hidden"
+      className="app-shell flex h-[100dvh] min-h-0 bg-[#e8ebe9] overflow-hidden"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
-      <aside className="hidden md:flex flex-col w-60 bg-[#202724] shrink-0">
+      <aside className="hidden md:flex flex-col w-60 bg-[#2b312e] shrink-0">
         <Sidebar />
       </aside>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="w-72 bg-[#202724] flex flex-col min-h-0">
+          <div className="w-72 bg-[#2b312e] flex flex-col min-h-0">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <span className="text-white font-bold">Menu</span>
               <button
@@ -308,7 +314,7 @@ export default function AppLayout() {
       )}
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-        <header className="bg-[#252d29] border-b border-[#39423e] px-5 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
+        <header className="bg-[#303633] border-b border-[#414844] px-5 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}

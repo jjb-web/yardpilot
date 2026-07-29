@@ -101,6 +101,7 @@ function mapInvoice(row: Record<string, unknown>): Invoice {
     shareEnabled: true,
     sentAt: text(row.sent_at) || null,
     viewedAt: text(row.viewed_at) || null,
+    archivedAt: text(row.archived_at) || null,
     createdAt: text(row.created_at),
     updatedAt: text(row.updated_at),
   };

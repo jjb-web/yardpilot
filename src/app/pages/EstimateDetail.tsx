@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, Download, Edit3, Share2 } from "lucide-react";
+import { ArrowLeft, Download, Edit3, Share2, Trash2 } from "lucide-react";
 import CopyToast from "../components/CopyToast";
 import EstimateDocument from "../components/EstimateDocument";
 import { useApp } from "../context/AppContext";
@@ -19,6 +19,7 @@ export default function EstimateDetail() {
     properties,
     propertyPhotos,
     setProjectSharing,
+    deleteProject,
   } = useApp();
   const [message, setMessage] = useState("");
   const { copyText, copiedMessage } = useCopyFeedback();
@@ -65,6 +66,24 @@ export default function EstimateDetail() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setMessage(error instanceof Error ? error.message : "Could not share estimate.");
+    }
+  }
+
+  async function removeEstimate() {
+    if (!project) return;
+    const confirmed = window.confirm(
+      `Delete “${project.name}”? This permanently removes the estimate and its connected schedule, invoice, assignment, and follow-up records.`
+    );
+    if (!confirmed) return;
+
+    setMessage("");
+    try {
+      await deleteProject(project.id);
+      navigate("/app/estimates", { replace: true });
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "The estimate could not be deleted."
+      );
     }
   }
 
@@ -116,9 +135,16 @@ export default function EstimateDetail() {
           <button
             type="button"
             onClick={() => void shareEstimate()}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 cursor-pointer"
           >
             <Share2 size={15} /> Share
+          </button>
+          <button
+            type="button"
+            onClick={() => void removeEstimate()}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50 cursor-pointer"
+          >
+            <Trash2 size={15} /> Delete
           </button>
         </div>
       </div>

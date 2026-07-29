@@ -824,21 +824,12 @@ export default function EstimateBuilder() {
               </div>
               <div>
                 <label className={labelClass}>Estimate Status</label>
-                <select
-                  value={form.estimateStatus}
-                  onChange={(event) =>
-                    setField(
-                      "estimateStatus",
-                      event.target.value as EstimateStatus
-                    )
-                  }
-                  className={inputClass}
-                >
-                  <option value="draft">Draft</option>
-                  <option value="sent">Sent</option>
-                  <option value="accepted">Accepted</option>
-                  <option value="declined">Declined</option>
-                </select>
+                <div className="flex min-h-11 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold capitalize text-gray-700">
+                  {form.estimateStatus}
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Status changes automatically when the estimate is shared or the client responds.
+                </p>
               </div>
               <div>
                 <label className={labelClass}>Square Footage</label>

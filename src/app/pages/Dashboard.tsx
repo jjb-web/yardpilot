@@ -47,7 +47,10 @@ export default function Dashboard() {
 
   const now = Date.now();
   const isEmployee = role === "employee";
-  const activeJobs = projects.filter((project) => project.status === "active");
+  const activeJobs = projects.filter(
+    (project) =>
+      project.status === "active" && project.estimateStatus === "accepted"
+  );
   const assignedJobs = activeJobs.filter(
     (project) =>
       !isEmployee || project.assignedMemberIds.includes(authUserId ?? "")
@@ -139,7 +142,7 @@ export default function Dashboard() {
   ];
 
   const stats = isEmployee ? employeeStats : managerStats;
-  const recentProjects = [...projects]
+  const recentProjects = [...(isEmployee ? activeJobs : projects)]
     .sort(
       (a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -215,7 +218,7 @@ export default function Dashboard() {
             <ReceiptText className="text-green-700 mb-3" size={21} />
             <p className="font-bold text-gray-900">Invoices</p>
             <p className="text-sm text-gray-500 mt-1">
-              {invoices.filter((invoice) => invoice.status !== "paid").length} open
+              {invoices.filter((invoice) => !invoice.archivedAt).length} active
             </p>
           </Link>
           <Link

@@ -8,6 +8,7 @@ import {
   PlusCircle,
   Search,
   Share2,
+  Trash2,
 } from "lucide-react";
 import CopyToast from "../components/CopyToast";
 import { useApp } from "../context/AppContext";
@@ -25,7 +26,6 @@ const STATUS_OPTIONS: Array<{ value: "all" | EstimateStatus; label: string }> = 
   { value: "all", label: "All" },
   { value: "draft", label: "Draft" },
   { value: "sent", label: "Sent" },
-  { value: "accepted", label: "Accepted" },
   { value: "declined", label: "Declined" },
 ];
 
@@ -50,6 +50,7 @@ export default function Estimates() {
     contacts,
     properties,
     setProjectSharing,
+    deleteProject,
   } = useApp();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -62,6 +63,9 @@ export default function Estimates() {
 
     return [...projects]
       .filter((project) => {
+        if (project.status !== "active" || project.estimateStatus === "accepted") {
+          return false;
+        }
         if (status !== "all" && project.estimateStatus !== status) return false;
         if (!query) return true;
 
@@ -128,6 +132,23 @@ export default function Estimates() {
     }
   }
 
+  async function removeEstimate(project: Project) {
+    const confirmed = window.confirm(
+      `Delete “${project.name}”? This permanently removes the estimate and connected schedule, invoice, assignment, and follow-up records.`
+    );
+    if (!confirmed) return;
+
+    setActionMessage("");
+    try {
+      await deleteProject(project.id);
+      setActionMessage("Estimate and connected records deleted.");
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error ? error.message : "The estimate could not be deleted."
+      );
+    }
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-7">
@@ -136,13 +157,13 @@ export default function Estimates() {
             Estimates
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Client-ready estimates, cost breakdowns, records, downloads, and sharing.
+            Draft, sent, and declined estimates. Accepted estimates automatically move into Jobs.
           </p>
         </div>
         <button
           type="button"
           onClick={() => navigate("/app/estimate/new")}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 text-white text-sm font-semibold rounded-lg hover:bg-slate-900 cursor-pointer"
         >
           <PlusCircle size={16} /> Create Estimate
         </button>
@@ -167,7 +188,7 @@ export default function Estimates() {
               onClick={() => setStatus(option.value)}
               className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer ${
                 status === option.value
-                  ? "bg-green-700 text-white"
+                  ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-950"
                   : "text-gray-600 hover:bg-gray-100"
               }`}
             >
@@ -218,7 +239,7 @@ export default function Estimates() {
                     navigate(`/app/estimate/${project.id}`);
                   }
                 }}
-                className="bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-green-300 hover:shadow-md transition-all cursor-pointer"
+                className="bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-slate-400 hover:shadow-md transition-all cursor-pointer"
               >
                 <div className="grid lg:grid-cols-[1.25fr_1fr_0.9fr]">
                   <div className="p-6 border-b lg:border-b-0 lg:border-r border-gray-100">
@@ -282,7 +303,7 @@ export default function Estimates() {
                   <div className="p-6 bg-gray-50 flex flex-col justify-between gap-5">
                     <div>
                       <p className="text-xs uppercase tracking-wider font-bold text-gray-400">Total</p>
-                      <p className="text-3xl font-extrabold text-green-800 mt-2">
+                      <p className="text-3xl font-extrabold text-slate-800 mt-2">
                         {formatMoney(totals.total)}
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
@@ -332,9 +353,19 @@ export default function Estimates() {
                           stop(event);
                           void shareEstimate(project);
                         }}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-700 text-white text-xs font-semibold hover:bg-green-800 cursor-pointer"
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 cursor-pointer"
                       >
                         <Share2 size={14} /> Share
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          stop(event);
+                          void removeEstimate(project);
+                        }}
+                        className="col-span-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-white text-red-600 text-xs font-semibold hover:bg-red-50 cursor-pointer"
+                      >
+                        <Trash2 size={14} /> Delete Estimate
                       </button>
                     </div>
                   </div>

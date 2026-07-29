@@ -56,6 +56,7 @@ export default function Team() {
     jobRequestsLoading,
     switchWorkspace,
     createCompanyWorkspace,
+    createWorkgroupWorkspace,
     createWorkspaceInvite,
     revokeWorkspaceInvite,
     acceptWorkspaceInvite,
@@ -82,6 +83,8 @@ export default function Team() {
   const [joinCode, setJoinCode] = useState("");
   const [companyOpen, setCompanyOpen] = useState(false);
   const [companyName, setCompanyName] = useState("");
+  const [workgroupOpen, setWorkgroupOpen] = useState(false);
+  const [workgroupName, setWorkgroupName] = useState("");
   const [memberOpen, setMemberOpen] = useState(false);
   const [selectedMember, setSelectedMember] =
     useState<WorkspaceMember | null>(null);
@@ -111,7 +114,7 @@ export default function Team() {
   );
 
   const inputClass =
-    "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30";
+    "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/25";
   const labelClass =
     "block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5";
 
@@ -206,6 +209,29 @@ export default function Team() {
         companyError instanceof Error
           ? companyError.message
           : "Could not create company."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createWorkgroup() {
+    setError("");
+    if (!workgroupName.trim()) {
+      setError("Enter a workgroup name.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createWorkgroupWorkspace(workgroupName);
+      setWorkgroupOpen(false);
+      setWorkgroupName("");
+      setMessage("Workgroup created. You are its owner.");
+    } catch (workgroupError) {
+      setError(
+        workgroupError instanceof Error
+          ? workgroupError.message
+          : "Could not create workgroup."
       );
     } finally {
       setSaving(false);
@@ -379,8 +405,8 @@ export default function Team() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Team & Workspaces</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Personal workspaces stay private. Company workspaces are joined by
-            invitation with owner, co-owner, manager, or employee access.
+            Personal workspaces stay private. Companies and workgroups use the
+            same owner, co-owner, manager, and employee invitation roles.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -391,6 +417,13 @@ export default function Team() {
           >
             <BriefcaseBusiness size={16} /> Create Company
           </button>
+          <button
+            type="button"
+            onClick={() => setWorkgroupOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 cursor-pointer"
+          >
+            <Users size={16} /> Create Workgroup
+          </button>
           {isEmployee && (
             <button
               type="button"
@@ -400,11 +433,11 @@ export default function Team() {
               <Clipboard size={16} /> Propose Job
             </button>
           )}
-          {canInvite && activeWorkspace?.kind === "company" && (
+          {canInvite && activeWorkspace?.kind !== "personal" && (
             <button
               type="button"
               onClick={() => setInviteOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800 text-white text-sm font-semibold cursor-pointer"
             >
               <UserPlus size={16} /> Invite Team Member
             </button>
@@ -532,7 +565,7 @@ export default function Team() {
               type="button"
               onClick={() => void joinWorkspace()}
               disabled={saving}
-              className="w-full mt-3 px-4 py-2.5 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
+              className="w-full mt-3 px-4 py-2.5 rounded-lg bg-slate-800 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
             >
               Join Workspace
             </button>
@@ -655,7 +688,7 @@ export default function Team() {
                       <button
                         type="button"
                         onClick={() => void approveRequest(request)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold cursor-pointer"
                       >
                         <Check size={15} /> Approve
                       </button>
@@ -711,8 +744,41 @@ export default function Team() {
               <button type="button" onClick={() => setCompanyOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">
                 Cancel
               </button>
-              <button type="button" onClick={() => void createCompany()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+              <button type="button" onClick={() => void createCompany()} disabled={saving} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
                 Create Company
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {workgroupOpen && (
+        <div className="app-modal-overlay fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-bold text-gray-900">Create Workgroup</h2>
+              <button type="button" onClick={() => setWorkgroupOpen(false)} className="text-gray-400 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 sm:p-6">
+              <label className={labelClass}>Workgroup Name</label>
+              <input
+                value={workgroupName}
+                onChange={(event) => setWorkgroupName(event.target.value)}
+                placeholder="North Crew, Weekend Team, John's Workgroup…"
+                className={inputClass}
+              />
+              <p className="text-sm text-gray-500 mt-3">
+                Workgroups collaborate exactly like company workspaces, but their names do not need to be unique. You can invite co-owners, managers, and employees.
+              </p>
+            </div>
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button type="button" onClick={() => setWorkgroupOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">
+                Cancel
+              </button>
+              <button type="button" onClick={() => void createWorkgroup()} disabled={saving} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+                Create Workgroup
               </button>
             </div>
           </div>
@@ -787,7 +853,7 @@ export default function Team() {
               <button type="button" onClick={() => setInviteOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">
                 Cancel
               </button>
-              <button type="button" onClick={() => void createInvite()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+              <button type="button" onClick={() => void createInvite()} disabled={saving} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
                 Create Invite
               </button>
             </div>
@@ -857,7 +923,7 @@ export default function Team() {
               <button type="button" onClick={() => setMemberOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">
                 Cancel
               </button>
-              <button type="button" onClick={() => void saveMember()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+              <button type="button" onClick={() => void saveMember()} disabled={saving} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
                 Save Team Profile
               </button>
             </div>
@@ -900,7 +966,7 @@ export default function Team() {
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2 shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <button type="button" onClick={() => setRequestOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button>
-              <button type="button" onClick={() => void createJobRequest()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">Send Proposal</button>
+              <button type="button" onClick={() => void createJobRequest()} disabled={saving} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">Send Proposal</button>
             </div>
           </div>
         </div>

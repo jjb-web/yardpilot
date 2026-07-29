@@ -519,3 +519,44 @@ body.yardpilot-app-open #root {
     break-inside: avoid;
   }
 }
+
+/* Dark-mode readability for slate tabs, cards, and selected controls. */
+.dark .app-shell .bg-slate-50 {
+  background-color: #18201d !important;
+}
+
+.dark .app-shell .bg-slate-100 {
+  background-color: #222b27 !important;
+}
+
+.dark .app-shell .bg-slate-200 {
+  background-color: #d7ded9 !important;
+}
+
+.dark .app-shell .text-slate-950,
+.dark .app-shell .text-slate-900,
+.dark .app-shell .text-slate-800,
+.dark .app-shell .text-slate-700 {
+  color: #eef2ef !important;
+}
+
+.dark .app-shell .bg-slate-200.text-slate-950,
+.dark .app-shell .dark\:bg-slate-200.dark\:text-slate-950 {
+  color: #17201c !important;
+}
+
+.dark .app-shell .text-slate-600,
+.dark .app-shell .text-slate-500 {
+  color: #aab6af !important;
+}
+
+.dark .app-shell .border-slate-200,
+.dark .app-shell .border-slate-300,
+.dark .app-shell .border-slate-400 {
+  border-color: #3a4741 !important;
+}
+
+.dark .app-shell .hover\:bg-slate-50:hover,
+.dark .app-shell .hover\:bg-slate-100:hover {
+  background-color: #26312c !important;
+}

@@ -13,10 +13,12 @@ import { useApp } from "../context/AppContext";
 export default function Account() {
   const {
     user,
+    authUserId,
     activeWorkspace,
     role,
     workspaceMembers,
     updateProfile,
+    updateMyWorkspaceRate,
   } = useApp();
 
   const [form, setForm] = useState({
@@ -27,6 +29,9 @@ export default function Account() {
     state: "",
   });
   const [saving, setSaving] = useState(false);
+  const [rateSaving, setRateSaving] = useState(false);
+  const [positionTitle, setPositionTitle] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -40,6 +45,16 @@ export default function Account() {
       state: user.state,
     });
   }, [user]);
+
+  useEffect(() => {
+    const membership = workspaceMembers.find(
+      (member) => member.userId === authUserId
+    );
+    setPositionTitle(membership?.positionTitle ?? "");
+    setHourlyRate(
+      membership ? String(membership.hourlyRate || "") : ""
+    );
+  }, [workspaceMembers, authUserId, activeWorkspace?.id]);
 
   const cardClass = "rounded-xl border border-gray-200 bg-white p-5 sm:p-6";
   const inputClass =
@@ -66,6 +81,27 @@ export default function Account() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveWorkspaceRate() {
+    setMessage("");
+    setError("");
+    setRateSaving(true);
+    try {
+      await updateMyWorkspaceRate(
+        positionTitle,
+        Number(hourlyRate || 0)
+      );
+      setMessage("Workspace labor profile updated.");
+    } catch (rateError) {
+      setError(
+        rateError instanceof Error
+          ? rateError.message
+          : "Your labor profile could not be updated."
+      );
+    } finally {
+      setRateSaving(false);
     }
   }
 
@@ -202,6 +238,53 @@ export default function Account() {
             className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60 cursor-pointer"
           >
             <Save size={16} /> {saving ? "Saving…" : "Save Profile"}
+          </button>
+        </div>
+      </div>
+
+      <div className={`${cardClass} mb-5`}>
+        <div className="flex items-center gap-2 mb-1">
+          <Building2 size={18} className="text-slate-700" />
+          <h2 className="font-bold text-gray-900">My labor profile</h2>
+        </div>
+        <p className="mb-5 text-sm text-gray-500">
+          This rate is internal and is used when you assign yourself hours on an estimate. It is stored separately for each workspace.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelClass}>Position / Title</label>
+            <input
+              value={positionTitle}
+              onChange={(event) => setPositionTitle(event.target.value)}
+              placeholder="Owner, Crew Lead, Designer…"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Internal Hourly Rate</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={hourlyRate}
+                onChange={(event) =>
+                  setHourlyRate(event.target.value.replace(/[^0-9.]/g, ""))
+                }
+                placeholder="0.00"
+                className={`${inputClass} pl-7`}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            onClick={() => void saveWorkspaceRate()}
+            disabled={rateSaving}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60 cursor-pointer"
+          >
+            <Save size={16} /> {rateSaving ? "Saving…" : "Save Labor Profile"}
           </button>
         </div>
       </div>

@@ -6,6 +6,7 @@ import {
   Mail,
   MessageSquareText,
   Plus,
+  PackageCheck,
   ReceiptText,
   Search,
   Trash2,
@@ -125,6 +126,7 @@ export default function Invoices() {
     addInvoice,
     updateInvoice,
     deleteInvoice,
+    completeInvoice,
   } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -136,11 +138,14 @@ export default function Invoices() {
   const [draft, setDraft] = useState<InvoiceDraft>(blankDraft);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [completingId, setCompletingId] = useState("");
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return [...invoices]
       .filter((invoice) => {
+        if (invoice.archivedAt) return false;
         const project = projects.find((item) => item.id === invoice.projectId);
         const contact = contacts.find((item) => item.id === invoice.contactId);
         const status = computedStatus(invoice);
@@ -158,7 +163,7 @@ export default function Invoices() {
 
   const totalOutstanding = invoices
     .filter((invoice) =>
-      !["paid", "void"].includes(computedStatus(invoice))
+      !invoice.archivedAt && !["paid", "void"].includes(computedStatus(invoice))
     )
     .reduce((sum, invoice) => sum + invoice.amount, 0);
   const totalPaid = invoices
@@ -277,6 +282,7 @@ export default function Invoices() {
           shareEnabled: false,
           sentAt: null,
           viewedAt: null,
+          archivedAt: null,
           createdAt: now,
           updatedAt: now,
         });
@@ -309,6 +315,29 @@ export default function Invoices() {
       setModalError(
         error instanceof Error ? error.message : "The invoice could not be deleted."
       );
+    }
+  }
+
+  async function finishInvoice(invoice: Invoice) {
+    const finalStatus = computedStatus(invoice);
+    const confirmed = window.confirm(
+      `Complete ${invoice.invoiceNumber}? It will leave the active invoice list and appear on its Past Job as Archived · ${finalStatus}.`
+    );
+    if (!confirmed) return;
+
+    setActionMessage("");
+    setCompletingId(invoice.id);
+    try {
+      await completeInvoice(invoice.id);
+      setActionMessage(
+        `${invoice.invoiceNumber} archived with status ${finalStatus}.`
+      );
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error ? error.message : "The invoice could not be completed."
+      );
+    } finally {
+      setCompletingId("");
     }
   }
 
@@ -353,6 +382,12 @@ export default function Invoices() {
       {invoicesError && (
         <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {invoicesError}
+        </div>
+      )}
+
+      {actionMessage && (
+        <div className="mb-5 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          {actionMessage}
         </div>
       )}
 
@@ -492,6 +527,15 @@ export default function Invoices() {
                         <CheckCircle2 size={17} />
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => void finishInvoice(invoice)}
+                      disabled={Boolean(completingId)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+                    >
+                      <PackageCheck size={16} />
+                      {completingId === invoice.id ? "Completing…" : "Complete"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => openInvoice(invoice)}

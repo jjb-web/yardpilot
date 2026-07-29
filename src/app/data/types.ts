@@ -14,7 +14,7 @@ export type WorkspaceRole =
   | "manager"
   | "employee";
 
-export type WorkspaceKind = "personal" | "company";
+export type WorkspaceKind = "personal" | "company" | "workgroup";
 
 export type LineItem = {
   id: string;
@@ -207,6 +207,7 @@ export type Invoice = {
   shareEnabled: boolean;
   sentAt: string | null;
   viewedAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

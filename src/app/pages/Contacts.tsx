@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { Link } from "react-router";
 import {
   Building2,
@@ -23,15 +29,22 @@ import type {
   ContactType,
   Project,
   Property,
+  PropertyPhoto,
 } from "../data/types";
 import { formatMoney, propertyAddress } from "../lib/estimate";
 
-const CONTACT_TYPE_OPTIONS: Array<{ value: ContactType; label: string }> = [
+const CONTACT_TYPE_OPTIONS: Array<{
+  value: ContactType;
+  label: string;
+}> = [
   { value: "lead", label: "Lead" },
   { value: "customer", label: "Customer" },
 ];
 
-const ACTIVITY_OPTIONS: Array<{ value: ContactActivity; label: string }> = [
+const ACTIVITY_OPTIONS: Array<{
+  value: ContactActivity;
+  label: string;
+}> = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
@@ -55,6 +68,13 @@ type PropertyDraft = Omit<
   Property,
   "id" | "workspaceId" | "contactId" | "createdAt" | "updatedAt"
 >;
+
+type StagedProperty = {
+  key: string;
+  draft: PropertyDraft;
+  files: File[];
+  projectIds: string[];
+};
 
 function uid() {
   return (
@@ -92,6 +112,23 @@ function emptyProperty(): PropertyDraft {
   };
 }
 
+function emptyStagedProperty(): StagedProperty {
+  return {
+    key: uid(),
+    draft: emptyProperty(),
+    files: [],
+    projectIds: [],
+  };
+}
+
+function hasPropertyData(property: StagedProperty) {
+  return (
+    Object.values(property.draft).some((value) => value.trim() !== "") ||
+    property.files.length > 0 ||
+    property.projectIds.length > 0
+  );
+}
+
 function contactAddress(contact: Contact) {
   const cityStateZip = [contact.city, contact.state, contact.zip]
     .filter(Boolean)
@@ -109,14 +146,6 @@ function activityClasses(status: ContactActivity) {
   return status === "active"
     ? "bg-emerald-100 text-emerald-700"
     : "bg-gray-100 text-gray-600";
-}
-
-function hasPropertyData(draft: PropertyDraft, files: File[], projectIds: string[]) {
-  return (
-    Object.values(draft).some((value) => value.trim() !== "") ||
-    files.length > 0 ||
-    projectIds.length > 0
-  );
 }
 
 function StagedPhotos({
@@ -137,23 +166,28 @@ function StagedPhotos({
   if (!files.length) return null;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
       {files.map((file, index) => (
-        <div key={`${file.name}-${file.lastModified}-${index}`} className="relative group">
+        <div
+          key={`${file.name}-${file.lastModified}-${index}`}
+          className="relative"
+        >
           <img
             src={urls[index]}
             alt={file.name}
-            className="w-full aspect-square object-cover rounded-lg border border-gray-200"
+            className="aspect-square w-full rounded-lg border border-gray-200 object-cover"
           />
           <button
             type="button"
             onClick={() => onRemove(index)}
-            className="absolute top-2 right-2 rounded-md bg-black/70 p-1.5 text-white cursor-pointer"
+            className="absolute right-2 top-2 rounded-md bg-black/70 p-1.5 text-white"
             aria-label={`Remove ${file.name}`}
           >
             <X size={14} />
           </button>
-          <p className="mt-1 truncate text-[11px] text-gray-500">{file.name}</p>
+          <p className="mt-1 truncate text-[11px] text-gray-500">
+            {file.name}
+          </p>
         </div>
       ))}
     </div>
@@ -178,7 +212,7 @@ function RecordPicker({
   }
 
   return (
-    <div className="max-h-64 overflow-y-auto overscroll-contain rounded-xl border border-gray-200 divide-y divide-gray-100">
+    <div className="max-h-64 divide-y divide-gray-100 overflow-y-auto overscroll-contain rounded-xl border border-gray-200">
       {projects.map((project) => {
         const checked = selectedIds.includes(project.id);
         return (
@@ -186,7 +220,7 @@ function RecordPicker({
             key={project.id}
             type="button"
             onClick={() => onToggle(project.id)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 cursor-pointer"
+            className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50"
           >
             <span
               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
@@ -202,12 +236,44 @@ function RecordPicker({
                 {project.name}
               </p>
               <p className="text-xs text-gray-500">
-                {project.estimateNumber} · {project.status} · {formatMoney(project.totalEstimate)}
+                {project.estimateNumber} · {project.estimateStatus} ·{" "}
+                {formatMoney(project.totalEstimate)}
               </p>
             </div>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function PhotoGrid({
+  photos,
+  onDelete,
+}: {
+  photos: PropertyPhoto[];
+  onDelete: (photo: PropertyPhoto) => void;
+}) {
+  if (!photos.length) return null;
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {photos.map((photo) => (
+        <div key={photo.id} className="relative">
+          <img
+            src={photo.url}
+            alt={photo.caption || "Property"}
+            className="aspect-square w-full rounded-lg border border-gray-200 object-cover"
+          />
+          <button
+            type="button"
+            onClick={() => onDelete(photo)}
+            className="absolute right-2 top-2 rounded-md bg-black/70 p-1.5 text-white"
+            aria-label="Delete photo"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -240,24 +306,22 @@ export default function Contacts() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTab, setActiveTab] =
-    useState<"details" | "property" | "history">("details");
+    useState<"details" | "properties" | "history">("details");
   const [selected, setSelected] = useState<Contact | null>(null);
   const [draft, setDraft] = useState<ContactDraft>(emptyContact);
+  const [stagedProperties, setStagedProperties] = useState<StagedProperty[]>([
+    emptyStagedProperty(),
+  ]);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
-  const [newPropertyDraft, setNewPropertyDraft] =
-    useState<PropertyDraft>(emptyProperty);
-  const [newPropertyFiles, setNewPropertyFiles] = useState<File[]>([]);
-  const [newLinkedProjectIds, setNewLinkedProjectIds] = useState<string[]>([]);
-
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [selectedProperty, setSelectedProperty] =
+    useState<Property | null>(null);
   const [propertyDraft, setPropertyDraft] =
     useState<PropertyDraft>(emptyProperty);
   const [propertyFiles, setPropertyFiles] = useState<File[]>([]);
-  const [propertyLinkedProjectIds, setPropertyLinkedProjectIds] =
-    useState<string[]>([]);
+  const [propertyProjectIds, setPropertyProjectIds] = useState<string[]>([]);
   const [propertySaving, setPropertySaving] = useState(false);
   const [propertyError, setPropertyError] = useState("");
 
@@ -265,7 +329,10 @@ export default function Contacts() {
     const query = search.trim().toLowerCase();
     return [...contacts]
       .filter((contact) => {
-        if (typeFilter !== "all" && contact.contactType !== typeFilter) {
+        if (
+          typeFilter !== "all" &&
+          contact.contactType !== typeFilter
+        ) {
           return false;
         }
         if (
@@ -286,41 +353,34 @@ export default function Contacts() {
           contact.source,
         ].some((value) => value.toLowerCase().includes(query));
       })
-      .sort((a, b) => {
-        if (a.activityStatus !== b.activityStatus) {
-          return a.activityStatus === "active" ? -1 : 1;
+      .sort((first, second) => {
+        if (first.activityStatus !== second.activityStatus) {
+          return first.activityStatus === "active" ? -1 : 1;
         }
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        return (
+          new Date(second.updatedAt).getTime() -
+          new Date(first.updatedAt).getTime()
+        );
       });
   }, [contacts, search, typeFilter, activityFilter]);
 
-  const selectedProperties = properties.filter(
-    (property) => property.contactId === selected?.id
-  );
+  const selectedProperties = properties
+    .filter((property) => property.contactId === selected?.id)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const selectedContactProjects = projects
+    .filter((project) => project.contactId === selected?.id)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const selectedPropertyPhotos = propertyPhotos.filter(
     (photo) => photo.propertyId === selectedProperty?.id
   );
-  const selectedPropertyProjects = projects
-    .filter((project) => project.propertyId === selectedProperty?.id)
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
-  const selectedContactProjects = projects
-    .filter((project) => project.contactId === selected?.id)
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
-
-  const linkableForNew = projects.filter(
+  const linkableProjects = projects.filter(
     (project) => !project.contactId || project.contactId === selected?.id
   );
 
   const inputClass =
-    "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/25";
+    "w-full min-h-11 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500/25 sm:text-sm";
   const labelClass =
-    "block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5";
+    "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500";
 
   function setContactField<K extends keyof ContactDraft>(
     key: K,
@@ -329,21 +389,32 @@ export default function Contacts() {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function setNewPropertyField<K extends keyof PropertyDraft>(
-    key: K,
-    value: PropertyDraft[K]
+  function updateStagedProperty(
+    key: string,
+    updater: (property: StagedProperty) => StagedProperty
   ) {
-    setNewPropertyDraft((current) => ({ ...current, [key]: value }));
+    setStagedProperties((current) =>
+      current.map((property) =>
+        property.key === key ? updater(property) : property
+      )
+    );
   }
 
-  function setPropertyField<K extends keyof PropertyDraft>(
-    key: K,
+  function setStagedField<K extends keyof PropertyDraft>(
+    propertyKey: string,
+    field: K,
     value: PropertyDraft[K]
   ) {
-    setPropertyDraft((current) => ({ ...current, [key]: value }));
+    updateStagedProperty(propertyKey, (property) => ({
+      ...property,
+      draft: { ...property.draft, [field]: value },
+    }));
   }
 
-  function toggleId(id: string, setter: Dispatch<SetStateAction<string[]>>) {
+  function toggleArrayId(
+    id: string,
+    setter: Dispatch<SetStateAction<string[]>>
+  ) {
     setter((current) =>
       current.includes(id)
         ? current.filter((value) => value !== id)
@@ -354,9 +425,7 @@ export default function Contacts() {
   function resetContactModal() {
     setSelected(null);
     setDraft(emptyContact());
-    setNewPropertyDraft(emptyProperty());
-    setNewPropertyFiles([]);
-    setNewLinkedProjectIds([]);
+    setStagedProperties([emptyStagedProperty()]);
     setActiveTab("details");
     setModalError("");
   }
@@ -381,9 +450,7 @@ export default function Contacts() {
       source: contact.source,
       notes: contact.notes,
     });
-    setNewPropertyDraft(emptyProperty());
-    setNewPropertyFiles([]);
-    setNewLinkedProjectIds([]);
+    setStagedProperties([emptyStagedProperty()]);
     setActiveTab("details");
     setModalError("");
     setModalOpen(true);
@@ -409,8 +476,7 @@ export default function Contacts() {
         client: contact.name || project.client,
         contactId: contact.id,
         propertyId: property?.id ?? null,
-        address:
-          property?.address || contact.address || project.address,
+        address: property?.address || contact.address || project.address,
         city: property?.city || contact.city || project.city,
         updatedAt: now,
       });
@@ -468,36 +534,36 @@ export default function Contacts() {
             updatedAt: now,
           });
 
-      let createdProperty: Property | null = null;
-      if (
-        !selected &&
-        hasPropertyData(
-          newPropertyDraft,
-          newPropertyFiles,
-          newLinkedProjectIds
-        )
-      ) {
-        createdProperty = await addProperty({
-          id: uid(),
-          workspaceId: activeWorkspaceId,
-          contactId: savedContact.id,
-          ...newPropertyDraft,
-          name: newPropertyDraft.name.trim() || "Primary Property",
-          address: newPropertyDraft.address.trim(),
-          city: newPropertyDraft.city.trim(),
-          state: newPropertyDraft.state.trim(),
-          zip: newPropertyDraft.zip.trim(),
-          description: newPropertyDraft.description.trim(),
-          internalNotes: newPropertyDraft.internalNotes.trim(),
-          clientNotes: newPropertyDraft.clientNotes.trim(),
-          createdAt: now,
-          updatedAt: now,
-        });
-        await uploadFiles(createdProperty.id, newPropertyFiles);
-      }
-
-      if (!selected && newLinkedProjectIds.length) {
-        await linkProjects(newLinkedProjectIds, savedContact, createdProperty);
+      if (!selected) {
+        for (const [index, staged] of stagedProperties.entries()) {
+          if (!hasPropertyData(staged)) continue;
+          const createdProperty = await addProperty({
+            id: uid(),
+            workspaceId: activeWorkspaceId,
+            contactId: savedContact.id,
+            ...staged.draft,
+            name:
+              staged.draft.name.trim() ||
+              (index === 0 ? "Primary Property" : `Property ${index + 1}`),
+            address: staged.draft.address.trim(),
+            city: staged.draft.city.trim(),
+            state: staged.draft.state.trim(),
+            zip: staged.draft.zip.trim(),
+            description: staged.draft.description.trim(),
+            internalNotes: staged.draft.internalNotes.trim(),
+            clientNotes: staged.draft.clientNotes.trim(),
+            createdAt: now,
+            updatedAt: now,
+          });
+          await uploadFiles(createdProperty.id, staged.files);
+          if (staged.projectIds.length) {
+            await linkProjects(
+              staged.projectIds,
+              savedContact,
+              createdProperty
+            );
+          }
+        }
       }
 
       setModalOpen(false);
@@ -515,7 +581,11 @@ export default function Contacts() {
 
   async function removeContact() {
     if (!selected) return;
-    if (!window.confirm(`Delete ${selected.name} and their linked properties?`)) {
+    if (
+      !window.confirm(
+        `Delete ${selected.name} and their linked properties?`
+      )
+    ) {
       return;
     }
     setSaving(true);
@@ -534,21 +604,12 @@ export default function Contacts() {
     }
   }
 
-  function resetPropertyModal() {
+  function openNewProperty() {
     setSelectedProperty(null);
     setPropertyDraft(emptyProperty());
     setPropertyFiles([]);
-    setPropertyLinkedProjectIds([]);
+    setPropertyProjectIds([]);
     setPropertyError("");
-  }
-
-  function openNewProperty() {
-    if (!selected) return;
-    resetPropertyModal();
-    setPropertyDraft({
-      ...emptyProperty(),
-      name: selectedProperties.length === 0 ? "Primary Property" : "",
-    });
     setPropertyModalOpen(true);
   }
 
@@ -565,7 +626,7 @@ export default function Contacts() {
       clientNotes: property.clientNotes,
     });
     setPropertyFiles([]);
-    setPropertyLinkedProjectIds(
+    setPropertyProjectIds(
       projects
         .filter((project) => project.propertyId === property.id)
         .map((project) => project.id)
@@ -577,12 +638,28 @@ export default function Contacts() {
   function closePropertyModal() {
     if (propertySaving) return;
     setPropertyModalOpen(false);
-    resetPropertyModal();
+    setSelectedProperty(null);
+    setPropertyDraft(emptyProperty());
+    setPropertyFiles([]);
+    setPropertyProjectIds([]);
+    setPropertyError("");
   }
 
   async function saveProperty() {
     if (!selected || !activeWorkspaceId) return;
     setPropertyError("");
+    if (
+      !propertyDraft.name.trim() &&
+      !propertyDraft.address.trim() &&
+      propertyFiles.length === 0 &&
+      propertyProjectIds.length === 0
+    ) {
+      setPropertyError(
+        "Enter a property name or address, choose a photo, or link a record."
+      );
+      return;
+    }
+
     setPropertySaving(true);
     const now = new Date().toISOString();
     try {
@@ -590,7 +667,7 @@ export default function Contacts() {
         ? await updateProperty({
             ...selectedProperty,
             ...propertyDraft,
-            name: propertyDraft.name.trim() || "Primary Property",
+            name: propertyDraft.name.trim() || "Property",
             address: propertyDraft.address.trim(),
             city: propertyDraft.city.trim(),
             state: propertyDraft.state.trim(),
@@ -605,7 +682,7 @@ export default function Contacts() {
             workspaceId: activeWorkspaceId,
             contactId: selected.id,
             ...propertyDraft,
-            name: propertyDraft.name.trim() || "Primary Property",
+            name: propertyDraft.name.trim() || "Property",
             address: propertyDraft.address.trim(),
             city: propertyDraft.city.trim(),
             state: propertyDraft.state.trim(),
@@ -620,25 +697,21 @@ export default function Contacts() {
       await uploadFiles(savedProperty.id, propertyFiles);
 
       if (selectedProperty) {
-        const removedLinks = projects.filter(
-          (project) =>
-            project.propertyId === selectedProperty.id &&
-            !propertyLinkedProjectIds.includes(project.id)
+        const previouslyLinked = projects.filter(
+          (project) => project.propertyId === selectedProperty.id
         );
-        for (const project of removedLinks) {
+        for (const project of previouslyLinked) {
+          if (propertyProjectIds.includes(project.id)) continue;
           await updateProject({
             ...project,
-            contactId: selected.id,
             propertyId: null,
+            contactId: selected.id,
             updatedAt: now,
           });
         }
       }
-
-      await linkProjects(propertyLinkedProjectIds, selected, savedProperty);
-
-      setPropertyModalOpen(false);
-      resetPropertyModal();
+      await linkProjects(propertyProjectIds, selected, savedProperty);
+      closePropertyModal();
     } catch (error) {
       setPropertyError(
         error instanceof Error
@@ -652,14 +725,11 @@ export default function Contacts() {
 
   async function removeProperty() {
     if (!selectedProperty) return;
-    if (!window.confirm(`Delete ${selectedProperty.name} and its photos?`)) {
-      return;
-    }
+    if (!window.confirm(`Delete ${selectedProperty.name}?`)) return;
     setPropertySaving(true);
     try {
       await deleteProperty(selectedProperty.id);
-      setPropertyModalOpen(false);
-      resetPropertyModal();
+      closePropertyModal();
     } catch (error) {
       setPropertyError(
         error instanceof Error
@@ -671,19 +741,245 @@ export default function Contacts() {
     }
   }
 
+  async function removePhoto(photo: PropertyPhoto) {
+    if (!window.confirm("Delete this property photo?")) return;
+    try {
+      await deletePropertyPhoto(photo);
+    } catch (error) {
+      setPropertyError(
+        error instanceof Error
+          ? error.message
+          : "The photo could not be deleted."
+      );
+    }
+  }
+
+  function propertyEditor(
+    property: StagedProperty,
+    index: number
+  ) {
+    const updateFiles = (files: File[]) =>
+      updateStagedProperty(property.key, (current) => ({
+        ...current,
+        files,
+      }));
+    const updateProjectIds = (projectIds: string[]) =>
+      updateStagedProperty(property.key, (current) => ({
+        ...current,
+        projectIds,
+      }));
+
+    return (
+      <section
+        key={property.key}
+        className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5"
+      >
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-gray-900">
+              Property {index + 1}
+            </h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Details, photos, and linked records are optional.
+            </p>
+          </div>
+          {stagedProperties.length > 1 && (
+            <button
+              type="button"
+              onClick={() =>
+                setStagedProperties((current) =>
+                  current.filter((item) => item.key !== property.key)
+                )
+              }
+              className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600"
+              aria-label={`Remove property ${index + 1}`}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Property Name / Label</label>
+            <input
+              value={property.draft.name}
+              onChange={(event) =>
+                setStagedField(property.key, "name", event.target.value)
+              }
+              placeholder="Primary Home, Rental, Commercial Site…"
+              className={inputClass}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Street Address</label>
+            <input
+              value={property.draft.address}
+              onChange={(event) =>
+                setStagedField(property.key, "address", event.target.value)
+              }
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>City</label>
+            <input
+              value={property.draft.city}
+              onChange={(event) =>
+                setStagedField(property.key, "city", event.target.value)
+              }
+              className={inputClass}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>State</label>
+              <input
+                value={property.draft.state}
+                onChange={(event) =>
+                  setStagedField(property.key, "state", event.target.value)
+                }
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>ZIP</label>
+              <input
+                value={property.draft.zip}
+                onChange={(event) =>
+                  setStagedField(property.key, "zip", event.target.value)
+                }
+                className={inputClass}
+              />
+            </div>
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Property Description</label>
+            <textarea
+              rows={3}
+              value={property.draft.description}
+              onChange={(event) =>
+                setStagedField(
+                  property.key,
+                  "description",
+                  event.target.value
+                )
+              }
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Client-visible Notes</label>
+            <textarea
+              rows={4}
+              value={property.draft.clientNotes}
+              onChange={(event) =>
+                setStagedField(
+                  property.key,
+                  "clientNotes",
+                  event.target.value
+                )
+              }
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Internal Notes</label>
+            <textarea
+              rows={4}
+              value={property.draft.internalNotes}
+              onChange={(event) =>
+                setStagedField(
+                  property.key,
+                  "internalNotes",
+                  event.target.value
+                )
+              }
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-gray-100 pt-5">
+          <div className="mb-3 flex items-center gap-2">
+            <ImageIcon size={17} className="text-slate-600" />
+            <h4 className="font-semibold text-gray-900">Photos</h4>
+          </div>
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm font-semibold text-gray-600 hover:border-slate-400">
+            <Upload size={17} /> Choose Photos
+            <input
+              type="file"
+              accept="image/*,.heic,.heif"
+              multiple
+              className="sr-only"
+              onChange={(event) => {
+                const files = Array.from(
+                  event.currentTarget.files ?? []
+                ) as File[];
+                updateFiles([...property.files, ...files]);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <StagedPhotos
+            files={property.files}
+            onRemove={(fileIndex) =>
+              updateFiles(
+                property.files.filter((_, indexValue) =>
+                  indexValue !== fileIndex
+                )
+              )
+            }
+          />
+        </div>
+
+        <div className="mt-6 border-t border-gray-100 pt-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Link2 size={17} className="text-slate-600" />
+            <h4 className="font-semibold text-gray-900">
+              Link Existing Estimates or Jobs
+            </h4>
+          </div>
+          <RecordPicker
+            projects={linkableProjects}
+            selectedIds={property.projectIds}
+            onToggle={(id) =>
+              updateProjectIds(
+                property.projectIds.includes(id)
+                  ? property.projectIds.filter((value) => value !== id)
+                  : [...property.projectIds, id]
+              )
+            }
+          />
+        </div>
+      </section>
+    );
+  }
+
+  const tabs = selected
+    ? ([
+        ["details", "Contact Details"],
+        ["properties", "Properties"],
+        ["history", "History"],
+      ] as const)
+    : ([
+        ["details", "Contact Details"],
+        ["properties", "Properties & History"],
+      ] as const);
+
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-7">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6">
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Contacts & Properties</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Create a contact, property, photos, and linked history in one workflow.
+          <h1 className="text-2xl font-bold text-gray-900">Contacts</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Customers, leads, properties, photos, and connected records.
           </p>
         </div>
         <button
           type="button"
           onClick={openNewContact}
-          className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900"
         >
           <Plus size={16} /> Add Contact
         </button>
@@ -695,7 +991,7 @@ export default function Contacts() {
         </div>
       )}
 
-      <div className="mb-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="mb-6 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
         <div className="relative">
           <Search
             size={17}
@@ -704,32 +1000,42 @@ export default function Contacts() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, email, phone, or address"
+            placeholder="Search name, email, phone, or address…"
             className={`${inputClass} pl-10`}
           />
         </div>
-        <select
-          value={typeFilter}
-          onChange={(event) =>
-            setTypeFilter(event.target.value as "all" | ContactType)
-          }
-          className={inputClass}
-        >
-          <option value="all">All types</option>
-          <option value="lead">Leads</option>
-          <option value="customer">Customers</option>
-        </select>
-        <select
-          value={activityFilter}
-          onChange={(event) =>
-            setActivityFilter(event.target.value as "all" | ContactActivity)
-          }
-          className={inputClass}
-        >
-          <option value="all">Active & inactive</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
+        <div className="flex rounded-lg border border-gray-200 bg-white p-1">
+          {(["all", "lead", "customer"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTypeFilter(value)}
+              className={`rounded-md px-3 py-2 text-xs font-semibold capitalize ${
+                typeFilter === value
+                  ? "bg-slate-800 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+        <div className="flex rounded-lg border border-gray-200 bg-white p-1">
+          {(["all", "active", "inactive"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setActivityFilter(value)}
+              className={`rounded-md px-3 py-2 text-xs font-semibold capitalize ${
+                activityFilter === value
+                  ? "bg-slate-800 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
       </div>
 
       {contactsLoading ? (
@@ -738,10 +1044,9 @@ export default function Contacts() {
         </div>
       ) : filteredContacts.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-16 text-center">
-          <UserRound size={30} className="mx-auto text-gray-300" />
-          <p className="mt-3 font-semibold text-gray-700">No contacts found</p>
-          <p className="mt-1 text-sm text-gray-400">
-            Add a lead or customer to begin.
+          <UserRound size={34} className="mx-auto text-gray-300" />
+          <p className="mt-3 font-semibold text-gray-700">
+            No matching contacts
           </p>
         </div>
       ) : (
@@ -756,13 +1061,13 @@ export default function Contacts() {
                 key={contact.id}
                 type="button"
                 onClick={() => openContact(contact)}
-                className="rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md cursor-pointer"
+                className="rounded-xl border border-gray-200 bg-white p-5 text-left hover:border-slate-300 hover:shadow-sm"
               >
-                <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
                     <UserRound size={20} />
                   </div>
-                  <div className="flex flex-wrap justify-end gap-1.5">
+                  <div className="flex gap-1.5">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-semibold ${typeClasses(
                         contact.contactType
@@ -779,7 +1084,9 @@ export default function Contacts() {
                     </span>
                   </div>
                 </div>
-                <p className="font-bold text-gray-900">{contact.name}</p>
+                <p className="mt-4 font-bold text-gray-900">
+                  {contact.name}
+                </p>
                 <div className="mt-3 space-y-2 text-sm text-gray-500">
                   <p className="flex items-center gap-2 truncate">
                     <Phone size={14} /> {contact.phone || "No phone"}
@@ -793,7 +1100,8 @@ export default function Contacts() {
                   </p>
                 </div>
                 <p className="mt-4 text-xs font-semibold text-slate-500">
-                  {propertyCount} {propertyCount === 1 ? "property" : "properties"}
+                  {propertyCount}{" "}
+                  {propertyCount === 1 ? "property" : "properties"}
                 </p>
               </button>
             );
@@ -810,13 +1118,13 @@ export default function Contacts() {
                   {selected ? selected.name : "Add Contact"}
                 </h2>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  Contact details, properties, photos, and history are all optional except the name.
+                  Only the contact name is required. Add any number of properties, photos, and linked records before saving.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeContactModal}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 cursor-pointer"
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
               >
                 <X size={20} />
               </button>
@@ -824,18 +1132,14 @@ export default function Contacts() {
 
             <div className="shrink-0 border-b border-gray-100 px-4 sm:px-6">
               <div className="flex gap-1 overflow-x-auto">
-                {([
-                  ["details", "Contact Details"],
-                  ["property", selected ? "Properties" : "First Property"],
-                  ["history", "Photos & History"],
-                ] as const).map(([value, label]) => (
+                {tabs.map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => setActiveTab(value)}
-                    className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold cursor-pointer ${
+                    className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold ${
                       activeTab === value
-                        ? "border-slate-800 text-slate-900"
+                        ? "border-slate-700 text-slate-900 dark:border-slate-200 dark:text-white"
                         : "border-transparent text-gray-500"
                     }`}
                   >
@@ -858,7 +1162,9 @@ export default function Contacts() {
                     <label className={labelClass}>Name *</label>
                     <input
                       value={draft.name}
-                      onChange={(event) => setContactField("name", event.target.value)}
+                      onChange={(event) =>
+                        setContactField("name", event.target.value)
+                      }
                       className={inputClass}
                     />
                   </div>
@@ -867,7 +1173,9 @@ export default function Contacts() {
                     <input
                       type="email"
                       value={draft.email}
-                      onChange={(event) => setContactField("email", event.target.value)}
+                      onChange={(event) =>
+                        setContactField("email", event.target.value)
+                      }
                       className={inputClass}
                     />
                   </div>
@@ -876,15 +1184,19 @@ export default function Contacts() {
                     <input
                       type="tel"
                       value={draft.phone}
-                      onChange={(event) => setContactField("phone", event.target.value)}
+                      onChange={(event) =>
+                        setContactField("phone", event.target.value)
+                      }
                       className={inputClass}
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={labelClass}>Contact Street Address</label>
+                    <label className={labelClass}>Street Address</label>
                     <input
                       value={draft.address}
-                      onChange={(event) => setContactField("address", event.target.value)}
+                      onChange={(event) =>
+                        setContactField("address", event.target.value)
+                      }
                       className={inputClass}
                     />
                   </div>
@@ -892,7 +1204,9 @@ export default function Contacts() {
                     <label className={labelClass}>City</label>
                     <input
                       value={draft.city}
-                      onChange={(event) => setContactField("city", event.target.value)}
+                      onChange={(event) =>
+                        setContactField("city", event.target.value)
+                      }
                       className={inputClass}
                     />
                   </div>
@@ -901,7 +1215,9 @@ export default function Contacts() {
                       <label className={labelClass}>State</label>
                       <input
                         value={draft.state}
-                        onChange={(event) => setContactField("state", event.target.value)}
+                        onChange={(event) =>
+                          setContactField("state", event.target.value)
+                        }
                         className={inputClass}
                       />
                     </div>
@@ -909,17 +1225,22 @@ export default function Contacts() {
                       <label className={labelClass}>ZIP</label>
                       <input
                         value={draft.zip}
-                        onChange={(event) => setContactField("zip", event.target.value)}
+                        onChange={(event) =>
+                          setContactField("zip", event.target.value)
+                        }
                         className={inputClass}
                       />
                     </div>
                   </div>
                   <div>
-                    <label className={labelClass}>Type</label>
+                    <label className={labelClass}>Contact Type</label>
                     <select
                       value={draft.contactType}
                       onChange={(event) =>
-                        setContactField("contactType", event.target.value as ContactType)
+                        setContactField(
+                          "contactType",
+                          event.target.value as ContactType
+                        )
                       }
                       className={inputClass}
                     >
@@ -953,7 +1274,9 @@ export default function Contacts() {
                     <label className={labelClass}>Source</label>
                     <select
                       value={draft.source}
-                      onChange={(event) => setContactField("source", event.target.value)}
+                      onChange={(event) =>
+                        setContactField("source", event.target.value)
+                      }
                       className={inputClass}
                     >
                       {SOURCE_OPTIONS.map((option) => (
@@ -968,27 +1291,31 @@ export default function Contacts() {
                     <textarea
                       rows={5}
                       value={draft.notes}
-                      onChange={(event) => setContactField("notes", event.target.value)}
+                      onChange={(event) =>
+                        setContactField("notes", event.target.value)
+                      }
                       className={inputClass}
                     />
                   </div>
                 </div>
               )}
 
-              {activeTab === "property" && (
-                selected ? (
+              {activeTab === "properties" &&
+                (selected ? (
                   <div>
                     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h3 className="font-bold text-gray-900">Linked properties</h3>
+                        <h3 className="font-bold text-gray-900">
+                          Linked properties
+                        </h3>
                         <p className="mt-1 text-sm text-gray-500">
-                          Add and edit as many service locations as this contact needs.
+                          A contact may have any number of service locations.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={openNewProperty}
-                        className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white cursor-pointer"
+                        className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
                       >
                         <Plus size={15} /> Add Property
                       </button>
@@ -997,11 +1324,18 @@ export default function Contacts() {
                       <button
                         type="button"
                         onClick={openNewProperty}
-                        className="w-full rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500 hover:border-slate-400 cursor-pointer"
+                        className="w-full rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500 hover:border-slate-400"
                       >
-                        <Building2 size={28} className="mx-auto text-gray-300" />
-                        <p className="mt-3 font-semibold">No properties yet</p>
-                        <p className="mt-1 text-sm">Add one without leaving this contact.</p>
+                        <Building2
+                          size={28}
+                          className="mx-auto text-gray-300"
+                        />
+                        <p className="mt-3 font-semibold">
+                          No properties yet
+                        </p>
+                        <p className="mt-1 text-sm">
+                          Add one without leaving this contact.
+                        </p>
                       </button>
                     ) : (
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -1017,7 +1351,7 @@ export default function Contacts() {
                               key={property.id}
                               type="button"
                               onClick={() => openProperty(property)}
-                              className="rounded-xl border border-gray-200 bg-white p-5 text-left hover:border-slate-300 hover:shadow-sm cursor-pointer"
+                              className="rounded-xl border border-gray-200 bg-white p-5 text-left hover:border-slate-300 hover:shadow-sm"
                             >
                               <div className="flex gap-4">
                                 {photos[0]?.url ? (
@@ -1032,12 +1366,16 @@ export default function Contacts() {
                                   </div>
                                 )}
                                 <div className="min-w-0 flex-1">
-                                  <p className="font-bold text-gray-900">{property.name}</p>
-                                  <p className="mt-1 text-sm text-gray-500 line-clamp-2">
-                                    {propertyAddress(property) || "No address"}
+                                  <p className="font-bold text-gray-900">
+                                    {property.name}
+                                  </p>
+                                  <p className="mt-1 line-clamp-2 text-sm text-gray-500">
+                                    {propertyAddress(property) ||
+                                      "No address"}
                                   </p>
                                   <p className="mt-2 text-xs text-gray-400">
-                                    {photos.length} photos · {history.length} records
+                                    {photos.length} photos · {history.length}{" "}
+                                    records
                                   </p>
                                 </div>
                               </div>
@@ -1048,186 +1386,69 @@ export default function Contacts() {
                     )}
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      Add an optional first property now. YardPilot will create it at the same time as the contact.
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className={labelClass}>Property Name / Label</label>
-                      <input
-                        value={newPropertyDraft.name}
-                        onChange={(event) =>
-                          setNewPropertyField("name", event.target.value)
-                        }
-                        placeholder="Primary Property, Rental, Commercial Site…"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className={labelClass}>Street Address</label>
-                      <input
-                        value={newPropertyDraft.address}
-                        onChange={(event) =>
-                          setNewPropertyField("address", event.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>City</label>
-                      <input
-                        value={newPropertyDraft.city}
-                        onChange={(event) =>
-                          setNewPropertyField("city", event.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={labelClass}>State</label>
-                        <input
-                          value={newPropertyDraft.state}
-                          onChange={(event) =>
-                            setNewPropertyField("state", event.target.value)
-                          }
-                          className={inputClass}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>ZIP</label>
-                        <input
-                          value={newPropertyDraft.zip}
-                          onChange={(event) =>
-                            setNewPropertyField("zip", event.target.value)
-                          }
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className={labelClass}>Property Description</label>
-                      <textarea
-                        rows={3}
-                        value={newPropertyDraft.description}
-                        onChange={(event) =>
-                          setNewPropertyField("description", event.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Client-visible Notes</label>
-                      <textarea
-                        rows={4}
-                        value={newPropertyDraft.clientNotes}
-                        onChange={(event) =>
-                          setNewPropertyField("clientNotes", event.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Internal Notes</label>
-                      <textarea
-                        rows={4}
-                        value={newPropertyDraft.internalNotes}
-                        onChange={(event) =>
-                          setNewPropertyField("internalNotes", event.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                  </div>
-                )
-              )}
-
-              {activeTab === "history" && (
-                selected ? (
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="font-bold text-gray-900">Contact history</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Open a property to upload photos or change which estimate/job is linked to it.
-                      </p>
-                    </div>
-                    {selectedContactProjects.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">
-                        No estimates or jobs are linked to this contact yet.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {selectedContactProjects.map((project) => (
-                          <Link
-                            key={project.id}
-                            to={`/app/estimates/${project.id}`}
-                            className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 hover:border-slate-300"
-                          >
-                            <FileText size={18} className="shrink-0 text-slate-600" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-gray-900">
-                                {project.name}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {project.estimateNumber} · {project.status}
-                              </p>
-                            </div>
-                            <p className="text-sm font-bold text-gray-900">
-                              {formatMoney(project.totalEstimate)}
-                            </p>
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-7">
+                  <div className="space-y-5">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      Add photos and choose existing records now. When you save, YardPilot creates the contact and optional property, uploads the photos, and links the selected records in one step.
+                      Build the contact and every needed property in one pass. Nothing here is locked; empty property cards are ignored when you save.
                     </div>
-                    <section>
-                      <div className="mb-3 flex items-center gap-2">
-                        <ImageIcon size={18} className="text-slate-600" />
-                        <h3 className="font-bold text-gray-900">Property Photos</h3>
-                      </div>
-                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-7 text-sm font-semibold text-gray-600 hover:border-slate-400">
-                        <Upload size={17} /> Choose Photos
-                        <input
-                          type="file"
-                          accept="image/*,.heic,.heif"
-                          multiple
-                          className="sr-only"
-                          onChange={(event) => {
-                            const files: File[] = Array.from(event.currentTarget.files ?? []);
-                            setNewPropertyFiles((current) => [...current, ...files]);
-                            event.currentTarget.value = "";
-                          }}
-                        />
-                      </label>
-                      <StagedPhotos
-                        files={newPropertyFiles}
-                        onRemove={(index) =>
-                          setNewPropertyFiles((current) =>
-                            current.filter((_, itemIndex) => itemIndex !== index)
-                          )
-                        }
-                      />
-                    </section>
-                    <section>
-                      <div className="mb-3 flex items-center gap-2">
-                        <Link2 size={18} className="text-slate-600" />
-                        <h3 className="font-bold text-gray-900">
-                          Link Existing Estimates or Jobs
-                        </h3>
-                      </div>
-                      <RecordPicker
-                        projects={linkableForNew}
-                        selectedIds={newLinkedProjectIds}
-                        onToggle={(id) => toggleId(id, setNewLinkedProjectIds)}
-                      />
-                    </section>
+                    {stagedProperties.map(propertyEditor)}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setStagedProperties((current) => [
+                          ...current,
+                          emptyStagedProperty(),
+                        ])
+                      }
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-4 text-sm font-semibold text-gray-600 hover:border-slate-400"
+                    >
+                      <Plus size={16} /> Add Another Property
+                    </button>
                   </div>
-                )
+                ))}
+
+              {activeTab === "history" && selected && (
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="font-bold text-gray-900">
+                      Contact history
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Estimates and jobs linked through any of this contact’s properties appear here.
+                    </p>
+                  </div>
+                  {selectedContactProjects.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">
+                      No estimates or jobs are linked to this contact yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedContactProjects.map((project) => (
+                        <Link
+                          key={project.id}
+                          to={`/app/estimates/${project.id}`}
+                          className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 hover:border-slate-300"
+                        >
+                          <FileText
+                            size={18}
+                            className="shrink-0 text-slate-600"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-gray-900">
+                              {project.name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {project.estimateNumber} ·{" "}
+                              {project.estimateStatus}
+                            </p>
+                          </div>
+                          <p className="text-sm font-bold text-gray-900">
+                            {formatMoney(project.totalEstimate)}
+                          </p>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1237,7 +1458,7 @@ export default function Contacts() {
                   <button
                     type="button"
                     onClick={() => void removeContact()}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-red-600 cursor-pointer"
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-red-600"
                   >
                     <Trash2 size={15} /> Delete Contact
                   </button>
@@ -1247,7 +1468,7 @@ export default function Contacts() {
                 <button
                   type="button"
                   onClick={closeContactModal}
-                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 sm:flex-none cursor-pointer"
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 sm:flex-none"
                 >
                   Cancel
                 </button>
@@ -1255,9 +1476,13 @@ export default function Contacts() {
                   type="button"
                   onClick={() => void saveContact()}
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none cursor-pointer"
+                  className="flex-1 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none"
                 >
-                  {saving ? "Saving…" : selected ? "Update & Close" : "Create & Close"}
+                  {saving
+                    ? "Saving…"
+                    : selected
+                      ? "Update & Close"
+                      : "Create & Close"}
                 </button>
               </div>
             </div>
@@ -1267,41 +1492,44 @@ export default function Contacts() {
 
       {propertyModalOpen && selected && (
         <div className="app-modal-overlay fixed inset-0 z-[90] flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-4">
-          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-5xl sm:rounded-2xl">
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-4 sm:px-6">
+          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-4xl sm:rounded-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4 sm:px-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  {selectedProperty ? selectedProperty.name : "Add Property"}
+                  {selectedProperty
+                    ? selectedProperty.name
+                    : "Add Property"}
                 </h2>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  Linked to {selected.name}. Details, photos, and history can be saved together.
+                  Save details, photos, and linked history together.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closePropertyModal}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 cursor-pointer"
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-7">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
               {propertyError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {propertyError}
                 </div>
               )}
-
-              <section className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className={labelClass}>Property Name / Label</label>
                   <input
                     value={propertyDraft.name}
                     onChange={(event) =>
-                      setPropertyField("name", event.target.value)
+                      setPropertyDraft((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
                     }
-                    placeholder="Primary Property, Rental, Commercial Site…"
                     className={inputClass}
                   />
                 </div>
@@ -1310,7 +1538,10 @@ export default function Contacts() {
                   <input
                     value={propertyDraft.address}
                     onChange={(event) =>
-                      setPropertyField("address", event.target.value)
+                      setPropertyDraft((current) => ({
+                        ...current,
+                        address: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
@@ -1320,7 +1551,10 @@ export default function Contacts() {
                   <input
                     value={propertyDraft.city}
                     onChange={(event) =>
-                      setPropertyField("city", event.target.value)
+                      setPropertyDraft((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
@@ -1331,7 +1565,10 @@ export default function Contacts() {
                     <input
                       value={propertyDraft.state}
                       onChange={(event) =>
-                        setPropertyField("state", event.target.value)
+                        setPropertyDraft((current) => ({
+                          ...current,
+                          state: event.target.value,
+                        }))
                       }
                       className={inputClass}
                     />
@@ -1341,19 +1578,25 @@ export default function Contacts() {
                     <input
                       value={propertyDraft.zip}
                       onChange={(event) =>
-                        setPropertyField("zip", event.target.value)
+                        setPropertyDraft((current) => ({
+                          ...current,
+                          zip: event.target.value,
+                        }))
                       }
                       className={inputClass}
                     />
                   </div>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Property Description</label>
+                  <label className={labelClass}>Description</label>
                   <textarea
                     rows={3}
                     value={propertyDraft.description}
                     onChange={(event) =>
-                      setPropertyField("description", event.target.value)
+                      setPropertyDraft((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
@@ -1364,7 +1607,10 @@ export default function Contacts() {
                     rows={4}
                     value={propertyDraft.clientNotes}
                     onChange={(event) =>
-                      setPropertyField("clientNotes", event.target.value)
+                      setPropertyDraft((current) => ({
+                        ...current,
+                        clientNotes: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
@@ -1375,24 +1621,24 @@ export default function Contacts() {
                     rows={4}
                     value={propertyDraft.internalNotes}
                     onChange={(event) =>
-                      setPropertyField("internalNotes", event.target.value)
+                      setPropertyDraft((current) => ({
+                        ...current,
+                        internalNotes: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
                 </div>
-              </section>
+              </div>
 
-              <section className="border-t border-gray-100 pt-6">
-                <div className="mb-4 flex items-center gap-2">
+              <section className="mt-7 border-t border-gray-100 pt-6">
+                <div className="mb-3 flex items-center gap-2">
                   <ImageIcon size={18} className="text-slate-600" />
-                  <div>
-                    <h3 className="font-bold text-gray-900">Property Photos</h3>
-                    <p className="text-sm text-gray-500">
-                      Choose photos now. New files upload when you press Save & Close.
-                    </p>
-                  </div>
+                  <h3 className="font-bold text-gray-900">
+                    Property Photos
+                  </h3>
                 </div>
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm font-semibold text-gray-600 hover:border-slate-400">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-7 text-sm font-semibold text-gray-600 hover:border-slate-400">
                   <Upload size={17} /> Choose Photos
                   <input
                     type="file"
@@ -1400,8 +1646,13 @@ export default function Contacts() {
                     multiple
                     className="sr-only"
                     onChange={(event) => {
-                      const files: File[] = Array.from(event.currentTarget.files ?? []);
-                      setPropertyFiles((current) => [...current, ...files]);
+                      const files = Array.from(
+                        event.currentTarget.files ?? []
+                      ) as File[];
+                      setPropertyFiles((current) => [
+                        ...current,
+                        ...files,
+                      ]);
                       event.currentTarget.value = "";
                     }}
                   />
@@ -1410,90 +1661,42 @@ export default function Contacts() {
                   files={propertyFiles}
                   onRemove={(index) =>
                     setPropertyFiles((current) =>
-                      current.filter((_, itemIndex) => itemIndex !== index)
+                      current.filter(
+                        (_, itemIndex) => itemIndex !== index
+                      )
                     )
                   }
                 />
-                {selectedPropertyPhotos.length > 0 && (
-                  <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {selectedPropertyPhotos.map((photo) => (
-                      <div key={photo.id} className="relative group">
-                        <img
-                          src={photo.url}
-                          alt={photo.caption || "Property"}
-                          className="w-full aspect-square rounded-lg border border-gray-200 object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void deletePropertyPhoto(photo)}
-                          className="absolute right-2 top-2 rounded-md bg-black/70 p-1.5 text-white cursor-pointer"
-                          aria-label="Delete photo"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <PhotoGrid
+                  photos={selectedPropertyPhotos}
+                  onDelete={(photo) => void removePhoto(photo)}
+                />
               </section>
 
-              <section className="border-t border-gray-100 pt-6">
+              <section className="mt-7 border-t border-gray-100 pt-6">
                 <div className="mb-3 flex items-center gap-2">
                   <Link2 size={18} className="text-slate-600" />
-                  <div>
-                    <h3 className="font-bold text-gray-900">
-                      Linked Estimates & Jobs
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      Select records to attach to this property when it is saved.
-                    </p>
-                  </div>
+                  <h3 className="font-bold text-gray-900">
+                    Linked Estimates and Jobs
+                  </h3>
                 </div>
                 <RecordPicker
-                  projects={projects.filter(
-                    (project) =>
-                      !project.contactId ||
-                      project.contactId === selected.id ||
-                      project.propertyId === selectedProperty?.id
-                  )}
-                  selectedIds={propertyLinkedProjectIds}
-                  onToggle={(id) => toggleId(id, setPropertyLinkedProjectIds)}
+                  projects={linkableProjects}
+                  selectedIds={propertyProjectIds}
+                  onToggle={(id) =>
+                    toggleArrayId(id, setPropertyProjectIds)
+                  }
                 />
-
-                {selectedPropertyProjects.length > 0 && (
-                  <div className="mt-5 space-y-2">
-                    {selectedPropertyProjects.map((project) => (
-                      <Link
-                        key={project.id}
-                        to={`/app/estimates/${project.id}`}
-                        className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 hover:border-slate-300"
-                      >
-                        <FileText size={17} className="shrink-0 text-slate-600" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-gray-900">
-                            {project.name}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {project.estimateNumber} · {project.status}
-                          </p>
-                        </div>
-                        <p className="text-sm font-bold text-gray-900">
-                          {formatMoney(project.totalEstimate)}
-                        </p>
-                      </Link>
-                    ))}
-                  </div>
-                )}
               </section>
             </div>
 
-            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
+            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
               <div>
                 {selectedProperty && (
                   <button
                     type="button"
                     onClick={() => void removeProperty()}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-red-600 cursor-pointer"
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-red-600"
                   >
                     <Trash2 size={15} /> Delete Property
                   </button>
@@ -1503,7 +1706,7 @@ export default function Contacts() {
                 <button
                   type="button"
                   onClick={closePropertyModal}
-                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 sm:flex-none cursor-pointer"
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 sm:flex-none"
                 >
                   Cancel
                 </button>
@@ -1511,9 +1714,13 @@ export default function Contacts() {
                   type="button"
                   onClick={() => void saveProperty()}
                   disabled={propertySaving}
-                  className="flex-1 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none cursor-pointer"
+                  className="flex-1 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none"
                 >
-                  {propertySaving ? "Saving…" : "Save & Close"}
+                  {propertySaving
+                    ? "Saving…"
+                    : selectedProperty
+                      ? "Update & Close"
+                      : "Create & Close"}
                 </button>
               </div>
             </div>

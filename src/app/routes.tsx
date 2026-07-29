@@ -6,6 +6,8 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import FAQ from "./pages/FAQ";
+import ContactSupport from "./pages/ContactSupport";
 import AppLayout from "./components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
@@ -54,6 +56,8 @@ export const router = createBrowserRouter([
   { path: "/reset-password", Component: ResetPassword },
   { path: "/terms", Component: Terms },
   { path: "/privacy", Component: Privacy },
+  { path: "/faq", Component: FAQ },
+  { path: "/contact", Component: ContactSupport },
   { path: "/estimate/share/:token", Component: PublicEstimate },
   { path: "/invoice/share/:token", Component: PublicInvoice },
   {

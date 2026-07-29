@@ -90,6 +90,7 @@ type AppContextType = {
   switchWorkspace: (workspaceId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
   createCompanyWorkspace: (name: string) => Promise<string>;
+  createWorkgroupWorkspace: (name: string) => Promise<string>;
   createWorkspaceInvite: (
     email: string,
     role: Exclude<WorkspaceRole, "owner">,
@@ -104,6 +105,10 @@ type AppContextType = {
     hourlyRate: number
   ) => Promise<void>;
   removeWorkspaceMember: (membershipId: string) => Promise<void>;
+  updateMyWorkspaceRate: (
+    positionTitle: string,
+    hourlyRate: number
+  ) => Promise<void>;
 
   refreshProjects: () => Promise<void>;
   addProject: (project: Project) => Promise<Project>;
@@ -134,6 +139,7 @@ type AppContextType = {
   updateInvoice: (invoice: Invoice) => Promise<Invoice>;
   deleteInvoice: (id: string) => Promise<void>;
   setInvoiceSharing: (id: string, enabled: boolean) => Promise<Invoice>;
+  completeInvoice: (id: string) => Promise<void>;
 
   refreshSchedule: () => Promise<void>;
   addScheduleEvent: (event: ScheduleEvent) => Promise<ScheduleEvent>;
@@ -318,6 +324,7 @@ type InvoiceRow = {
   share_enabled: boolean;
   sent_at: string | null;
   viewed_at: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -649,6 +656,7 @@ function rowToInvoice(row: InvoiceRow): Invoice {
     shareEnabled: Boolean(row.share_enabled),
     sentAt: row.sent_at,
     viewedAt: row.viewed_at,
+    archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1258,6 +1266,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return workspaceId;
   }
 
+  async function createWorkgroupWorkspace(name: string) {
+    const { data, error } = await supabase.rpc("create_workgroup_workspace", {
+      requested_name: name.trim(),
+    });
+    if (error) throw new Error(error.message);
+    const workspaceId = String(data);
+    const loaded = await fetchWorkspaces();
+    setWorkspaces(loaded);
+    const created = loaded.find((workspace) => workspace.id === workspaceId);
+    if (created) {
+      activeWorkspaceIdRef.current = created.id;
+      setActiveWorkspaceId(created.id);
+      localStorage.setItem("yardpilot-workspace", created.id);
+      await loadWorkspaceBundle(created.id, created.role);
+    }
+    return workspaceId;
+  }
+
   async function switchWorkspace(workspaceId: string) {
     const workspace = workspaces.find((item) => item.id === workspaceId);
     if (!workspace) throw new Error("Workspace not found.");
@@ -1364,6 +1390,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? {
               ...member,
               role: memberRole,
+              positionTitle: positionTitle.trim(),
+              hourlyRate: Math.max(0, Number(hourlyRate) || 0),
+            }
+          : member
+      )
+    );
+  }
+
+  async function updateMyWorkspaceRate(
+    positionTitle: string,
+    hourlyRate: number
+  ) {
+    const workspaceId = currentWorkspaceOrThrow();
+    const { error } = await supabase.rpc("update_my_workspace_rate", {
+      requested_workspace_id: workspaceId,
+      requested_position_title: positionTitle.trim(),
+      requested_hourly_rate: Math.max(0, Number(hourlyRate) || 0),
+    });
+    if (error) throw new Error(error.message);
+    const userId = currentUserOrThrow();
+    setWorkspaceMembers((previous) =>
+      previous.map((member) =>
+        member.userId === userId
+          ? {
+              ...member,
               positionTitle: positionTitle.trim(),
               hourlyRate: Math.max(0, Number(hourlyRate) || 0),
             }
@@ -1539,14 +1590,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function deleteProject(id: string) {
     ensureManager();
-    const workspaceId = currentWorkspaceOrThrow();
-    const { error } = await supabase
-      .from("projects")
-      .delete()
-      .eq("id", id)
-      .eq("workspace_id", workspaceId);
+    const { error } = await supabase.rpc("delete_project_with_connected_data", {
+      requested_project_id: id,
+    });
     if (error) throw new Error(error.message);
     setProjects((previous) => previous.filter((project) => project.id !== id));
+    setInvoices((previous) => previous.filter((invoice) => invoice.projectId !== id));
     await Promise.all([refreshSchedule(), refreshFollowUps()]);
   }
 
@@ -1830,6 +1879,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       share_enabled: invoice.shareEnabled,
       sent_at: invoice.sentAt,
       viewed_at: invoice.viewedAt,
+      archived_at: invoice.archivedAt,
       created_at: invoice.createdAt,
       updated_at: invoice.updatedAt,
     };
@@ -1925,6 +1975,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       previous.map((invoice) => (invoice.id === saved.id ? saved : invoice))
     );
     return saved;
+  }
+
+  async function completeInvoice(id: string) {
+    ensureManager();
+    const { error } = await supabase.rpc("complete_invoice", {
+      requested_invoice_id: id,
+    });
+    if (error) throw new Error(error.message);
+    await Promise.all([refreshInvoices(), refreshSchedule(), refreshFollowUps()]);
   }
 
   function scheduleToDatabase(event: ScheduleEvent) {
@@ -2239,11 +2298,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         switchWorkspace,
         refreshWorkspaces,
         createCompanyWorkspace,
+        createWorkgroupWorkspace,
         createWorkspaceInvite,
         revokeWorkspaceInvite,
         acceptWorkspaceInvite,
         updateWorkspaceMember,
         removeWorkspaceMember,
+        updateMyWorkspaceRate,
         refreshProjects,
         addProject,
         updateProject,
@@ -2266,6 +2327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateInvoice,
         deleteInvoice,
         setInvoiceSharing,
+        completeInvoice,
         refreshSchedule,
         addScheduleEvent,
         updateScheduleEvent,

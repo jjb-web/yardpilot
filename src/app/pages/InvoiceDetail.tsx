@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, Download, Edit3, Share2 } from "lucide-react";
+import { ArrowLeft, Download, Edit3, PackageCheck, Share2 } from "lucide-react";
 import CopyToast from "../components/CopyToast";
 import InvoiceDocument from "../components/InvoiceDocument";
 import { useApp } from "../context/AppContext";
@@ -19,6 +19,7 @@ export default function InvoiceDetail() {
     properties,
     propertyPhotos,
     setInvoiceSharing,
+    completeInvoice,
   } = useApp();
   const [message, setMessage] = useState("");
   const { copyText, copiedMessage } = useCopyFeedback();
@@ -63,6 +64,30 @@ export default function InvoiceDetail() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setMessage(error instanceof Error ? error.message : "Could not share invoice.");
+    }
+  }
+
+  async function finishInvoice() {
+    if (!invoice) return;
+    const finalStatus =
+      invoice.status !== "paid" &&
+      invoice.status !== "void" &&
+      new Date(`${invoice.dueDate}T23:59:59`).getTime() < Date.now()
+        ? "overdue"
+        : invoice.status;
+    const confirmed = window.confirm(
+      `Complete ${invoice.invoiceNumber}? It will leave the active invoice list and appear on its Past Job as Archived · ${finalStatus}.`
+    );
+    if (!confirmed) return;
+
+    setMessage("");
+    try {
+      await completeInvoice(invoice.id);
+      navigate("/app/projects/past");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "The invoice could not be completed."
+      );
     }
   }
 
@@ -118,12 +143,27 @@ export default function InvoiceDetail() {
           >
             <Share2 size={15} /> Share Invoice
           </button>
+          {!invoice.archivedAt && (
+            <button
+              type="button"
+              onClick={() => void finishInvoice()}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              <PackageCheck size={15} /> Complete Invoice
+            </button>
+          )}
         </div>
       </div>
 
       {message && (
         <div className="no-print mb-5 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           {message}
+        </div>
+      )}
+
+      {invoice.archivedAt && (
+        <div className="no-print mb-5 rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+          Archived invoice · {invoice.status}
         </div>
       )}
 
