@@ -167,7 +167,7 @@ export default function AppLayout() {
     <div className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5 px-1">
-          <div className="w-9 h-9 bg-green-400 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
             <img
               src="/yardpilot-logo.png"
               alt="YardPilotUSA logo"
