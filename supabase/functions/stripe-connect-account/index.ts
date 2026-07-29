@@ -15,6 +15,12 @@ type WorkspaceRow = {
   stripe_account_id: string | null;
 };
 
+type RequirementError = {
+  code: string;
+  reason: string;
+  requirement: string;
+};
+
 const ADMIN_ROLES = new Set(["owner", "co_owner"]);
 
 function requiredEnv(name: string) {
@@ -119,25 +125,88 @@ function dashboardType(account: Stripe.Account) {
   return null;
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function requirementErrors(value: unknown): RequirementError[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    const row =
+      entry && typeof entry === "object"
+        ? (entry as Record<string, unknown>)
+        : {};
+    return {
+      code: typeof row.code === "string" ? row.code : "",
+      reason: typeof row.reason === "string" ? row.reason : "",
+      requirement:
+        typeof row.requirement === "string" ? row.requirement : "",
+    };
+  });
+}
+
+function accountStatus(account: Stripe.Account | null) {
+  const requirements = account?.requirements;
+  const future = account?.future_requirements;
+  const syncedAt = new Date().toISOString();
+
+  return {
+    connected: Boolean(account?.charges_enabled && account?.payouts_enabled),
+    accountExists: Boolean(account),
+    onboardingComplete: Boolean(account?.details_submitted),
+    chargesEnabled: Boolean(account?.charges_enabled),
+    payoutsEnabled: Boolean(account?.payouts_enabled),
+    currentlyDue: stringArray(requirements?.currently_due),
+    eventuallyDue: stringArray(requirements?.eventually_due),
+    pastDue: stringArray(requirements?.past_due),
+    pendingVerification: stringArray(requirements?.pending_verification),
+    disabledReason: requirements?.disabled_reason ?? null,
+    errors: requirementErrors(requirements?.errors),
+    futureCurrentlyDue: stringArray(future?.currently_due),
+    futureEventuallyDue: stringArray(future?.eventually_due),
+    futurePastDue: stringArray(future?.past_due),
+    futurePendingVerification: stringArray(future?.pending_verification),
+    futureDisabledReason: future?.disabled_reason ?? null,
+    syncedAt,
+  };
+}
+
 async function persistAccountStatus(
   admin: ReturnType<typeof createClient>,
   workspaceId: string,
   account: Stripe.Account,
 ) {
+  const status = accountStatus(account);
   const { error } = await admin
     .from("workspaces")
     .update({
       stripe_account_id: account.id,
-      stripe_onboarding_complete: Boolean(account.details_submitted),
-      stripe_charges_enabled: Boolean(account.charges_enabled),
-      stripe_payouts_enabled: Boolean(account.payouts_enabled),
-      updated_at: new Date().toISOString(),
+      stripe_onboarding_complete: status.onboardingComplete,
+      stripe_charges_enabled: status.chargesEnabled,
+      stripe_payouts_enabled: status.payoutsEnabled,
+      stripe_currently_due: status.currentlyDue,
+      stripe_eventually_due: status.eventuallyDue,
+      stripe_past_due: status.pastDue,
+      stripe_pending_verification: status.pendingVerification,
+      stripe_disabled_reason: status.disabledReason,
+      stripe_requirement_errors: status.errors,
+      stripe_future_currently_due: status.futureCurrentlyDue,
+      stripe_future_eventually_due: status.futureEventuallyDue,
+      stripe_future_past_due: status.futurePastDue,
+      stripe_future_pending_verification: status.futurePendingVerification,
+      stripe_future_disabled_reason: status.futureDisabledReason,
+      stripe_status_synced_at: status.syncedAt,
+      updated_at: status.syncedAt,
     })
     .eq("id", workspaceId);
 
   if (error) {
     throw new Error(`Could not save Stripe status: ${error.message}`);
   }
+
+  return status;
 }
 
 Deno.serve(async (request) => {
@@ -292,6 +361,18 @@ Deno.serve(async (request) => {
             stripe_onboarding_complete: false,
             stripe_charges_enabled: false,
             stripe_payouts_enabled: false,
+            stripe_currently_due: [],
+            stripe_eventually_due: [],
+            stripe_past_due: [],
+            stripe_pending_verification: [],
+            stripe_disabled_reason: null,
+            stripe_requirement_errors: [],
+            stripe_future_currently_due: [],
+            stripe_future_eventually_due: [],
+            stripe_future_past_due: [],
+            stripe_future_pending_verification: [],
+            stripe_future_disabled_reason: null,
+            stripe_status_synced_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq("id", workspaceId);
@@ -324,13 +405,7 @@ Deno.serve(async (request) => {
     }
 
     if (action === "status") {
-      return json(request, origins, {
-        connected: Boolean(account?.charges_enabled && account?.payouts_enabled),
-        accountExists: Boolean(account),
-        onboardingComplete: Boolean(account?.details_submitted),
-        chargesEnabled: Boolean(account?.charges_enabled),
-        payoutsEnabled: Boolean(account?.payouts_enabled),
-      });
+      return json(request, origins, accountStatus(account));
     }
 
     if (!account) {
@@ -398,6 +473,12 @@ Deno.serve(async (request) => {
       refresh_url: refreshUrl,
       return_url: returnUrl,
       type: "account_onboarding",
+      collection_options: {
+        // Up-front onboarding collects known eventually-due requirements in the
+        // first flow. Stripe can still request documents later if verification
+        // of the submitted information fails or requirements change.
+        fields: "eventually_due",
+      },
     });
 
     console.log("Stripe onboarding link created", {
@@ -405,6 +486,7 @@ Deno.serve(async (request) => {
       workspaceId,
       stripeAccountId: account.id,
       dashboardType: dashboardType(account),
+      collectionMode: "eventually_due",
     });
 
     return json(request, origins, { url: accountLink.url });

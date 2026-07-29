@@ -1,17 +1,136 @@
 import { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   Building2,
+  CheckCircle2,
+  Clock3,
   CreditCard,
   ExternalLink,
   Mail,
   MapPin,
   Phone,
+  RefreshCw,
   Save,
   ShieldCheck,
   Trash2,
   UserRound,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import type { StripeConnectionStatus, Workspace } from "../data/types";
+
+
+type StripeUiState =
+  | "not_connected"
+  | "setup"
+  | "action_required"
+  | "in_review"
+  | "processing"
+  | "ready";
+
+function workspaceStripeStatus(
+  workspace: Workspace | null
+): StripeConnectionStatus {
+  return {
+    connected: Boolean(
+      workspace?.stripeChargesEnabled && workspace?.stripePayoutsEnabled
+    ),
+    accountExists: Boolean(workspace?.stripeAccountId),
+    onboardingComplete: Boolean(workspace?.stripeOnboardingComplete),
+    chargesEnabled: Boolean(workspace?.stripeChargesEnabled),
+    payoutsEnabled: Boolean(workspace?.stripePayoutsEnabled),
+    currentlyDue: workspace?.stripeCurrentlyDue ?? [],
+    eventuallyDue: workspace?.stripeEventuallyDue ?? [],
+    pastDue: workspace?.stripePastDue ?? [],
+    pendingVerification: workspace?.stripePendingVerification ?? [],
+    disabledReason: workspace?.stripeDisabledReason ?? null,
+    errors: workspace?.stripeRequirementErrors ?? [],
+    futureCurrentlyDue: workspace?.stripeFutureCurrentlyDue ?? [],
+    futureEventuallyDue: workspace?.stripeFutureEventuallyDue ?? [],
+    futurePastDue: workspace?.stripeFuturePastDue ?? [],
+    futurePendingVerification:
+      workspace?.stripeFuturePendingVerification ?? [],
+    futureDisabledReason: workspace?.stripeFutureDisabledReason ?? null,
+    syncedAt: workspace?.stripeStatusSyncedAt ?? null,
+  };
+}
+
+function humanizeRequirement(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("verification.document")) return "Identity document";
+  if (normalized.endsWith("id_number")) return "Government ID number";
+  if (normalized.includes("external_account")) return "Payout bank account";
+  if (normalized.includes("tax_id")) return "Business tax ID";
+  if (normalized.includes("business_profile.url")) return "Business website";
+  if (normalized.includes("support_phone")) return "Customer support phone";
+  if (normalized.includes("support_email")) return "Customer support email";
+  if (normalized.includes("tos_acceptance")) return "Stripe terms acceptance";
+  if (normalized.endsWith("email")) return "Email address verification";
+
+  const finalPart = value.split(".").at(-1) || value;
+  return finalPart
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function stripeUiState(status: StripeConnectionStatus): StripeUiState {
+  if (status.connected) return "ready";
+  if (!status.accountExists) return "not_connected";
+
+  const pending = new Set(status.pendingVerification);
+  const actionable = [...status.currentlyDue, ...status.pastDue].filter(
+    (item) => !pending.has(item)
+  );
+
+  if (status.errors.length > 0 || actionable.length > 0) {
+    return "action_required";
+  }
+  if (status.pendingVerification.length > 0) return "in_review";
+  if (!status.onboardingComplete || status.eventuallyDue.length > 0) {
+    return "setup";
+  }
+  return "processing";
+}
+
+function stripeStateCopy(state: StripeUiState) {
+  switch (state) {
+    case "ready":
+      return {
+        title: "Stripe connected",
+        description:
+          "Card payments and payouts are enabled for this workspace.",
+      };
+    case "in_review":
+      return {
+        title: "Stripe verification in review",
+        description:
+          "Stripe is reviewing the information you submitted. No further action is required right now. Stripe will notify the account owner if anything else is needed.",
+      };
+    case "action_required":
+      return {
+        title: "Stripe needs more information",
+        description:
+          "Complete the outstanding Stripe requirements before online invoice payments can be enabled.",
+      };
+    case "processing":
+      return {
+        title: "Stripe is processing your account",
+        description:
+          "Your information was submitted, but payments or payouts are not enabled yet. Refresh the status or check Stripe for details.",
+      };
+    case "setup":
+      return {
+        title: "Stripe setup incomplete",
+        description:
+          "Finish the Stripe onboarding flow to provide the remaining business, identity, and payout information.",
+      };
+    default:
+      return {
+        title: "Stripe not connected",
+        description:
+          "Stripe securely collects business, identity, and bank information during onboarding.",
+      };
+  }
+}
 
 export default function Account() {
   const {
@@ -43,6 +162,8 @@ export default function Account() {
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeMessage, setStripeMessage] = useState("");
   const [stripeError, setStripeError] = useState("");
+  const [liveStripeStatus, setLiveStripeStatus] =
+    useState<StripeConnectionStatus | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
@@ -85,8 +206,9 @@ export default function Account() {
           return;
         }
 
-        await refreshStripeConnection();
+        const status = await refreshStripeConnection();
         if (cancelled) return;
+        setLiveStripeStatus(status);
 
         setStripeMessage(
           params.get("connected") === "1"
@@ -117,10 +239,66 @@ export default function Account() {
     };
   }, []);
 
-  const stripeReady = Boolean(
-    activeWorkspace?.stripeChargesEnabled &&
-      activeWorkspace?.stripePayoutsEnabled
-  );
+  useEffect(() => {
+    if (
+      !activeWorkspace?.stripeAccountId ||
+      (role !== "owner" && role !== "co_owner")
+    ) {
+      setLiveStripeStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadStripeStatus() {
+      try {
+        const status = await refreshStripeConnection();
+        if (!cancelled) setLiveStripeStatus(status);
+      } catch (statusError) {
+        if (!cancelled) {
+          console.error("Could not refresh Stripe status:", statusError);
+        }
+      }
+    }
+
+    void loadStripeStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspace?.id, activeWorkspace?.stripeAccountId, role]);
+
+  useEffect(() => {
+    if (stripeUiState(liveStripeStatus ?? workspaceStripeStatus(activeWorkspace)) !== "in_review") {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshStripeConnection()
+        .then((status) => setLiveStripeStatus(status))
+        .catch((statusError) =>
+          console.error("Could not poll Stripe verification status:", statusError)
+        );
+    }, 30_000);
+
+    return () => window.clearInterval(timer);
+  }, [
+    activeWorkspace?.id,
+    liveStripeStatus?.pendingVerification.join("|"),
+    liveStripeStatus?.chargesEnabled,
+    liveStripeStatus?.payoutsEnabled,
+  ]);
+
+  const stripeStatus =
+    liveStripeStatus ?? workspaceStripeStatus(activeWorkspace);
+  const stripeState = stripeUiState(stripeStatus);
+  const stripeCopy = stripeStateCopy(stripeState);
+  const stripeReady = stripeState === "ready";
+  const actionableRequirements = [
+    ...new Set([
+      ...stripeStatus.currentlyDue,
+      ...stripeStatus.pastDue,
+    ]),
+  ].filter((item) => !stripeStatus.pendingVerification.includes(item));
 
   const cardClass = "rounded-xl border border-gray-200 bg-white p-5 sm:p-6";
   const inputClass =
@@ -187,6 +365,33 @@ export default function Account() {
           ? stripeConnectError.message
           : "Stripe onboarding could not be started."
       );
+      setStripeLoading(false);
+    }
+  }
+
+  async function refreshStripeStatus() {
+    setStripeError("");
+    setStripeMessage("Refreshing Stripe status…");
+    setStripeLoading(true);
+
+    try {
+      const status = await refreshStripeConnection();
+      setLiveStripeStatus(status);
+      setStripeMessage(
+        status.connected
+          ? "Stripe is ready for online invoice payments."
+          : status.pendingVerification.length > 0
+            ? "Stripe is still reviewing the submitted information."
+            : "Stripe status refreshed."
+      );
+    } catch (statusError) {
+      setStripeMessage("");
+      setStripeError(
+        statusError instanceof Error
+          ? statusError.message
+          : "Stripe status could not be refreshed."
+      );
+    } finally {
       setStripeLoading(false);
     }
   }
@@ -406,46 +611,112 @@ export default function Account() {
           Connect Stripe to place a secure Pay button on shared invoices. Only owners and co-owners can change the payout account.
         </p>
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-gray-900">
-                {activeWorkspace?.stripeChargesEnabled && activeWorkspace?.stripePayoutsEnabled
-                  ? "Stripe connected"
-                  : activeWorkspace?.stripeAccountId
-                    ? "Stripe setup incomplete"
-                    : "Stripe not connected"}
-              </p>
-              <p className="mt-1 text-xs text-gray-500">
-                {activeWorkspace?.stripeChargesEnabled && activeWorkspace?.stripePayoutsEnabled
-                  ? "Card payments and payouts are enabled for this workspace."
-                  : "Stripe securely collects business, identity, and bank information during onboarding."}
-              </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start gap-2">
+                {stripeState === "ready" ? (
+                  <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+                ) : stripeState === "in_review" || stripeState === "processing" ? (
+                  <Clock3 size={18} className="mt-0.5 shrink-0 text-blue-600" />
+                ) : stripeState === "action_required" ? (
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                ) : (
+                  <CreditCard size={18} className="mt-0.5 shrink-0 text-slate-500" />
+                )}
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {stripeCopy.title}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    {stripeCopy.description}
+                  </p>
+                </div>
+              </div>
+
+              {stripeState === "action_required" &&
+                actionableRequirements.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold text-amber-900">
+                      Outstanding requirements
+                    </p>
+                    <ul className="mt-1.5 space-y-1 text-xs text-amber-800">
+                      {actionableRequirements.slice(0, 5).map((requirement) => (
+                        <li key={requirement}>• {humanizeRequirement(requirement)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+              {stripeState === "in_review" &&
+                stripeStatus.pendingVerification.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+                    In review: {stripeStatus.pendingVerification
+                      .slice(0, 4)
+                      .map(humanizeRequirement)
+                      .join(", ")}.
+                  </div>
+                )}
+
+              {stripeStatus.disabledReason && (
+                <p className="mt-3 text-xs text-red-700">
+                  Stripe status: {humanizeRequirement(stripeStatus.disabledReason)}
+                </p>
+              )}
+
+              {stripeStatus.syncedAt && (
+                <p className="mt-3 text-[11px] text-gray-400">
+                  Last checked {new Date(stripeStatus.syncedAt).toLocaleString()}
+                </p>
+              )}
             </div>
-            {(role === "owner" || role === "co_owner") &&
-              (stripeReady ? (
-                <a
-                  href="https://dashboard.stripe.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900"
-                >
-                  <ExternalLink size={15} /> Open Stripe Dashboard
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void connectStripe()}
-                  disabled={stripeLoading || activeWorkspace?.isPersonal}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
-                >
-                  <ExternalLink size={15} />
-                  {stripeLoading
-                    ? "Opening Stripe…"
-                    : activeWorkspace?.stripeAccountId
-                      ? "Continue Stripe Setup"
-                      : "Connect Stripe"}
-                </button>
-              ))}
+
+            {(role === "owner" || role === "co_owner") && (
+              <div className="flex shrink-0 flex-wrap gap-2 sm:max-w-[250px] sm:justify-end">
+                {stripeState === "ready" && (
+                  <a
+                    href="https://dashboard.stripe.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900"
+                  >
+                    <ExternalLink size={15} /> Open Stripe Dashboard
+                  </a>
+                )}
+
+                {(stripeState === "not_connected" ||
+                  stripeState === "setup" ||
+                  stripeState === "action_required") && (
+                  <button
+                    type="button"
+                    onClick={() => void connectStripe()}
+                    disabled={stripeLoading || activeWorkspace?.isPersonal}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
+                  >
+                    <ExternalLink size={15} />
+                    {stripeLoading
+                      ? "Opening Stripe…"
+                      : stripeState === "not_connected"
+                        ? "Connect Stripe"
+                        : "Complete Stripe Requirements"}
+                  </button>
+                )}
+
+                {stripeState !== "not_connected" && (
+                  <button
+                    type="button"
+                    onClick={() => void refreshStripeStatus()}
+                    disabled={stripeLoading}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      size={15}
+                      className={stripeLoading ? "animate-spin" : ""}
+                    />
+                    Refresh status
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           {activeWorkspace?.isPersonal && (
             <p className="mt-3 text-xs text-amber-700">Create or switch to a company/workgroup before enabling payments.</p>

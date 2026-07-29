@@ -1,6 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 
+type RequirementError = {
+  code: string;
+  reason: string;
+  requirement: string;
+};
+
 function requiredEnv(name: string) {
   const value = Deno.env.get(name)?.trim();
   if (!value) throw new Error(`Missing required secret: ${name}`);
@@ -13,6 +19,53 @@ function connectedAccountId(event: Stripe.Event) {
 
 function unixDate(seconds: number | null | undefined) {
   return seconds ? new Date(seconds * 1000).toISOString() : new Date().toISOString();
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function requirementErrors(value: unknown): RequirementError[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    const row =
+      entry && typeof entry === "object"
+        ? (entry as Record<string, unknown>)
+        : {};
+    return {
+      code: typeof row.code === "string" ? row.code : "",
+      reason: typeof row.reason === "string" ? row.reason : "",
+      requirement:
+        typeof row.requirement === "string" ? row.requirement : "",
+    };
+  });
+}
+
+function accountUpdate(account: Stripe.Account) {
+  const requirements = account.requirements;
+  const future = account.future_requirements;
+  const now = new Date().toISOString();
+
+  return {
+    stripe_onboarding_complete: Boolean(account.details_submitted),
+    stripe_charges_enabled: Boolean(account.charges_enabled),
+    stripe_payouts_enabled: Boolean(account.payouts_enabled),
+    stripe_currently_due: stringArray(requirements?.currently_due),
+    stripe_eventually_due: stringArray(requirements?.eventually_due),
+    stripe_past_due: stringArray(requirements?.past_due),
+    stripe_pending_verification: stringArray(requirements?.pending_verification),
+    stripe_disabled_reason: requirements?.disabled_reason ?? null,
+    stripe_requirement_errors: requirementErrors(requirements?.errors),
+    stripe_future_currently_due: stringArray(future?.currently_due),
+    stripe_future_eventually_due: stringArray(future?.eventually_due),
+    stripe_future_past_due: stringArray(future?.past_due),
+    stripe_future_pending_verification: stringArray(future?.pending_verification),
+    stripe_future_disabled_reason: future?.disabled_reason ?? null,
+    stripe_status_synced_at: now,
+    updated_at: now,
+  };
 }
 
 Deno.serve(async (request) => {
@@ -59,12 +112,7 @@ Deno.serve(async (request) => {
       const account = event.data.object as Stripe.Account;
       const { error } = await admin
         .from("workspaces")
-        .update({
-          stripe_onboarding_complete: Boolean(account.details_submitted),
-          stripe_charges_enabled: Boolean(account.charges_enabled),
-          stripe_payouts_enabled: Boolean(account.payouts_enabled),
-          updated_at: new Date().toISOString(),
-        })
+        .update(accountUpdate(account))
         .eq("stripe_account_id", account.id);
 
       if (error) throw new Error(`Could not update workspace Stripe status: ${error.message}`);

@@ -38,6 +38,8 @@ import type {
   ScheduleEvent,
   ScheduleEventStatus,
   ScheduleSourceType,
+  StripeConnectionStatus,
+  StripeRequirementError,
   User,
   Workspace,
   WorkspaceInvite,
@@ -113,7 +115,7 @@ type AppContextType = {
   removeWorkspaceMember: (membershipId: string) => Promise<void>;
   leaveWorkspace: (workspaceId: string) => Promise<void>;
   startStripeOnboarding: () => Promise<string>;
-  refreshStripeConnection: () => Promise<void>;
+  refreshStripeConnection: () => Promise<StripeConnectionStatus>;
   deleteAccount: () => Promise<void>;
   updateMyWorkspaceRate: (
     positionTitle: string,
@@ -193,6 +195,18 @@ type WorkspaceRow = {
   stripe_onboarding_complete: boolean | null;
   stripe_charges_enabled: boolean | null;
   stripe_payouts_enabled: boolean | null;
+  stripe_currently_due: string[] | null;
+  stripe_eventually_due: string[] | null;
+  stripe_past_due: string[] | null;
+  stripe_pending_verification: string[] | null;
+  stripe_disabled_reason: string | null;
+  stripe_requirement_errors: StripeRequirementError[] | null;
+  stripe_future_currently_due: string[] | null;
+  stripe_future_eventually_due: string[] | null;
+  stripe_future_past_due: string[] | null;
+  stripe_future_pending_verification: string[] | null;
+  stripe_future_disabled_reason: string | null;
+  stripe_status_synced_at: string | null;
   created_at: string;
 };
 
@@ -519,6 +533,19 @@ function rowToWorkspace(row: WorkspaceRow): Workspace {
     stripeOnboardingComplete: Boolean(row.stripe_onboarding_complete),
     stripeChargesEnabled: Boolean(row.stripe_charges_enabled),
     stripePayoutsEnabled: Boolean(row.stripe_payouts_enabled),
+    stripeCurrentlyDue: row.stripe_currently_due ?? [],
+    stripeEventuallyDue: row.stripe_eventually_due ?? [],
+    stripePastDue: row.stripe_past_due ?? [],
+    stripePendingVerification: row.stripe_pending_verification ?? [],
+    stripeDisabledReason: row.stripe_disabled_reason ?? null,
+    stripeRequirementErrors: row.stripe_requirement_errors ?? [],
+    stripeFutureCurrentlyDue: row.stripe_future_currently_due ?? [],
+    stripeFutureEventuallyDue: row.stripe_future_eventually_due ?? [],
+    stripeFuturePastDue: row.stripe_future_past_due ?? [],
+    stripeFuturePendingVerification:
+      row.stripe_future_pending_verification ?? [],
+    stripeFutureDisabledReason: row.stripe_future_disabled_reason ?? null,
+    stripeStatusSyncedAt: row.stripe_status_synced_at ?? null,
     createdAt: row.created_at,
   };
 }
@@ -1579,7 +1606,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return url;
   }
 
-  async function refreshStripeConnection() {
+  async function refreshStripeConnection(): Promise<StripeConnectionStatus> {
     ensureAdmin();
 
     const { data, error } = await supabase.functions.invoke(
@@ -1600,7 +1627,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       throw new Error(data.error);
     }
 
+    const status = data as StripeConnectionStatus;
     await refreshWorkspaces();
+    return status;
   }
 
   async function deleteAccount() {

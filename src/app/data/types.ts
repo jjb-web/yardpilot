@@ -16,6 +16,32 @@ export type WorkspaceRole =
 
 export type WorkspaceKind = "personal" | "company" | "workgroup";
 
+export type StripeRequirementError = {
+  code: string;
+  reason: string;
+  requirement: string;
+};
+
+export type StripeConnectionStatus = {
+  connected: boolean;
+  accountExists: boolean;
+  onboardingComplete: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  currentlyDue: string[];
+  eventuallyDue: string[];
+  pastDue: string[];
+  pendingVerification: string[];
+  disabledReason: string | null;
+  errors: StripeRequirementError[];
+  futureCurrentlyDue: string[];
+  futureEventuallyDue: string[];
+  futurePastDue: string[];
+  futurePendingVerification: string[];
+  futureDisabledReason: string | null;
+  syncedAt: string | null;
+};
+
 export type LineItem = {
   id: string;
   description: string;
@@ -143,6 +169,18 @@ export type Workspace = {
   stripeOnboardingComplete: boolean;
   stripeChargesEnabled: boolean;
   stripePayoutsEnabled: boolean;
+  stripeCurrentlyDue: string[];
+  stripeEventuallyDue: string[];
+  stripePastDue: string[];
+  stripePendingVerification: string[];
+  stripeDisabledReason: string | null;
+  stripeRequirementErrors: StripeRequirementError[];
+  stripeFutureCurrentlyDue: string[];
+  stripeFutureEventuallyDue: string[];
+  stripeFuturePastDue: string[];
+  stripeFuturePendingVerification: string[];
+  stripeFutureDisabledReason: string | null;
+  stripeStatusSyncedAt: string | null;
   createdAt: string;
 };
 
