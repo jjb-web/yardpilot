@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Link } from "react-router";
 import {
   Building2,
+  Check,
   FileText,
+  Image as ImageIcon,
   Link2,
   Mail,
   MapPin,
@@ -10,6 +12,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   UserRound,
   X,
 } from "lucide-react";
@@ -18,6 +21,7 @@ import type {
   Contact,
   ContactActivity,
   ContactType,
+  Project,
   Property,
 } from "../data/types";
 import { formatMoney, propertyAddress } from "../lib/estimate";
@@ -26,10 +30,12 @@ const CONTACT_TYPE_OPTIONS: Array<{ value: ContactType; label: string }> = [
   { value: "lead", label: "Lead" },
   { value: "customer", label: "Customer" },
 ];
+
 const ACTIVITY_OPTIONS: Array<{ value: ContactActivity; label: string }> = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
+
 const SOURCE_OPTIONS = [
   "",
   "Referral",
@@ -40,11 +46,21 @@ const SOURCE_OPTIONS = [
   "Other",
 ];
 
-type ContactDraft = Omit<Contact, "id" | "workspaceId" | "createdAt" | "updatedAt">;
-type PropertyDraft = Omit<Property, "id" | "workspaceId" | "contactId" | "createdAt" | "updatedAt">;
+type ContactDraft = Omit<
+  Contact,
+  "id" | "workspaceId" | "createdAt" | "updatedAt"
+>;
+
+type PropertyDraft = Omit<
+  Property,
+  "id" | "workspaceId" | "contactId" | "createdAt" | "updatedAt"
+>;
 
 function uid() {
-  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    Math.random().toString(36).slice(2, 11)
+  );
 }
 
 function emptyContact(): ContactDraft {
@@ -77,16 +93,123 @@ function emptyProperty(): PropertyDraft {
 }
 
 function contactAddress(contact: Contact) {
-  const cityStateZip = [contact.city, contact.state, contact.zip].filter(Boolean).join(" ");
+  const cityStateZip = [contact.city, contact.state, contact.zip]
+    .filter(Boolean)
+    .join(" ");
   return [contact.address, cityStateZip].filter(Boolean).join(", ");
 }
 
 function typeClasses(type: ContactType) {
-  return type === "customer" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700";
+  return type === "customer"
+    ? "bg-blue-100 text-blue-700"
+    : "bg-amber-100 text-amber-700";
 }
 
 function activityClasses(status: ContactActivity) {
-  return status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600";
+  return status === "active"
+    ? "bg-emerald-100 text-emerald-700"
+    : "bg-gray-100 text-gray-600";
+}
+
+function hasPropertyData(draft: PropertyDraft, files: File[], projectIds: string[]) {
+  return (
+    Object.values(draft).some((value) => value.trim() !== "") ||
+    files.length > 0 ||
+    projectIds.length > 0
+  );
+}
+
+function StagedPhotos({
+  files,
+  onRemove,
+}: {
+  files: File[];
+  onRemove: (index: number) => void;
+}) {
+  const [urls, setUrls] = useState<string[]>([]);
+
+  useEffect(() => {
+    const next = files.map((file) => URL.createObjectURL(file));
+    setUrls(next);
+    return () => next.forEach((url) => URL.revokeObjectURL(url));
+  }, [files]);
+
+  if (!files.length) return null;
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+      {files.map((file, index) => (
+        <div key={`${file.name}-${file.lastModified}-${index}`} className="relative group">
+          <img
+            src={urls[index]}
+            alt={file.name}
+            className="w-full aspect-square object-cover rounded-lg border border-gray-200"
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="absolute top-2 right-2 rounded-md bg-black/70 p-1.5 text-white cursor-pointer"
+            aria-label={`Remove ${file.name}`}
+          >
+            <X size={14} />
+          </button>
+          <p className="mt-1 truncate text-[11px] text-gray-500">{file.name}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RecordPicker({
+  projects,
+  selectedIds,
+  onToggle,
+}: {
+  projects: Project[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}) {
+  if (!projects.length) {
+    return (
+      <p className="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-400">
+        No existing estimates or jobs are available to link.
+      </p>
+    );
+  }
+
+  return (
+    <div className="max-h-64 overflow-y-auto overscroll-contain rounded-xl border border-gray-200 divide-y divide-gray-100">
+      {projects.map((project) => {
+        const checked = selectedIds.includes(project.id);
+        return (
+          <button
+            key={project.id}
+            type="button"
+            onClick={() => onToggle(project.id)}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 cursor-pointer"
+          >
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                checked
+                  ? "border-slate-700 bg-slate-700 text-white"
+                  : "border-gray-300 bg-white"
+              }`}
+            >
+              {checked && <Check size={13} />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-gray-900">
+                {project.name}
+              </p>
+              <p className="text-xs text-gray-500">
+                {project.estimateNumber} · {project.status} · {formatMoney(project.totalEstimate)}
+              </p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function Contacts() {
@@ -112,34 +235,45 @@ export default function Contacts() {
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ContactType>("all");
-  const [activityFilter, setActivityFilter] = useState<"all" | ContactActivity>("all");
+  const [activityFilter, setActivityFilter] =
+    useState<"all" | ContactActivity>("all");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "properties">("details");
+  const [activeTab, setActiveTab] =
+    useState<"details" | "property" | "history">("details");
   const [selected, setSelected] = useState<Contact | null>(null);
   const [draft, setDraft] = useState<ContactDraft>(emptyContact);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
+
   const [newPropertyDraft, setNewPropertyDraft] =
     useState<PropertyDraft>(emptyProperty);
+  const [newPropertyFiles, setNewPropertyFiles] = useState<File[]>([]);
+  const [newLinkedProjectIds, setNewLinkedProjectIds] = useState<string[]>([]);
 
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [propertyDraft, setPropertyDraft] = useState<PropertyDraft>(emptyProperty);
+  const [propertyDraft, setPropertyDraft] =
+    useState<PropertyDraft>(emptyProperty);
+  const [propertyFiles, setPropertyFiles] = useState<File[]>([]);
+  const [propertyLinkedProjectIds, setPropertyLinkedProjectIds] =
+    useState<string[]>([]);
   const [propertySaving, setPropertySaving] = useState(false);
   const [propertyError, setPropertyError] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [linkProjectId, setLinkProjectId] = useState("");
-  const [linkPropertyId, setLinkPropertyId] = useState("");
-  const [linking, setLinking] = useState(false);
-  const [linkMessage, setLinkMessage] = useState("");
 
   const filteredContacts = useMemo(() => {
     const query = search.trim().toLowerCase();
     return [...contacts]
       .filter((contact) => {
-        if (typeFilter !== "all" && contact.contactType !== typeFilter) return false;
-        if (activityFilter !== "all" && contact.activityStatus !== activityFilter) return false;
+        if (typeFilter !== "all" && contact.contactType !== typeFilter) {
+          return false;
+        }
+        if (
+          activityFilter !== "all" &&
+          contact.activityStatus !== activityFilter
+        ) {
+          return false;
+        }
         if (!query) return true;
         return [
           contact.name,
@@ -153,25 +287,46 @@ export default function Contacts() {
         ].some((value) => value.toLowerCase().includes(query));
       })
       .sort((a, b) => {
-        if (a.activityStatus !== b.activityStatus) return a.activityStatus === "active" ? -1 : 1;
+        if (a.activityStatus !== b.activityStatus) {
+          return a.activityStatus === "active" ? -1 : 1;
+        }
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
   }, [contacts, search, typeFilter, activityFilter]);
 
-  const selectedProperties = properties.filter((property) => property.contactId === selected?.id);
+  const selectedProperties = properties.filter(
+    (property) => property.contactId === selected?.id
+  );
   const selectedPropertyPhotos = propertyPhotos.filter(
     (photo) => photo.propertyId === selectedProperty?.id
   );
   const selectedPropertyProjects = projects
     .filter((project) => project.propertyId === selectedProperty?.id)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  const selectedContactProjects = projects
+    .filter((project) => project.contactId === selected?.id)
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
 
-  function setContactField<K extends keyof ContactDraft>(key: K, value: ContactDraft[K]) {
+  const linkableForNew = projects.filter(
+    (project) => !project.contactId || project.contactId === selected?.id
+  );
+
+  const inputClass =
+    "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/25";
+  const labelClass =
+    "block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5";
+
+  function setContactField<K extends keyof ContactDraft>(
+    key: K,
+    value: ContactDraft[K]
+  ) {
     setDraft((current) => ({ ...current, [key]: value }));
-  }
-
-  function setPropertyField<K extends keyof PropertyDraft>(key: K, value: PropertyDraft[K]) {
-    setPropertyDraft((current) => ({ ...current, [key]: value }));
   }
 
   function setNewPropertyField<K extends keyof PropertyDraft>(
@@ -181,19 +336,33 @@ export default function Contacts() {
     setNewPropertyDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function hasNewPropertyData() {
-    return Object.values(newPropertyDraft).some((value) => value.trim() !== "");
+  function setPropertyField<K extends keyof PropertyDraft>(
+    key: K,
+    value: PropertyDraft[K]
+  ) {
+    setPropertyDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function openNewContact() {
+  function toggleId(id: string, setter: Dispatch<SetStateAction<string[]>>) {
+    setter((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id]
+    );
+  }
+
+  function resetContactModal() {
     setSelected(null);
     setDraft(emptyContact());
     setNewPropertyDraft(emptyProperty());
+    setNewPropertyFiles([]);
+    setNewLinkedProjectIds([]);
     setActiveTab("details");
     setModalError("");
-    setLinkProjectId("");
-    setLinkPropertyId("");
-    setLinkMessage("");
+  }
+
+  function openNewContact() {
+    resetContactModal();
     setModalOpen(true);
   }
 
@@ -213,97 +382,132 @@ export default function Contacts() {
       notes: contact.notes,
     });
     setNewPropertyDraft(emptyProperty());
+    setNewPropertyFiles([]);
+    setNewLinkedProjectIds([]);
     setActiveTab("details");
     setModalError("");
-    setLinkProjectId("");
-    setLinkPropertyId("");
-    setLinkMessage("");
     setModalOpen(true);
   }
 
   function closeContactModal() {
-    if (saving || propertySaving || uploading) return;
+    if (saving || propertySaving) return;
     setModalOpen(false);
-    setSelected(null);
-    setDraft(emptyContact());
-    setNewPropertyDraft(emptyProperty());
-    setModalError("");
-    setLinkProjectId("");
-    setLinkPropertyId("");
-    setLinkMessage("");
+    resetContactModal();
+  }
+
+  async function linkProjects(
+    ids: string[],
+    contact: Contact,
+    property: Property | null
+  ) {
+    const now = new Date().toISOString();
+    for (const projectId of ids) {
+      const project = projects.find((item) => item.id === projectId);
+      if (!project) continue;
+      await updateProject({
+        ...project,
+        client: contact.name || project.client,
+        contactId: contact.id,
+        propertyId: property?.id ?? null,
+        address:
+          property?.address || contact.address || project.address,
+        city: property?.city || contact.city || project.city,
+        updatedAt: now,
+      });
+    }
+  }
+
+  async function uploadFiles(propertyId: string, files: File[]) {
+    for (const file of files) {
+      await uploadPropertyPhoto(propertyId, file);
+    }
   }
 
   async function saveContact() {
     setModalError("");
     if (!draft.name.trim()) {
       setModalError("Enter a contact name before saving.");
+      setActiveTab("details");
+      return;
+    }
+    if (!activeWorkspaceId) {
+      setModalError("Workspace is still loading.");
       return;
     }
 
     setSaving(true);
     const now = new Date().toISOString();
     try {
-      if (selected) {
-        const saved = await updateContact({
-          ...selected,
-          ...draft,
-          name: draft.name.trim(),
-          email: draft.email.trim(),
-          phone: draft.phone.trim(),
-          address: draft.address.trim(),
-          city: draft.city.trim(),
-          state: draft.state.trim(),
-          zip: draft.zip.trim(),
-          source: draft.source.trim(),
-          updatedAt: now,
-        });
-        setSelected(saved);
-      } else {
-        if (!activeWorkspaceId) throw new Error("Workspace is still loading.");
-        const savedContact = await addContact({
-          id: uid(),
-          workspaceId: activeWorkspaceId,
-          ...draft,
-          name: draft.name.trim(),
-          email: draft.email.trim(),
-          phone: draft.phone.trim(),
-          address: draft.address.trim(),
-          city: draft.city.trim(),
-          state: draft.state.trim(),
-          zip: draft.zip.trim(),
-          source: draft.source.trim(),
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        if (hasNewPropertyData()) {
-          await addProperty({
+      const savedContact = selected
+        ? await updateContact({
+            ...selected,
+            ...draft,
+            name: draft.name.trim(),
+            email: draft.email.trim(),
+            phone: draft.phone.trim(),
+            address: draft.address.trim(),
+            city: draft.city.trim(),
+            state: draft.state.trim(),
+            zip: draft.zip.trim(),
+            source: draft.source.trim(),
+            updatedAt: now,
+          })
+        : await addContact({
             id: uid(),
             workspaceId: activeWorkspaceId,
-            contactId: savedContact.id,
-            ...newPropertyDraft,
-            name: newPropertyDraft.name.trim() || "Primary Property",
-            address: newPropertyDraft.address.trim(),
-            city: newPropertyDraft.city.trim(),
-            state: newPropertyDraft.state.trim(),
-            zip: newPropertyDraft.zip.trim(),
-            description: newPropertyDraft.description.trim(),
-            internalNotes: newPropertyDraft.internalNotes.trim(),
-            clientNotes: newPropertyDraft.clientNotes.trim(),
+            ...draft,
+            name: draft.name.trim(),
+            email: draft.email.trim(),
+            phone: draft.phone.trim(),
+            address: draft.address.trim(),
+            city: draft.city.trim(),
+            state: draft.state.trim(),
+            zip: draft.zip.trim(),
+            source: draft.source.trim(),
             createdAt: now,
             updatedAt: now,
           });
-        }
+
+      let createdProperty: Property | null = null;
+      if (
+        !selected &&
+        hasPropertyData(
+          newPropertyDraft,
+          newPropertyFiles,
+          newLinkedProjectIds
+        )
+      ) {
+        createdProperty = await addProperty({
+          id: uid(),
+          workspaceId: activeWorkspaceId,
+          contactId: savedContact.id,
+          ...newPropertyDraft,
+          name: newPropertyDraft.name.trim() || "Primary Property",
+          address: newPropertyDraft.address.trim(),
+          city: newPropertyDraft.city.trim(),
+          state: newPropertyDraft.state.trim(),
+          zip: newPropertyDraft.zip.trim(),
+          description: newPropertyDraft.description.trim(),
+          internalNotes: newPropertyDraft.internalNotes.trim(),
+          clientNotes: newPropertyDraft.clientNotes.trim(),
+          createdAt: now,
+          updatedAt: now,
+        });
+        await uploadFiles(createdProperty.id, newPropertyFiles);
       }
+
+      if (!selected && newLinkedProjectIds.length) {
+        await linkProjects(newLinkedProjectIds, savedContact, createdProperty);
+      }
+
       setModalOpen(false);
-      setSelected(null);
-      setDraft(emptyContact());
-      setNewPropertyDraft(emptyProperty());
-      setLinkProjectId("");
-      setLinkPropertyId("");
-      setLinkMessage("");
+      resetContactModal();
     } catch (error) {
-      setModalError(error instanceof Error ? error.message : "The contact could not be saved.");
+      setModalError(
+        error instanceof Error
+          ? error.message
+          : "The contact could not be saved."
+      );
     } finally {
       setSaving(false);
     }
@@ -311,33 +515,40 @@ export default function Contacts() {
 
   async function removeContact() {
     if (!selected) return;
-    if (!window.confirm(`Delete ${selected.name} and their linked properties?`)) return;
+    if (!window.confirm(`Delete ${selected.name} and their linked properties?`)) {
+      return;
+    }
     setSaving(true);
     try {
       await deleteContact(selected.id);
       setModalOpen(false);
-      setSelected(null);
-      setDraft(emptyContact());
-      setModalError("");
+      resetContactModal();
     } catch (error) {
-      setModalError(error instanceof Error ? error.message : "The contact could not be deleted.");
+      setModalError(
+        error instanceof Error
+          ? error.message
+          : "The contact could not be deleted."
+      );
     } finally {
       setSaving(false);
     }
   }
 
+  function resetPropertyModal() {
+    setSelectedProperty(null);
+    setPropertyDraft(emptyProperty());
+    setPropertyFiles([]);
+    setPropertyLinkedProjectIds([]);
+    setPropertyError("");
+  }
+
   function openNewProperty() {
     if (!selected) return;
-    setSelectedProperty(null);
+    resetPropertyModal();
     setPropertyDraft({
       ...emptyProperty(),
       name: selectedProperties.length === 0 ? "Primary Property" : "",
-      address: selected.address,
-      city: selected.city,
-      state: selected.state,
-      zip: selected.zip,
     });
-    setPropertyError("");
     setPropertyModalOpen(true);
   }
 
@@ -353,50 +564,87 @@ export default function Contacts() {
       internalNotes: property.internalNotes,
       clientNotes: property.clientNotes,
     });
+    setPropertyFiles([]);
+    setPropertyLinkedProjectIds(
+      projects
+        .filter((project) => project.propertyId === property.id)
+        .map((project) => project.id)
+    );
     setPropertyError("");
     setPropertyModalOpen(true);
   }
 
   function closePropertyModal() {
-    if (propertySaving || uploading) return;
+    if (propertySaving) return;
     setPropertyModalOpen(false);
-    setSelectedProperty(null);
-    setPropertyDraft(emptyProperty());
-    setPropertyError("");
+    resetPropertyModal();
   }
 
   async function saveProperty() {
-    if (!selected) return;
+    if (!selected || !activeWorkspaceId) return;
     setPropertyError("");
     setPropertySaving(true);
     const now = new Date().toISOString();
     try {
+      const savedProperty = selectedProperty
+        ? await updateProperty({
+            ...selectedProperty,
+            ...propertyDraft,
+            name: propertyDraft.name.trim() || "Primary Property",
+            address: propertyDraft.address.trim(),
+            city: propertyDraft.city.trim(),
+            state: propertyDraft.state.trim(),
+            zip: propertyDraft.zip.trim(),
+            description: propertyDraft.description.trim(),
+            internalNotes: propertyDraft.internalNotes.trim(),
+            clientNotes: propertyDraft.clientNotes.trim(),
+            updatedAt: now,
+          })
+        : await addProperty({
+            id: uid(),
+            workspaceId: activeWorkspaceId,
+            contactId: selected.id,
+            ...propertyDraft,
+            name: propertyDraft.name.trim() || "Primary Property",
+            address: propertyDraft.address.trim(),
+            city: propertyDraft.city.trim(),
+            state: propertyDraft.state.trim(),
+            zip: propertyDraft.zip.trim(),
+            description: propertyDraft.description.trim(),
+            internalNotes: propertyDraft.internalNotes.trim(),
+            clientNotes: propertyDraft.clientNotes.trim(),
+            createdAt: now,
+            updatedAt: now,
+          });
+
+      await uploadFiles(savedProperty.id, propertyFiles);
+
       if (selectedProperty) {
-        const saved = await updateProperty({
-          ...selectedProperty,
-          ...propertyDraft,
-          name: propertyDraft.name.trim() || "Primary Property",
-          updatedAt: now,
-        });
-        setSelectedProperty(saved);
-      } else {
-        if (!activeWorkspaceId) throw new Error("Workspace is still loading.");
-        await addProperty({
-          id: uid(),
-          workspaceId: activeWorkspaceId,
-          contactId: selected.id,
-          ...propertyDraft,
-          name: propertyDraft.name.trim() || "Primary Property",
-          createdAt: now,
-          updatedAt: now,
-        });
+        const removedLinks = projects.filter(
+          (project) =>
+            project.propertyId === selectedProperty.id &&
+            !propertyLinkedProjectIds.includes(project.id)
+        );
+        for (const project of removedLinks) {
+          await updateProject({
+            ...project,
+            contactId: selected.id,
+            propertyId: null,
+            updatedAt: now,
+          });
+        }
       }
+
+      await linkProjects(propertyLinkedProjectIds, selected, savedProperty);
+
       setPropertyModalOpen(false);
-      setSelectedProperty(null);
-      setPropertyDraft(emptyProperty());
-      setPropertyError("");
+      resetPropertyModal();
     } catch (error) {
-      setPropertyError(error instanceof Error ? error.message : "The property could not be saved.");
+      setPropertyError(
+        error instanceof Error
+          ? error.message
+          : "The property could not be saved."
+      );
     } finally {
       setPropertySaving(false);
     }
@@ -404,155 +652,149 @@ export default function Contacts() {
 
   async function removeProperty() {
     if (!selectedProperty) return;
-    if (!window.confirm(`Delete ${selectedProperty.name} and its photos?`)) return;
+    if (!window.confirm(`Delete ${selectedProperty.name} and its photos?`)) {
+      return;
+    }
     setPropertySaving(true);
     try {
       await deleteProperty(selectedProperty.id);
       setPropertyModalOpen(false);
-      setSelectedProperty(null);
-      setPropertyDraft(emptyProperty());
-      setPropertyError("");
+      resetPropertyModal();
     } catch (error) {
-      setPropertyError(error instanceof Error ? error.message : "The property could not be deleted.");
+      setPropertyError(
+        error instanceof Error
+          ? error.message
+          : "The property could not be deleted."
+      );
     } finally {
       setPropertySaving(false);
     }
   }
 
-  async function linkEstimate() {
-    if (!selected || !linkProjectId) return;
-    const project = projects.find((item) => item.id === linkProjectId);
-    if (!project) {
-      setLinkMessage("Choose an estimate to link.");
-      return;
-    }
-
-    const linkedProperty = linkPropertyId
-      ? properties.find(
-          (property) =>
-            property.id === linkPropertyId && property.contactId === selected.id
-        ) ?? null
-      : null;
-
-    setLinking(true);
-    setLinkMessage("");
-    try {
-      await updateProject({
-        ...project,
-        contactId: selected.id,
-        propertyId: linkedProperty?.id ?? null,
-        client: selected.name,
-        address:
-          propertyAddress(linkedProperty) ||
-          contactAddress(selected) ||
-          project.address,
-        updatedAt: new Date().toISOString(),
-      });
-      setLinkMessage(
-        linkedProperty
-          ? `Linked to ${selected.name} and ${linkedProperty.name}.`
-          : `Linked to ${selected.name}.`
-      );
-      setLinkProjectId("");
-      setLinkPropertyId("");
-    } catch (error) {
-      setLinkMessage(
-        error instanceof Error ? error.message : "The estimate could not be linked."
-      );
-    } finally {
-      setLinking(false);
-    }
-  }
-
-  async function uploadPhotos(files: FileList | null) {
-    if (!selectedProperty || !files?.length) return;
-    setUploading(true);
-    setPropertyError("");
-    try {
-      for (const file of Array.from(files)) {
-        await uploadPropertyPhoto(selectedProperty.id, file);
-      }
-    } catch (error) {
-      setPropertyError(error instanceof Error ? error.message : "A photo could not be uploaded.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  const inputClass =
-    "w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/30";
-  const labelClass = "block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5";
-
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-7">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-7">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Contacts</h1>
-          <p className="text-gray-500 text-sm mt-1">Customers, leads, properties, photos, and prior work.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Contacts & Properties</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Create a contact, property, photos, and linked history in one workflow.
+          </p>
         </div>
-        <button type="button" onClick={openNewContact} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 cursor-pointer">
+        <button
+          type="button"
+          onClick={openNewContact}
+          className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 cursor-pointer"
+        >
           <Plus size={16} /> Add Contact
         </button>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="relative w-full max-w-md">
-          <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search contacts..." className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30" />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
-            {([ ["all", "All"], ["lead", "Leads"], ["customer", "Customers"] ] as const).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setTypeFilter(value)} className={`rounded-md px-3 py-1.5 text-xs font-semibold cursor-pointer ${typeFilter === value ? "bg-green-700 text-white" : "text-gray-600 hover:bg-gray-100"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
-            {([ ["all", "All"], ["active", "Active"], ["inactive", "Inactive"] ] as const).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setActivityFilter(value)} className={`rounded-md px-3 py-1.5 text-xs font-semibold cursor-pointer ${activityFilter === value ? "bg-green-700 text-white" : "text-gray-600 hover:bg-gray-100"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {(contactsError || propertiesError) && (
-        <div className="mb-5 text-red-700 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {contactsError || propertiesError}
         </div>
       )}
 
+      <div className="mb-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div className="relative">
+          <Search
+            size={17}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search name, email, phone, or address"
+            className={`${inputClass} pl-10`}
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(event) =>
+            setTypeFilter(event.target.value as "all" | ContactType)
+          }
+          className={inputClass}
+        >
+          <option value="all">All types</option>
+          <option value="lead">Leads</option>
+          <option value="customer">Customers</option>
+        </select>
+        <select
+          value={activityFilter}
+          onChange={(event) =>
+            setActivityFilter(event.target.value as "all" | ContactActivity)
+          }
+          className={inputClass}
+        >
+          <option value="all">Active & inactive</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
       {contactsLoading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-16 text-center text-gray-400 text-sm">Loading contacts...</div>
+        <div className="rounded-xl border border-gray-200 bg-white p-16 text-center text-sm text-gray-400">
+          Loading contacts…
+        </div>
       ) : filteredContacts.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
-          <UserRound size={34} className="text-gray-300 mx-auto mb-3" />
-          <p className="font-semibold text-gray-700">No contacts found</p>
+        <div className="rounded-xl border border-gray-200 bg-white p-16 text-center">
+          <UserRound size={30} className="mx-auto text-gray-300" />
+          <p className="mt-3 font-semibold text-gray-700">No contacts found</p>
+          <p className="mt-1 text-sm text-gray-400">
+            Add a lead or customer to begin.
+          </p>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredContacts.map((contact) => {
-            const propertyCount = properties.filter((property) => property.contactId === contact.id).length;
+            const address = contactAddress(contact);
+            const propertyCount = properties.filter(
+              (property) => property.contactId === contact.id
+            ).length;
             return (
-              <button type="button" key={contact.id} onClick={() => openContact(contact)} className="text-left bg-white border border-gray-200 rounded-xl p-5 hover:border-green-300 hover:shadow-sm transition-all cursor-pointer">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="min-w-0">
-                    <p className="font-bold text-gray-900 truncate">{contact.name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{contact.source || "No source"}</p>
+              <button
+                key={contact.id}
+                type="button"
+                onClick={() => openContact(contact)}
+                className="rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md cursor-pointer"
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                    <UserRound size={20} />
                   </div>
                   <div className="flex flex-wrap justify-end gap-1.5">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${typeClasses(contact.contactType)}`}>{contact.contactType}</span>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${activityClasses(contact.activityStatus)}`}>{contact.activityStatus}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${typeClasses(
+                        contact.contactType
+                      )}`}
+                    >
+                      {contact.contactType}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activityClasses(
+                        contact.activityStatus
+                      )}`}
+                    >
+                      {contact.activityStatus}
+                    </span>
                   </div>
                 </div>
-                <div className="space-y-2.5 text-sm text-gray-600">
-                  <div className="flex gap-2.5"><Phone size={15} className="text-green-700 shrink-0 mt-0.5" /><span className="truncate">{contact.phone || "No phone"}</span></div>
-                  <div className="flex gap-2.5"><Mail size={15} className="text-green-700 shrink-0 mt-0.5" /><span className="truncate">{contact.email || "No email"}</span></div>
-                  <div className="flex gap-2.5"><MapPin size={15} className="text-green-700 shrink-0 mt-0.5" /><span className="line-clamp-2">{contactAddress(contact) || "No address"}</span></div>
-                  <div className="flex gap-2.5 pt-1"><Building2 size={15} className="text-green-700 shrink-0 mt-0.5" /><span>{propertyCount} {propertyCount === 1 ? "property" : "properties"}</span></div>
+                <p className="font-bold text-gray-900">{contact.name}</p>
+                <div className="mt-3 space-y-2 text-sm text-gray-500">
+                  <p className="flex items-center gap-2 truncate">
+                    <Phone size={14} /> {contact.phone || "No phone"}
+                  </p>
+                  <p className="flex items-center gap-2 truncate">
+                    <Mail size={14} /> {contact.email || "No email"}
+                  </p>
+                  <p className="flex items-center gap-2 line-clamp-2">
+                    <MapPin size={14} className="shrink-0" />
+                    {address || "No address"}
+                  </p>
                 </div>
+                <p className="mt-4 text-xs font-semibold text-slate-500">
+                  {propertyCount} {propertyCount === 1 ? "property" : "properties"}
+                </p>
               </button>
             );
           })}
@@ -560,185 +802,721 @@ export default function Contacts() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/55 flex items-stretch sm:items-center justify-center p-0 sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) closeContactModal(); }}>
-          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] overflow-hidden bg-white sm:rounded-2xl shadow-2xl flex flex-col">
-            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+        <div className="app-modal-overlay fixed inset-0 z-[80] flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-5xl sm:rounded-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-4 sm:px-6">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{selected ? selected.name : "Add Contact"}</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Manage contact details and linked properties.</p>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {selected ? selected.name : "Add Contact"}
+                </h2>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Contact details, properties, photos, and history are all optional except the name.
+                </p>
               </div>
-              <button type="button" onClick={closeContactModal} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 cursor-pointer"><X size={20} /></button>
+              <button
+                type="button"
+                onClick={closeContactModal}
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="px-4 sm:px-6 pt-3 sm:pt-4 border-b border-gray-100 flex gap-2 overflow-x-auto shrink-0">
-              <button type="button" onClick={() => setActiveTab("details")} className={`px-4 py-2.5 text-sm font-semibold border-b-2 cursor-pointer ${activeTab === "details" ? "border-green-700 text-green-700" : "border-transparent text-gray-500"}`}>Contact Details</button>
-              <button type="button" onClick={() => setActiveTab("properties")} className={`px-4 py-2.5 text-sm font-semibold border-b-2 cursor-pointer ${activeTab === "properties" ? "border-green-700 text-green-700" : "border-transparent text-gray-500"}`}>Properties & History</button>
+            <div className="shrink-0 border-b border-gray-100 px-4 sm:px-6">
+              <div className="flex gap-1 overflow-x-auto">
+                {([
+                  ["details", "Contact Details"],
+                  ["property", selected ? "Properties" : "First Property"],
+                  ["history", "Photos & History"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setActiveTab(value)}
+                    className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold cursor-pointer ${
+                      activeTab === value
+                        ? "border-slate-800 text-slate-900"
+                        : "border-transparent text-gray-500"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="p-4 sm:p-6 min-h-0 overflow-y-auto overscroll-contain flex-1">
-              {modalError && <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{modalError}</div>}
-
-              {activeTab === "details" ? (
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2"><label className={labelClass}>Full Name</label><input value={draft.name} onChange={(event) => setContactField("name", event.target.value)} className={inputClass} /></div>
-                  <div><label className={labelClass}>Email</label><input type="email" value={draft.email} onChange={(event) => setContactField("email", event.target.value)} className={inputClass} /></div>
-                  <div><label className={labelClass}>Phone</label><input value={draft.phone} onChange={(event) => setContactField("phone", event.target.value)} className={inputClass} /></div>
-                  <div className="sm:col-span-2"><label className={labelClass}>Default Street Address</label><input value={draft.address} onChange={(event) => setContactField("address", event.target.value)} className={inputClass} /></div>
-                  <div><label className={labelClass}>City</label><input value={draft.city} onChange={(event) => setContactField("city", event.target.value)} className={inputClass} /></div>
-                  <div className="grid grid-cols-2 gap-4"><div><label className={labelClass}>State</label><input value={draft.state} onChange={(event) => setContactField("state", event.target.value)} className={inputClass} /></div><div><label className={labelClass}>ZIP</label><input value={draft.zip} onChange={(event) => setContactField("zip", event.target.value)} className={inputClass} /></div></div>
-                  <div><label className={labelClass}>Contact Type</label><select value={draft.contactType} onChange={(event) => setContactField("contactType", event.target.value as ContactType)} className={inputClass}>{CONTACT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-                  <div><label className={labelClass}>Activity</label><select value={draft.activityStatus} onChange={(event) => setContactField("activityStatus", event.target.value as ContactActivity)} className={inputClass}>{ACTIVITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-                  <div><label className={labelClass}>Source</label><select value={draft.source} onChange={(event) => setContactField("source", event.target.value)} className={inputClass}>{SOURCE_OPTIONS.map((source) => <option key={source || "blank"} value={source}>{source || "Blank"}</option>)}</select></div>
-                  <div className="sm:col-span-2"><label className={labelClass}>Contact Notes</label><textarea value={draft.notes} onChange={(event) => setContactField("notes", event.target.value)} rows={4} className={inputClass} /></div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              {modalError && (
+                <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {modalError}
                 </div>
-              ) : !selected ? (
-                <div className="space-y-5">
-                  <div className="rounded-xl border border-green-200 bg-green-50/60 p-4">
-                    <h3 className="font-bold text-gray-900">Add a property now — optional</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Fill in any property information you already have. Clicking Create Contact saves the contact and property together, so you do not need to reopen the contact.
-                    </p>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2"><label className={labelClass}>Property Name / Label</label><input value={newPropertyDraft.name} onChange={(event) => setNewPropertyField("name", event.target.value)} placeholder="Primary Property (optional)" className={inputClass} /></div>
-                    <div className="sm:col-span-2"><label className={labelClass}>Street Address</label><input value={newPropertyDraft.address} onChange={(event) => setNewPropertyField("address", event.target.value)} className={inputClass} /></div>
-                    <div><label className={labelClass}>City</label><input value={newPropertyDraft.city} onChange={(event) => setNewPropertyField("city", event.target.value)} className={inputClass} /></div>
-                    <div className="grid grid-cols-2 gap-4"><div><label className={labelClass}>State</label><input value={newPropertyDraft.state} onChange={(event) => setNewPropertyField("state", event.target.value)} className={inputClass} /></div><div><label className={labelClass}>ZIP</label><input value={newPropertyDraft.zip} onChange={(event) => setNewPropertyField("zip", event.target.value)} className={inputClass} /></div></div>
-                    <div className="sm:col-span-2"><label className={labelClass}>Property Description</label><textarea value={newPropertyDraft.description} onChange={(event) => setNewPropertyField("description", event.target.value)} rows={3} className={inputClass} /></div>
-                    <div><label className={labelClass}>Client-visible Notes</label><textarea value={newPropertyDraft.clientNotes} onChange={(event) => setNewPropertyField("clientNotes", event.target.value)} rows={3} className={inputClass} /></div>
-                    <div><label className={labelClass}>Internal Notes</label><textarea value={newPropertyDraft.internalNotes} onChange={(event) => setNewPropertyField("internalNotes", event.target.value)} rows={3} className={inputClass} /></div>
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    Photos and estimate history become available immediately after the contact and property are created.
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center justify-between gap-4 mb-5">
-                    <div><h3 className="font-bold text-gray-900">Linked properties</h3><p className="text-sm text-gray-500 mt-1">Each property can contain descriptions, notes, photos, and estimate history.</p></div>
-                    <button type="button" onClick={openNewProperty} className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-700 text-white text-sm font-semibold rounded-lg cursor-pointer"><Plus size={15} /> Add Property</button>
-                  </div>
-                  {selectedProperties.length === 0 ? (
-                    <div className="border border-dashed border-gray-300 rounded-xl p-10 text-center text-sm text-gray-400">No properties yet.</div>
-                  ) : (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {selectedProperties.map((property) => {
-                        const history = projects.filter((project) => project.propertyId === property.id);
-                        const photos = propertyPhotos.filter((photo) => photo.propertyId === property.id);
-                        return (
-                          <button type="button" key={property.id} onClick={() => openProperty(property)} className="text-left border border-gray-200 rounded-xl p-5 hover:border-green-300 hover:shadow-sm cursor-pointer bg-white">
-                            <div className="flex items-start gap-3">
-                              {photos[0]?.url ? <img src={photos[0].url} alt="Property" className="w-16 h-16 rounded-lg object-cover border border-gray-200" /> : <div className="w-16 h-16 rounded-lg bg-green-50 text-green-700 flex items-center justify-center"><Building2 size={22} /></div>}
-                              <div className="min-w-0"><p className="font-bold text-gray-900">{property.name}</p><p className="text-sm text-gray-500 mt-1 line-clamp-2">{propertyAddress(property) || "No address"}</p><p className="text-xs text-gray-400 mt-2">{photos.length} photos · {history.length} records</p></div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+              )}
 
-                  <div className="mt-6 border-t border-gray-100 pt-6">
-                    <div className="flex items-start gap-3 mb-4">
-                      <div className="w-9 h-9 rounded-lg bg-green-50 text-green-700 flex items-center justify-center shrink-0">
-                        <Link2 size={17} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-900">Link an existing estimate</h3>
-                        <p className="text-sm text-gray-500 mt-1">Use this when the estimate was created before the contact or property.</p>
-                      </div>
+              {activeTab === "details" && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Name *</label>
+                    <input
+                      value={draft.name}
+                      onChange={(event) => setContactField("name", event.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Email</label>
+                    <input
+                      type="email"
+                      value={draft.email}
+                      onChange={(event) => setContactField("email", event.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Phone</label>
+                    <input
+                      type="tel"
+                      value={draft.phone}
+                      onChange={(event) => setContactField("phone", event.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Contact Street Address</label>
+                    <input
+                      value={draft.address}
+                      onChange={(event) => setContactField("address", event.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>City</label>
+                    <input
+                      value={draft.city}
+                      onChange={(event) => setContactField("city", event.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelClass}>State</label>
+                      <input
+                        value={draft.state}
+                        onChange={(event) => setContactField("state", event.target.value)}
+                        className={inputClass}
+                      />
                     </div>
-                    <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
-                      <div>
-                        <label className={labelClass}>Estimate</label>
-                        <select value={linkProjectId} onChange={(event) => setLinkProjectId(event.target.value)} className={inputClass}>
-                          <option value="">Choose estimate...</option>
-                          {projects.map((project) => (
-                            <option key={project.id} value={project.id}>
-                              {project.estimateNumber} — {project.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelClass}>Property (optional)</label>
-                        <select value={linkPropertyId} onChange={(event) => setLinkPropertyId(event.target.value)} className={inputClass}>
-                          <option value="">Contact only</option>
-                          {selectedProperties.map((property) => (
-                            <option key={property.id} value={property.id}>{property.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void linkEstimate()}
-                        disabled={!linkProjectId || linking}
-                        className="h-[42px] px-4 rounded-lg bg-green-700 text-white text-sm font-semibold disabled:opacity-50 cursor-pointer"
-                      >
-                        {linking ? "Linking..." : "Link Estimate"}
-                      </button>
+                    <div>
+                      <label className={labelClass}>ZIP</label>
+                      <input
+                        value={draft.zip}
+                        onChange={(event) => setContactField("zip", event.target.value)}
+                        className={inputClass}
+                      />
                     </div>
-                    {linkMessage && (
-                      <p className={`mt-3 text-sm ${linkMessage.startsWith("Linked") ? "text-green-700" : "text-red-600"}`}>{linkMessage}</p>
-                    )}
+                  </div>
+                  <div>
+                    <label className={labelClass}>Type</label>
+                    <select
+                      value={draft.contactType}
+                      onChange={(event) =>
+                        setContactField("contactType", event.target.value as ContactType)
+                      }
+                      className={inputClass}
+                    >
+                      {CONTACT_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Activity</label>
+                    <select
+                      value={draft.activityStatus}
+                      onChange={(event) =>
+                        setContactField(
+                          "activityStatus",
+                          event.target.value as ContactActivity
+                        )
+                      }
+                      className={inputClass}
+                    >
+                      {ACTIVITY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Source</label>
+                    <select
+                      value={draft.source}
+                      onChange={(event) => setContactField("source", event.target.value)}
+                      className={inputClass}
+                    >
+                      {SOURCE_OPTIONS.map((option) => (
+                        <option key={option || "blank"} value={option}>
+                          {option || "Not specified"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Notes</label>
+                    <textarea
+                      rows={5}
+                      value={draft.notes}
+                      onChange={(event) => setContactField("notes", event.target.value)}
+                      className={inputClass}
+                    />
                   </div>
                 </div>
               )}
+
+              {activeTab === "property" && (
+                selected ? (
+                  <div>
+                    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-gray-900">Linked properties</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          Add and edit as many service locations as this contact needs.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openNewProperty}
+                        className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white cursor-pointer"
+                      >
+                        <Plus size={15} /> Add Property
+                      </button>
+                    </div>
+                    {selectedProperties.length === 0 ? (
+                      <button
+                        type="button"
+                        onClick={openNewProperty}
+                        className="w-full rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500 hover:border-slate-400 cursor-pointer"
+                      >
+                        <Building2 size={28} className="mx-auto text-gray-300" />
+                        <p className="mt-3 font-semibold">No properties yet</p>
+                        <p className="mt-1 text-sm">Add one without leaving this contact.</p>
+                      </button>
+                    ) : (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {selectedProperties.map((property) => {
+                          const photos = propertyPhotos.filter(
+                            (photo) => photo.propertyId === property.id
+                          );
+                          const history = projects.filter(
+                            (project) => project.propertyId === property.id
+                          );
+                          return (
+                            <button
+                              key={property.id}
+                              type="button"
+                              onClick={() => openProperty(property)}
+                              className="rounded-xl border border-gray-200 bg-white p-5 text-left hover:border-slate-300 hover:shadow-sm cursor-pointer"
+                            >
+                              <div className="flex gap-4">
+                                {photos[0]?.url ? (
+                                  <img
+                                    src={photos[0].url}
+                                    alt={property.name}
+                                    className="h-16 w-16 rounded-lg border border-gray-200 object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                                    <Building2 size={22} />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-bold text-gray-900">{property.name}</p>
+                                  <p className="mt-1 text-sm text-gray-500 line-clamp-2">
+                                    {propertyAddress(property) || "No address"}
+                                  </p>
+                                  <p className="mt-2 text-xs text-gray-400">
+                                    {photos.length} photos · {history.length} records
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      Add an optional first property now. YardPilot will create it at the same time as the contact.
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Property Name / Label</label>
+                      <input
+                        value={newPropertyDraft.name}
+                        onChange={(event) =>
+                          setNewPropertyField("name", event.target.value)
+                        }
+                        placeholder="Primary Property, Rental, Commercial Site…"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Street Address</label>
+                      <input
+                        value={newPropertyDraft.address}
+                        onChange={(event) =>
+                          setNewPropertyField("address", event.target.value)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>City</label>
+                      <input
+                        value={newPropertyDraft.city}
+                        onChange={(event) =>
+                          setNewPropertyField("city", event.target.value)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>State</label>
+                        <input
+                          value={newPropertyDraft.state}
+                          onChange={(event) =>
+                            setNewPropertyField("state", event.target.value)
+                          }
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>ZIP</label>
+                        <input
+                          value={newPropertyDraft.zip}
+                          onChange={(event) =>
+                            setNewPropertyField("zip", event.target.value)
+                          }
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Property Description</label>
+                      <textarea
+                        rows={3}
+                        value={newPropertyDraft.description}
+                        onChange={(event) =>
+                          setNewPropertyField("description", event.target.value)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Client-visible Notes</label>
+                      <textarea
+                        rows={4}
+                        value={newPropertyDraft.clientNotes}
+                        onChange={(event) =>
+                          setNewPropertyField("clientNotes", event.target.value)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Internal Notes</label>
+                      <textarea
+                        rows={4}
+                        value={newPropertyDraft.internalNotes}
+                        onChange={(event) =>
+                          setNewPropertyField("internalNotes", event.target.value)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                )
+              )}
+
+              {activeTab === "history" && (
+                selected ? (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="font-bold text-gray-900">Contact history</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Open a property to upload photos or change which estimate/job is linked to it.
+                      </p>
+                    </div>
+                    {selectedContactProjects.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">
+                        No estimates or jobs are linked to this contact yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedContactProjects.map((project) => (
+                          <Link
+                            key={project.id}
+                            to={`/app/estimates/${project.id}`}
+                            className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 hover:border-slate-300"
+                          >
+                            <FileText size={18} className="shrink-0 text-slate-600" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-gray-900">
+                                {project.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {project.estimateNumber} · {project.status}
+                              </p>
+                            </div>
+                            <p className="text-sm font-bold text-gray-900">
+                              {formatMoney(project.totalEstimate)}
+                            </p>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-7">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      Add photos and choose existing records now. When you save, YardPilot creates the contact and optional property, uploads the photos, and links the selected records in one step.
+                    </div>
+                    <section>
+                      <div className="mb-3 flex items-center gap-2">
+                        <ImageIcon size={18} className="text-slate-600" />
+                        <h3 className="font-bold text-gray-900">Property Photos</h3>
+                      </div>
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-7 text-sm font-semibold text-gray-600 hover:border-slate-400">
+                        <Upload size={17} /> Choose Photos
+                        <input
+                          type="file"
+                          accept="image/*,.heic,.heif"
+                          multiple
+                          className="sr-only"
+                          onChange={(event) => {
+                            const files: File[] = Array.from(event.currentTarget.files ?? []);
+                            setNewPropertyFiles((current) => [...current, ...files]);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      <StagedPhotos
+                        files={newPropertyFiles}
+                        onRemove={(index) =>
+                          setNewPropertyFiles((current) =>
+                            current.filter((_, itemIndex) => itemIndex !== index)
+                          )
+                        }
+                      />
+                    </section>
+                    <section>
+                      <div className="mb-3 flex items-center gap-2">
+                        <Link2 size={18} className="text-slate-600" />
+                        <h3 className="font-bold text-gray-900">
+                          Link Existing Estimates or Jobs
+                        </h3>
+                      </div>
+                      <RecordPicker
+                        projects={linkableForNew}
+                        selectedIds={newLinkedProjectIds}
+                        onToggle={(id) => toggleId(id, setNewLinkedProjectIds)}
+                      />
+                    </section>
+                  </div>
+                )
+              )}
             </div>
 
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <div>{selected && <button type="button" onClick={() => void removeContact()} className="inline-flex items-center gap-2 text-red-600 text-sm font-semibold cursor-pointer"><Trash2 size={15} /> Delete</button>}</div>
-              <div className="flex w-full sm:w-auto gap-2"><button type="button" onClick={closeContactModal} className="flex-1 sm:flex-none px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveContact()} disabled={saving} className="flex-1 sm:flex-none px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{saving ? "Saving..." : selected ? "Update Contact" : hasNewPropertyData() ? "Create Contact & Property" : "Create Contact"}</button></div>
+            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
+              <div>
+                {selected && (
+                  <button
+                    type="button"
+                    onClick={() => void removeContact()}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-red-600 cursor-pointer"
+                  >
+                    <Trash2 size={15} /> Delete Contact
+                  </button>
+                )}
+              </div>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <button
+                  type="button"
+                  onClick={closeContactModal}
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 sm:flex-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveContact()}
+                  disabled={saving}
+                  className="flex-1 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none cursor-pointer"
+                >
+                  {saving ? "Saving…" : selected ? "Update & Close" : "Create & Close"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {propertyModalOpen && selected && (
-        <div className="fixed inset-0 z-[90] bg-black/60 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-4xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0"><div><h2 className="text-xl font-bold text-gray-900">{selectedProperty ? selectedProperty.name : "Add Property"}</h2><p className="text-sm text-gray-500 mt-0.5">Linked to {selected.name}</p></div><button type="button" onClick={closePropertyModal} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg cursor-pointer"><X size={20} /></button></div>
-            <div className="p-4 sm:p-6 min-h-0 overflow-y-auto overscroll-contain flex-1 space-y-6">
-              {propertyError && <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{propertyError}</div>}
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><label className={labelClass}>Property Name / Label</label><input value={propertyDraft.name} onChange={(event) => setPropertyField("name", event.target.value)} placeholder="Primary Home, Rental, Commercial Site..." className={inputClass} /></div>
-                <div className="sm:col-span-2"><label className={labelClass}>Street Address</label><input value={propertyDraft.address} onChange={(event) => setPropertyField("address", event.target.value)} className={inputClass} /></div>
-                <div><label className={labelClass}>City</label><input value={propertyDraft.city} onChange={(event) => setPropertyField("city", event.target.value)} className={inputClass} /></div>
-                <div className="grid grid-cols-2 gap-4"><div><label className={labelClass}>State</label><input value={propertyDraft.state} onChange={(event) => setPropertyField("state", event.target.value)} className={inputClass} /></div><div><label className={labelClass}>ZIP</label><input value={propertyDraft.zip} onChange={(event) => setPropertyField("zip", event.target.value)} className={inputClass} /></div></div>
-                <div className="sm:col-span-2"><label className={labelClass}>Property Description (included in estimate)</label><textarea value={propertyDraft.description} onChange={(event) => setPropertyField("description", event.target.value)} rows={3} placeholder="Lot layout, access, existing landscape, project context..." className={inputClass} /></div>
-                <div><label className={labelClass}>Client-visible Property Notes</label><textarea value={propertyDraft.clientNotes} onChange={(event) => setPropertyField("clientNotes", event.target.value)} rows={4} placeholder="Notes that may appear in shared estimates..." className={inputClass} /></div>
-                <div><label className={labelClass}>Internal Property Notes</label><textarea value={propertyDraft.internalNotes} onChange={(event) => setPropertyField("internalNotes", event.target.value)} rows={4} placeholder="Gate codes, crew notes, supplier reminders..." className={inputClass} /></div>
+        <div className="app-modal-overlay fixed inset-0 z-[90] flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-5xl sm:rounded-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-4 sm:px-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {selectedProperty ? selectedProperty.name : "Add Property"}
+                </h2>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Linked to {selected.name}. Details, photos, and history can be saved together.
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={closePropertyModal}
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-              <div className="border-t border-gray-100 pt-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4"><div><h3 className="font-bold text-gray-900">Property photos</h3><p className="text-sm text-gray-500 mt-1">These photos appear in the downloaded or shared estimate.</p></div>{selectedProperty && (
-                  <div className="w-full sm:w-auto">
-                    <label className="sr-only" htmlFor="property-photo-upload">Upload property photos</label>
-                    <input
-                      id="property-photo-upload"
-                      type="file"
-                      accept="image/*,.heic,.heif"
-                      multiple
-                      disabled={uploading}
-                      onChange={(event) => {
-                        void uploadPhotos(event.target.files);
-                        event.currentTarget.value = "";
-                      }}
-                      className="block w-full max-w-sm text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-50 file:px-4 file:py-2.5 file:font-semibold file:text-green-700 hover:file:bg-green-100 disabled:opacity-60"
-                    />
-                    {uploading && <p className="mt-1 text-xs text-green-700">Uploading photos...</p>}
-                  </div>
-                )}</div>
-                {!selectedProperty ? <p className="text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl p-6 text-center">Save the property first, then upload photos.</p> : selectedPropertyPhotos.length === 0 ? <p className="text-sm text-gray-400 border border-dashed border-gray-300 rounded-xl p-6 text-center">No photos uploaded.</p> : <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{selectedPropertyPhotos.map((photo) => <div key={photo.id} className="relative group"><img src={photo.url} alt={photo.caption || "Property"} className="w-full aspect-square object-cover rounded-lg border border-gray-200" /><button type="button" onClick={() => void deletePropertyPhoto(photo)} className="absolute top-2 right-2 p-1.5 rounded-md bg-black/65 text-white opacity-0 group-hover:opacity-100 cursor-pointer"><Trash2 size={14} /></button></div>)}</div>}
-              </div>
-
-              {selectedProperty && (
-                <div className="border-t border-gray-100 pt-6">
-                  <h3 className="font-bold text-gray-900 mb-4">Previous estimates and jobs</h3>
-                  {selectedPropertyProjects.length === 0 ? <p className="text-sm text-gray-400">No records linked to this property yet.</p> : <div className="space-y-2">{selectedPropertyProjects.map((project) => <Link key={project.id} to={`/app/estimates/${project.id}`} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-green-300"><FileText size={17} className="text-green-700 shrink-0" /><div className="flex-1 min-w-0"><p className="text-sm font-semibold text-gray-900 truncate">{project.name}</p><p className="text-xs text-gray-400">{project.estimateNumber} · {new Date(project.updatedAt).toLocaleDateString("en-US")}</p></div><p className="font-bold text-gray-900 text-sm">{formatMoney(project.totalEstimate)}</p></Link>)}</div>}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-7">
+              {propertyError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {propertyError}
                 </div>
               )}
+
+              <section className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Property Name / Label</label>
+                  <input
+                    value={propertyDraft.name}
+                    onChange={(event) =>
+                      setPropertyField("name", event.target.value)
+                    }
+                    placeholder="Primary Property, Rental, Commercial Site…"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Street Address</label>
+                  <input
+                    value={propertyDraft.address}
+                    onChange={(event) =>
+                      setPropertyField("address", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>City</label>
+                  <input
+                    value={propertyDraft.city}
+                    onChange={(event) =>
+                      setPropertyField("city", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass}>State</label>
+                    <input
+                      value={propertyDraft.state}
+                      onChange={(event) =>
+                        setPropertyField("state", event.target.value)
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>ZIP</label>
+                    <input
+                      value={propertyDraft.zip}
+                      onChange={(event) =>
+                        setPropertyField("zip", event.target.value)
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Property Description</label>
+                  <textarea
+                    rows={3}
+                    value={propertyDraft.description}
+                    onChange={(event) =>
+                      setPropertyField("description", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Client-visible Notes</label>
+                  <textarea
+                    rows={4}
+                    value={propertyDraft.clientNotes}
+                    onChange={(event) =>
+                      setPropertyField("clientNotes", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Internal Notes</label>
+                  <textarea
+                    rows={4}
+                    value={propertyDraft.internalNotes}
+                    onChange={(event) =>
+                      setPropertyField("internalNotes", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </div>
+              </section>
+
+              <section className="border-t border-gray-100 pt-6">
+                <div className="mb-4 flex items-center gap-2">
+                  <ImageIcon size={18} className="text-slate-600" />
+                  <div>
+                    <h3 className="font-bold text-gray-900">Property Photos</h3>
+                    <p className="text-sm text-gray-500">
+                      Choose photos now. New files upload when you press Save & Close.
+                    </p>
+                  </div>
+                </div>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm font-semibold text-gray-600 hover:border-slate-400">
+                  <Upload size={17} /> Choose Photos
+                  <input
+                    type="file"
+                    accept="image/*,.heic,.heif"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => {
+                      const files: File[] = Array.from(event.currentTarget.files ?? []);
+                      setPropertyFiles((current) => [...current, ...files]);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <StagedPhotos
+                  files={propertyFiles}
+                  onRemove={(index) =>
+                    setPropertyFiles((current) =>
+                      current.filter((_, itemIndex) => itemIndex !== index)
+                    )
+                  }
+                />
+                {selectedPropertyPhotos.length > 0 && (
+                  <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {selectedPropertyPhotos.map((photo) => (
+                      <div key={photo.id} className="relative group">
+                        <img
+                          src={photo.url}
+                          alt={photo.caption || "Property"}
+                          className="w-full aspect-square rounded-lg border border-gray-200 object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void deletePropertyPhoto(photo)}
+                          className="absolute right-2 top-2 rounded-md bg-black/70 p-1.5 text-white cursor-pointer"
+                          aria-label="Delete photo"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="border-t border-gray-100 pt-6">
+                <div className="mb-3 flex items-center gap-2">
+                  <Link2 size={18} className="text-slate-600" />
+                  <div>
+                    <h3 className="font-bold text-gray-900">
+                      Linked Estimates & Jobs
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Select records to attach to this property when it is saved.
+                    </p>
+                  </div>
+                </div>
+                <RecordPicker
+                  projects={projects.filter(
+                    (project) =>
+                      !project.contactId ||
+                      project.contactId === selected.id ||
+                      project.propertyId === selectedProperty?.id
+                  )}
+                  selectedIds={propertyLinkedProjectIds}
+                  onToggle={(id) => toggleId(id, setPropertyLinkedProjectIds)}
+                />
+
+                {selectedPropertyProjects.length > 0 && (
+                  <div className="mt-5 space-y-2">
+                    {selectedPropertyProjects.map((project) => (
+                      <Link
+                        key={project.id}
+                        to={`/app/estimates/${project.id}`}
+                        className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 hover:border-slate-300"
+                      >
+                        <FileText size={17} className="shrink-0 text-slate-600" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-900">
+                            {project.name}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {project.estimateNumber} · {project.status}
+                          </p>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900">
+                          {formatMoney(project.totalEstimate)}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]"><div>{selectedProperty && <button type="button" onClick={() => void removeProperty()} className="inline-flex items-center gap-2 text-red-600 text-sm font-semibold cursor-pointer"><Trash2 size={15} /> Delete Property</button>}</div><div className="flex w-full sm:w-auto gap-2"><button type="button" onClick={closePropertyModal} className="flex-1 sm:flex-none px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveProperty()} disabled={propertySaving} className="flex-1 sm:flex-none px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{propertySaving ? "Saving..." : selectedProperty ? "Update Property" : "Create Property"}</button></div></div>
+
+            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
+              <div>
+                {selectedProperty && (
+                  <button
+                    type="button"
+                    onClick={() => void removeProperty()}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-red-600 cursor-pointer"
+                  >
+                    <Trash2 size={15} /> Delete Property
+                  </button>
+                )}
+              </div>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <button
+                  type="button"
+                  onClick={closePropertyModal}
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 sm:flex-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveProperty()}
+                  disabled={propertySaving}
+                  className="flex-1 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none cursor-pointer"
+                >
+                  {propertySaving ? "Saving…" : "Save & Close"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

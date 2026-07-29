@@ -76,3 +76,7 @@ export function formatMoney(value: number) {
 export function estimateShareUrl(shareToken: string) {
   return `${window.location.origin}/estimate/share/${shareToken}`;
 }
+
+export function invoiceShareUrl(shareToken: string) {
+  return `${window.location.origin}/invoice/share/${shareToken}`;
+}

@@ -186,9 +186,9 @@ export default function EstimateDocument({
                   </tr>
                 ))}
                 <tr>
-                  <td className="px-4 py-3 font-medium">Combined labor</td>
+                  <td className="px-4 py-3 font-medium">Total combined labor hours</td>
                   <td className="px-4 py-3 text-right text-gray-600">
-{laborHours.toLocaleString("en-US")} hours
+                    {laborHours.toLocaleString("en-US")} hours
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600">
                     Total combined hours

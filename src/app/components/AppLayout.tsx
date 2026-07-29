@@ -172,7 +172,7 @@ export default function AppLayout() {
     <div className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5 px-1">
-          <div className="w-9 h-9 rounded-lg border border-white/15 bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-9 h-9 rounded-lg border border-white/15 bg-[#2c3531] flex items-center justify-center shrink-0 overflow-hidden">
             <img
               src="/yardpilot-logo.png"
               alt="YardPilotUSA logo"
@@ -186,7 +186,7 @@ export default function AppLayout() {
             >
               YardPilotUSA
             </p>
-            <p className="text-green-400/80 text-xs truncate">
+            <p className="text-[#b7c5bc] text-xs truncate">
               {activeWorkspace?.name || user.company || "Workspace"}
             </p>
           </div>
@@ -221,17 +221,17 @@ export default function AppLayout() {
               onClick={() => setSidebarOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 active
-                  ? "bg-green-500/20 text-white"
-                  : "text-green-200/70 hover:bg-white/5 hover:text-white"
+                  ? "bg-white/10 text-white"
+                  : "text-[#c4cec8] hover:bg-white/5 hover:text-white"
               }`}
             >
               <Icon
                 size={17}
-                className={active ? "text-green-400" : "text-green-400/50"}
+                className={active ? "text-[#b9c9bf]" : "text-[#829087]"}
               />
               {label}
               {active && (
-                <ChevronRight size={14} className="ml-auto text-green-400" />
+                <ChevronRight size={14} className="ml-auto text-[#b9c9bf]" />
               )}
             </Link>
           );
@@ -242,21 +242,21 @@ export default function AppLayout() {
         <button
           type="button"
           onClick={() => setDarkMode((current) => !current)}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-green-200/70 hover:bg-white/5 hover:text-white transition-colors mb-2"
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-[#c4cec8] hover:bg-white/5 hover:text-white transition-colors mb-2"
         >
           {darkMode ? <Sun size={15} /> : <Moon size={15} />}
           {darkMode ? "Light mode" : "Dark mode"}
         </button>
 
         <div className="flex items-center gap-3 px-3 py-2 mb-1">
-          <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+          <div className="w-8 h-8 rounded-full bg-[#71877a] flex items-center justify-center text-white text-xs font-bold shrink-0">
             {user.name.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-xs font-semibold truncate">
               {user.name}
             </p>
-            <p className="text-green-400/60 text-xs truncate">
+            <p className="text-[#98a79e] text-xs truncate">
               {roleLabel(role)}
             </p>
           </div>
@@ -264,7 +264,7 @@ export default function AppLayout() {
         <button
           type="button"
           onClick={() => void handleLogout()}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-green-200/60 hover:bg-white/5 hover:text-white transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-[#aebbb3] hover:bg-white/5 hover:text-white transition-colors"
         >
           <LogOut size={15} /> Sign out
         </button>
@@ -274,16 +274,16 @@ export default function AppLayout() {
 
   return (
     <div
-      className="app-shell flex h-[100dvh] min-h-0 bg-[#edf0ee] overflow-hidden"
+      className="app-shell flex h-[100dvh] min-h-0 bg-[#e9ecea] overflow-hidden"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
-      <aside className="hidden md:flex flex-col w-60 bg-[#18211c] shrink-0">
+      <aside className="hidden md:flex flex-col w-60 bg-[#202724] shrink-0">
         <Sidebar />
       </aside>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="w-72 bg-[#18211c] flex flex-col min-h-0">
+          <div className="w-72 bg-[#202724] flex flex-col min-h-0">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <span className="text-white font-bold">Menu</span>
               <button
@@ -308,18 +308,18 @@ export default function AppLayout() {
       )}
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-        <header className="bg-[#f8faf9] border-b border-gray-300 px-5 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
+        <header className="bg-[#252d29] border-b border-[#39423e] px-5 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden text-gray-500 hover:text-gray-800"
+            className="md:hidden text-gray-300 hover:text-white"
           >
             <Menu size={20} />
           </button>
           <div className="hidden md:block min-w-0">
-            <p className="text-sm text-gray-500 truncate">
+            <p className="text-sm text-gray-300 truncate">
               Welcome back, {" "}
-              <span className="font-semibold text-gray-900">
+              <span className="font-semibold text-white">
                 {user.name.split(" ")[0]}
               </span>
               {activeWorkspace && (
@@ -329,10 +329,10 @@ export default function AppLayout() {
           </div>
           <Link
             to={role === "employee" ? "/app/team" : "/app/estimate/new"}
-            className="flex items-center gap-1.5 px-4 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800"
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#71877a] text-white text-sm font-semibold rounded-lg hover:bg-[#607568]"
           >
             <PlusCircle size={15} />
-            {role === "employee" ? "Propose Job" : "New Estimate"}
+            {role === "employee" ? "Submit Job Request" : "New Estimate"}
           </Link>
         </header>
 

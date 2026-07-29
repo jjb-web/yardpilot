@@ -586,30 +586,13 @@ export default function EstimateBuilder() {
     }
   }
 
-  const SaveActions = ({ bottom = false }: { bottom?: boolean }) => (
-    <div
-      className={`flex flex-col-reverse sm:flex-row sm:items-center gap-2 ${
-        bottom ? "sm:justify-end" : ""
-      }`}
-    >
-      <button
-        type="button"
-        onClick={() => void handleGenerateDescription()}
-        disabled={generating || saving}
-        className="inline-flex justify-center items-center gap-2 px-4 py-2.5 rounded-lg border border-green-200 bg-green-50 text-green-700 text-sm font-semibold cursor-pointer disabled:opacity-60"
-      >
-        {generating ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <Sparkles size={16} />
-        )}
-        Generate Description
-      </button>
+  const SaveActions = () => (
+    <div className="flex items-center justify-end">
       <button
         type="button"
         onClick={() => void handleSave()}
         disabled={saving}
-        className="inline-flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg bg-green-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
+        className="inline-flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 cursor-pointer disabled:opacity-60"
       >
         {saving ? (
           <Loader2 size={16} className="animate-spin" />
@@ -787,13 +770,13 @@ export default function EstimateBuilder() {
                   {PROJECT_TYPES.map((type) => (
                     <option key={type} value={type}>{type}</option>
                   ))}
-                  <option value={CUSTOM_PROJECT_TYPE}>Custom service…</option>
+                  <option value={CUSTOM_PROJECT_TYPE}>Other job type…</option>
                 </select>
                 {usesCustomProjectType && (
                   <input
                     value={form.projectType}
                     onChange={(event) => setField("projectType", event.target.value)}
-                    placeholder="Enter a custom landscaping service"
+                    placeholder="Enter another job or service type"
                     className={`${inputClass} mt-2`}
                   />
                 )}
@@ -855,20 +838,6 @@ export default function EstimateBuilder() {
                   <option value="sent">Sent</option>
                   <option value="accepted">Accepted</option>
                   <option value="declined">Declined</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Job Status</label>
-                <select
-                  value={form.status}
-                  onChange={(event) =>
-                    setField("status", event.target.value as ProjectStatus)
-                  }
-                  className={inputClass}
-                >
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
-                  <option value="archived">Archived</option>
                 </select>
               </div>
               <div>
@@ -1061,16 +1030,9 @@ export default function EstimateBuilder() {
           </section>
 
           <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-4 mb-5">
+            <div className="mb-5">
               <h2 className="font-bold text-gray-900">Description & notes</h2>
-              <button
-                type="button"
-                onClick={() => void handleGenerateDescription()}
-                disabled={generating}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-green-700 cursor-pointer disabled:opacity-60"
-              >
-                <Sparkles size={15} /> Generate
-              </button>
+              <p className="mt-1 text-sm text-gray-500">Write the scope yourself or use the local formatter for a clean client-ready paragraph.</p>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
@@ -1085,9 +1047,24 @@ export default function EstimateBuilder() {
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className={labelClass}>
-                  Optional Generated Description
-                </label>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                  <label className={`${labelClass} mb-0`}>
+                    Optional Generated Description
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateDescription()}
+                    disabled={generating || saving}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer disabled:opacity-60"
+                  >
+                    {generating ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={15} />
+                    )}
+                    {generating ? "Generating…" : "Generate Description"}
+                  </button>
+                </div>
                 <textarea
                   value={generatedDescription ?? ""}
                   onChange={(event) =>
@@ -1259,7 +1236,7 @@ export default function EstimateBuilder() {
           </section>
 
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
-            <SaveActions bottom />
+            <SaveActions />
           </div>
         </div>
 

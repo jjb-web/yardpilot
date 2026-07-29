@@ -404,3 +404,118 @@ body.yardpilot-app-open #root {
 .app-shell .border-gray-200 {
   border-color: #d6dcda;
 }
+
+/* YardPilot neutral + sage visual system ---------------------------------- */
+.app-shell .bg-green-700,
+.app-shell .bg-green-800 {
+  background-color: #657b6e !important;
+}
+
+.app-shell .hover\:bg-green-800:hover,
+.app-shell .hover\:bg-green-700:hover {
+  background-color: #52675b !important;
+}
+
+.app-shell .text-green-700,
+.app-shell .text-green-800 {
+  color: #52675b !important;
+}
+
+.app-shell .text-green-600 {
+  color: #657b6e !important;
+}
+
+.app-shell .bg-green-50 {
+  background-color: #f0f3f1 !important;
+}
+
+.app-shell .bg-green-100 {
+  background-color: #e3eae5 !important;
+}
+
+.app-shell .border-green-100,
+.app-shell .border-green-200,
+.app-shell .border-green-300 {
+  border-color: #cbd5cf !important;
+}
+
+.app-shell .ring-green-500\/30,
+.app-shell .focus\:ring-green-500\/30:focus,
+.app-shell .focus\:ring-green-500\/40:focus {
+  --tw-ring-color: rgb(101 123 110 / 0.28) !important;
+}
+
+/* Keep client-facing documents white and preserve their deliberate color. */
+.app-shell .estimate-print-root .bg-green-50,
+.app-shell .invoice-print-root .bg-green-50 {
+  background-color: #f0fdf4 !important;
+}
+
+.app-shell .estimate-print-root .text-green-700,
+.app-shell .estimate-print-root .text-green-800,
+.app-shell .invoice-print-root .text-green-700,
+.app-shell .invoice-print-root .text-green-800 {
+  color: #166534 !important;
+}
+
+/* Modal scrolling: one page scrollbar or one modal scrollbar, never both. */
+.app-modal-overlay {
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+.app-modal-overlay > * {
+  touch-action: auto;
+  overscroll-behavior: contain;
+}
+
+.app-shell:has(.app-modal-overlay) > div > main {
+  overflow: hidden !important;
+}
+
+.dark .invoice-print-root,
+.dark .invoice-print-root .bg-white {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+.dark .invoice-print-root .text-gray-900,
+.dark .invoice-print-root .text-gray-800,
+.dark .invoice-print-root .text-gray-700 {
+  color: #111827 !important;
+}
+
+.dark .invoice-print-root .text-gray-600,
+.dark .invoice-print-root .text-gray-500 {
+  color: #4b5563 !important;
+}
+
+.dark .invoice-print-root .border-gray-100,
+.dark .invoice-print-root .border-gray-200 {
+  border-color: #e5e7eb !important;
+}
+
+@media print {
+  .invoice-print-root,
+  .invoice-print-root * {
+    visibility: visible;
+  }
+
+  .invoice-print-root {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .invoice-print-root table,
+  .invoice-print-root figure,
+  .invoice-print-root section {
+    break-inside: avoid;
+  }
+}

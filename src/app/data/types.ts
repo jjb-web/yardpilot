@@ -165,6 +165,30 @@ export type WorkspaceInvite = {
 
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "void";
 
+export type InvoiceSnapshot = {
+  estimateNumber: string;
+  name: string;
+  client: string;
+  address: string;
+  city: string;
+  projectType: string;
+  billingMethod: ProjectBillingMethod;
+  lineItems: LineItem[];
+  laborAssignments: LaborAssignment[];
+  laborHours: number;
+  laborRate: number;
+  aiEstimate: string | null;
+  scopeDescription: string;
+  clientNotes: string;
+  terms: string;
+  taxRate: number;
+  discountAmount: number;
+  totalEstimate: number;
+  responseName: string;
+  signatureData: string;
+  acceptedAt: string | null;
+};
+
 export type Invoice = {
   id: string;
   workspaceId: string;
@@ -178,6 +202,11 @@ export type Invoice = {
   status: InvoiceStatus;
   amount: number;
   notes: string;
+  estimateSnapshot: InvoiceSnapshot | null;
+  shareToken: string;
+  shareEnabled: boolean;
+  sentAt: string | null;
+  viewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -259,4 +288,6 @@ export type User = {
   email: string;
   company: string;
   phone: string;
+  city: string;
+  state: string;
 };

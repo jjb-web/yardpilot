@@ -18,6 +18,7 @@ import type {
   FollowUpStatus,
   FollowUpType,
   Invoice,
+  InvoiceSnapshot,
   InvoiceStatus,
   JobRequest,
   JobRequestStatus,
@@ -84,6 +85,7 @@ type AppContextType = {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   register: (user: User, password: string) => Promise<boolean>;
+  updateProfile: (details: Pick<User, "name" | "company" | "phone" | "city" | "state">) => Promise<User>;
 
   switchWorkspace: (workspaceId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
@@ -109,6 +111,7 @@ type AppContextType = {
   deleteProject: (id: string) => Promise<void>;
   setProjectSharing: (id: string, enabled: boolean) => Promise<Project>;
   assignSelfToProject: (projectId: string) => Promise<void>;
+  completeProject: (projectId: string) => Promise<string>;
 
   refreshContacts: () => Promise<void>;
   addContact: (contact: Contact) => Promise<Contact>;
@@ -130,6 +133,7 @@ type AppContextType = {
   addInvoice: (invoice: Invoice) => Promise<Invoice>;
   updateInvoice: (invoice: Invoice) => Promise<Invoice>;
   deleteInvoice: (id: string) => Promise<void>;
+  setInvoiceSharing: (id: string, enabled: boolean) => Promise<Invoice>;
 
   refreshSchedule: () => Promise<void>;
   addScheduleEvent: (event: ScheduleEvent) => Promise<ScheduleEvent>;
@@ -154,6 +158,8 @@ type ProfileRow = {
   phone: string | null;
   full_name: string | null;
   company: string | null;
+  city: string | null;
+  state: string | null;
 };
 
 type WorkspaceRow = {
@@ -307,6 +313,11 @@ type InvoiceRow = {
   status: InvoiceStatus;
   amount: number | string;
   notes: string;
+  estimate_snapshot: unknown;
+  share_token: string;
+  share_enabled: boolean;
+  sent_at: string | null;
+  viewed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -380,6 +391,8 @@ function userFromAuth(authUser: SupabaseAuthUser): User {
     email: authUser.email ?? "",
     company: metadata.company ?? "",
     phone: metadata.phone ?? authUser.phone ?? "",
+    city: metadata.city ?? "",
+    state: metadata.state ?? "",
   };
 }
 
@@ -394,6 +407,8 @@ function userFromProfile(
     email: profile.email || fallback.email,
     company: profile.company || fallback.company,
     phone: profile.phone || fallback.phone,
+    city: profile.city || fallback.city,
+    state: profile.state || fallback.state,
   };
 }
 
@@ -574,6 +589,47 @@ async function rowToPropertyPhoto(
   };
 }
 
+function normalizeInvoiceSnapshot(value: unknown): InvoiceSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  return {
+    estimateNumber: String(candidate.estimate_number ?? candidate.estimateNumber ?? ""),
+    name: String(candidate.name ?? ""),
+    client: String(candidate.client ?? ""),
+    address: String(candidate.address ?? ""),
+    city: String(candidate.city ?? ""),
+    projectType: String(candidate.project_type ?? candidate.projectType ?? ""),
+    billingMethod: (candidate.billing_method ?? candidate.billingMethod) === "hourly" ? "hourly" : "fixed",
+    lineItems: normalizeLineItems(candidate.line_items ?? candidate.lineItems),
+    laborAssignments: Array.isArray(candidate.labor_assignments ?? candidate.laborAssignments)
+      ? ((candidate.labor_assignments ?? candidate.laborAssignments) as Array<Record<string, unknown>>).map((item) => ({
+          userId: String(item.user_id ?? item.userId ?? ""),
+          name: String(item.name ?? "Team member"),
+          hours: Number(item.hours ?? 0),
+          hourlyRate: Number(item.hourly_rate ?? item.hourlyRate ?? 0),
+        }))
+      : [],
+    laborHours: Number(candidate.labor_hours ?? candidate.laborHours ?? 0),
+    laborRate: Number(candidate.labor_rate ?? candidate.laborRate ?? 0),
+    aiEstimate:
+      typeof (candidate.estimate_summary ?? candidate.aiEstimate) === "string"
+        ? String(candidate.estimate_summary ?? candidate.aiEstimate)
+        : null,
+    scopeDescription: String(candidate.scope_description ?? candidate.scopeDescription ?? ""),
+    clientNotes: String(candidate.client_notes ?? candidate.clientNotes ?? ""),
+    terms: String(candidate.terms ?? ""),
+    taxRate: Number(candidate.tax_rate ?? candidate.taxRate ?? 0),
+    discountAmount: Number(candidate.discount_amount ?? candidate.discountAmount ?? 0),
+    totalEstimate: Number(candidate.total_estimate ?? candidate.totalEstimate ?? 0),
+    responseName: String(candidate.response_name ?? candidate.responseName ?? ""),
+    signatureData: String(candidate.signature_data ?? candidate.signatureData ?? ""),
+    acceptedAt:
+      typeof (candidate.accepted_at ?? candidate.acceptedAt) === "string"
+        ? String(candidate.accepted_at ?? candidate.acceptedAt)
+        : null,
+  };
+}
+
 function rowToInvoice(row: InvoiceRow): Invoice {
   return {
     id: row.id,
@@ -588,6 +644,11 @@ function rowToInvoice(row: InvoiceRow): Invoice {
     status: row.status,
     amount: Number(row.amount),
     notes: row.notes,
+    estimateSnapshot: normalizeInvoiceSnapshot(row.estimate_snapshot),
+    shareToken: row.share_token,
+    shareEnabled: Boolean(row.share_enabled),
+    sentAt: row.sent_at,
+    viewedAt: row.viewed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -782,7 +843,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function loadProfile(authUser: SupabaseAuthUser) {
     const { data, error } = await supabase
       .from("profiles")
-      .select("email, phone, full_name, company")
+      .select("email, phone, full_name, company, city, state")
       .eq("id", authUser.id)
       .maybeSingle();
 
@@ -1140,6 +1201,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return !error;
   }
 
+  async function updateProfile(
+    details: Pick<User, "name" | "company" | "phone" | "city" | "state">
+  ): Promise<User> {
+    const { data, error } = await supabase.rpc("update_my_profile", {
+      requested_full_name: details.name.trim(),
+      requested_phone: details.phone.trim(),
+      requested_company: details.company.trim(),
+      requested_city: details.city.trim(),
+      requested_state: details.state.trim(),
+    });
+    if (error) throw new Error(error.message);
+    const row = (data ?? {}) as Record<string, unknown>;
+    const updated: User = {
+      id: authUserIdRef.current ?? user?.id,
+      name: String(row.full_name ?? details.name.trim()),
+      email: user?.email ?? "",
+      company: String(row.company ?? details.company.trim()),
+      phone: String(row.phone ?? details.phone.trim()),
+      city: String(row.city ?? details.city.trim()),
+      state: String(row.state ?? details.state.trim()),
+    };
+    setUser(updated);
+    await supabase.auth.updateUser({
+      data: {
+        full_name: updated.name,
+        company: updated.company,
+        phone: updated.phone,
+        city: updated.city,
+        state: updated.state,
+      },
+    });
+    return updated;
+  }
+
   async function refreshWorkspaces() {
     const loaded = await fetchWorkspaces();
     setWorkspaces(loaded);
@@ -1187,9 +1282,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ensureManager();
     const workspaceId = currentWorkspaceOrThrow();
     const userId = currentUserOrThrow();
+    const cleanedEmail = email.trim().toLowerCase();
+    if (!cleanedEmail) throw new Error("Enter an email address.");
+    if (cleanedEmail === user?.email.trim().toLowerCase()) {
+      throw new Error("You are already a member of this workspace and cannot invite yourself.");
+    }
+    if (workspaceMembers.some((member) => member.email.trim().toLowerCase() === cleanedEmail)) {
+      throw new Error("That email already belongs to a member of this workspace.");
+    }
     const insertValues: Record<string, unknown> = {
       workspace_id: workspaceId,
-      email: email.trim().toLowerCase(),
+      email: cleanedEmail,
       role: inviteRole,
       invited_by: userId,
     };
@@ -1476,6 +1579,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }
 
+  async function completeProject(projectId: string): Promise<string> {
+    ensureManager();
+    const { data, error } = await supabase.rpc("complete_project_and_create_invoice", {
+      requested_project_id: projectId,
+    });
+    if (error) throw new Error(error.message);
+    await Promise.all([refreshProjects(), refreshInvoices(), refreshSchedule()]);
+    return String(data);
+  }
+
   async function refreshContacts() {
     await refreshCurrentBundle();
   }
@@ -1712,6 +1825,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       status: invoice.status,
       amount: invoice.amount,
       notes: invoice.notes,
+      estimate_snapshot: invoice.estimateSnapshot ?? {},
+      share_token: invoice.shareToken,
+      share_enabled: invoice.shareEnabled,
+      sent_at: invoice.sentAt,
+      viewed_at: invoice.viewedAt,
       created_at: invoice.createdAt,
       updated_at: invoice.updatedAt,
     };
@@ -1781,6 +1899,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
     setInvoices((previous) => previous.filter((invoice) => invoice.id !== id));
     await Promise.all([refreshSchedule(), refreshFollowUps()]);
+  }
+
+  async function setInvoiceSharing(id: string, enabled: boolean): Promise<Invoice> {
+    ensureManager();
+    const current = invoices.find((invoice) => invoice.id === id);
+    const updates: Record<string, unknown> = {
+      share_enabled: enabled,
+      updated_at: new Date().toISOString(),
+    };
+    if (enabled) {
+      updates.status = current?.status === "draft" ? "sent" : current?.status ?? "sent";
+      updates.sent_at = current?.sentAt ?? new Date().toISOString();
+    }
+    const { data, error } = await supabase
+      .from("invoices")
+      .update(updates)
+      .eq("id", id)
+      .eq("workspace_id", currentWorkspaceOrThrow())
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const saved = rowToInvoice(data as InvoiceRow);
+    setInvoices((previous) =>
+      previous.map((invoice) => (invoice.id === saved.id ? saved : invoice))
+    );
+    return saved;
   }
 
   function scheduleToDatabase(event: ScheduleEvent) {
@@ -2091,6 +2235,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         register,
+        updateProfile,
         switchWorkspace,
         refreshWorkspaces,
         createCompanyWorkspace,
@@ -2105,6 +2250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteProject,
         setProjectSharing,
         assignSelfToProject,
+        completeProject,
         refreshContacts,
         addContact,
         updateContact,
@@ -2119,6 +2265,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addInvoice,
         updateInvoice,
         deleteInvoice,
+        setInvoiceSharing,
         refreshSchedule,
         addScheduleEvent,
         updateScheduleEvent,

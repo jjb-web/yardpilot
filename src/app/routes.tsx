@@ -18,6 +18,8 @@ import Account from "./pages/Account";
 import Schedule from "./pages/Schedule";
 import FollowUps from "./pages/FollowUps";
 import Invoices from "./pages/Invoices";
+import InvoiceDetail from "./pages/InvoiceDetail";
+import PublicInvoice from "./pages/PublicInvoice";
 import Team from "./pages/Team";
 import JobDetail from "./pages/JobDetail";
 import { useApp } from "./context/AppContext";
@@ -53,6 +55,7 @@ export const router = createBrowserRouter([
   { path: "/terms", Component: Terms },
   { path: "/privacy", Component: Privacy },
   { path: "/estimate/share/:token", Component: PublicEstimate },
+  { path: "/invoice/share/:token", Component: PublicInvoice },
   {
     path: "/app",
     Component: ProtectedApp,
@@ -114,6 +117,14 @@ export const router = createBrowserRouter([
         element: (
           <ManagerOnly>
             <Invoices />
+          </ManagerOnly>
+        ),
+      },
+      {
+        path: "invoices/:id",
+        element: (
+          <ManagerOnly>
+            <InvoiceDetail />
           </ManagerOnly>
         ),
       },

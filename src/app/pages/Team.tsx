@@ -5,7 +5,6 @@ import {
   Clipboard,
   Copy,
   Edit3,
-  ExternalLink,
   Mail,
   Plus,
   ShieldCheck,
@@ -15,7 +14,6 @@ import {
   X,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { supabase } from "../lib/supabase";
 import CopyToast from "../components/CopyToast";
 import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type {
@@ -81,7 +79,6 @@ export default function Team() {
     Exclude<WorkspaceRole, "owner">
   >("employee");
   const [inviteCode, setInviteCode] = useState("");
-  const [lastInviteLink, setLastInviteLink] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [companyOpen, setCompanyOpen] = useState(false);
   const [companyName, setCompanyName] = useState("");
@@ -133,34 +130,20 @@ export default function Team() {
     try {
       const cleanedCode = inviteCode.trim().toUpperCase();
       if (cleanedCode && !/^[A-Z0-9_-]{6,32}$/.test(cleanedCode)) {
-        throw new Error("Custom codes must be 6–32 characters using letters, numbers, dashes, or underscores.");
+        throw new Error(
+          "Custom codes must be 6–32 characters using letters, numbers, dashes, or underscores."
+        );
       }
       const invite = await createWorkspaceInvite(
         inviteEmail,
         inviteRole,
         cleanedCode
       );
-      const link = inviteLink(invite.token);
-      setLastInviteLink(link);
-      const copied = await copyText(link, "Invite link copied");
-
-      const { error: sendError } = await supabase.functions.invoke(
-        "send-team-invite",
-        {
-          body: {
-            invitationId: invite.id,
-          },
-        }
-      );
-
+      const copied = await copyText(invite.code, "Invite code copied");
       setMessage(
-        sendError
-          ? copied
-            ? "Invite created and link copied. Automatic email could not be sent, so send the copied link manually."
-            : "Invite created, but automatic email and clipboard copy were unavailable. Use Copy Link on the pending invitation."
-          : copied
-            ? `Invite emailed to ${invite.email} and copied to your clipboard.`
-            : `Invite emailed to ${invite.email}.`
+        copied
+          ? `Invite created for ${invite.email}. The code ${invite.code} was copied. YardPilot does not send invitations automatically, so give the person the code or copy their invite link below.`
+          : `Invite created for ${invite.email}. YardPilot does not send it automatically. Give them code ${invite.code}, or use Copy Link under Pending Invites.`
       );
       setInviteEmail("");
       setInviteCode("");
@@ -231,7 +214,6 @@ export default function Team() {
 
   async function copyInvite(token: string) {
     const link = inviteLink(token);
-    setLastInviteLink(link);
     await copyText(link, "Invite link copied");
   }
 
@@ -244,8 +226,9 @@ export default function Team() {
     const subject = encodeURIComponent(
       `Join ${activeWorkspace?.name ?? "my team"} on YardPilot`
     );
+    const invite = workspaceInvites.find((item) => item.token === token);
     const body = encodeURIComponent(
-      `You have been invited to join ${activeWorkspace?.name ?? "a YardPilot workspace"}.\n\nCreate or sign into your account using this link:\n${link}`
+      `You have been invited to join ${activeWorkspace?.name ?? "a YardPilot workspace"}.\n\nInvite code: ${invite?.code ?? ""}\nInvite link: ${link}\n\nYardPilot does not send invitations automatically; this email was opened by the inviter.`
     );
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   }
@@ -435,18 +418,8 @@ export default function Team() {
         </div>
       )}
       {message && (
-        <div className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <div className="mb-5 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           {message}
-          {lastInviteLink && (
-            <a
-              href={lastInviteLink}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-2 inline-flex items-center gap-1 font-semibold underline"
-            >
-              Open invite <ExternalLink size={12} />
-            </a>
-          )}
         </div>
       )}
 
@@ -547,7 +520,7 @@ export default function Team() {
           <section className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="font-bold text-gray-900">Join a Company</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Paste the invite code or full invite link sent to your email.
+              Paste the invite code or full invite link supplied by the person inviting you.
             </p>
             <input
               value={joinCode}
@@ -713,7 +686,7 @@ export default function Team() {
       </section>
 
       {companyOpen && (
-        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+        <div className="app-modal-overlay fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
           <div className="w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-bold text-gray-900">Create Company Workspace</h2>
@@ -747,7 +720,7 @@ export default function Team() {
       )}
 
       {inviteOpen && (
-        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+        <div className="app-modal-overlay fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
           <div className="w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-bold text-gray-900">Invite Team Member</h2>
@@ -783,7 +756,7 @@ export default function Team() {
                   className={inputClass}
                 />
                 <p className="mt-1.5 text-xs text-gray-400">
-                  Leave blank to generate a secure code automatically. Codes are tied to the invited email and expire.
+                  Leave blank to generate a secure code. The code is tied to the invited email and expires.
                 </p>
               </div>
               <div>
@@ -807,8 +780,7 @@ export default function Team() {
                 </select>
               </div>
               <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                YardPilot tries to email the invite automatically. It always
-                creates a secure link you can copy as a fallback.
+                YardPilot does not send invitations automatically. After creating it, give the person the code or use Copy Link under Pending Invites.
               </div>
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
@@ -816,7 +788,7 @@ export default function Team() {
                 Cancel
               </button>
               <button type="button" onClick={() => void createInvite()} disabled={saving} className="px-4 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
-                Send Invite
+                Create Invite
               </button>
             </div>
           </div>
@@ -824,7 +796,7 @@ export default function Team() {
       )}
 
       {memberOpen && selectedMember && (
-        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+        <div className="app-modal-overlay fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
           <div className="w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
@@ -896,7 +868,7 @@ export default function Team() {
       <CopyToast message={copiedMessage} />
 
       {requestOpen && isEmployee && (
-        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+        <div className="app-modal-overlay fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
           <div className="w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h2 className="font-bold text-gray-900">Propose a Job</h2>
