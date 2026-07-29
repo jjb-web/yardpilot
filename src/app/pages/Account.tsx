@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   Building2,
+  CreditCard,
+  ExternalLink,
   Mail,
   MapPin,
   Phone,
   Save,
   ShieldCheck,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
@@ -19,6 +22,9 @@ export default function Account() {
     workspaceMembers,
     updateProfile,
     updateMyWorkspaceRate,
+    startStripeOnboarding,
+    refreshWorkspaces,
+    deleteAccount,
   } = useApp();
 
   const [form, setForm] = useState({
@@ -34,6 +40,8 @@ export default function Account() {
   const [hourlyRate, setHourlyRate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -55,6 +63,15 @@ export default function Account() {
       membership ? String(membership.hourlyRate || "") : ""
     );
   }, [workspaceMembers, authUserId, activeWorkspace?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("stripe")) return;
+    void refreshWorkspaces().then(() => {
+      setMessage("Stripe payment settings refreshed.");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    });
+  }, []);
 
   const cardClass = "rounded-xl border border-gray-200 bg-white p-5 sm:p-6";
   const inputClass =
@@ -102,6 +119,45 @@ export default function Account() {
       );
     } finally {
       setRateSaving(false);
+    }
+  }
+
+  async function connectStripe() {
+    setError("");
+    setMessage("");
+    setStripeLoading(true);
+    try {
+      const url = await startStripeOnboarding();
+      window.location.assign(url);
+    } catch (stripeError) {
+      setError(
+        stripeError instanceof Error
+          ? stripeError.message
+          : "Stripe onboarding could not be started."
+      );
+      setStripeLoading(false);
+    }
+  }
+
+  async function removeAccount() {
+    const first = window.confirm(
+      "Delete your YardPilot account? This permanently removes your personal workspace and all data you own. Shared workspace memberships will also be removed."
+    );
+    if (!first) return;
+    const typed = window.prompt('Type DELETE to permanently delete your account.');
+    if (typed !== "DELETE") return;
+    setDeletingAccount(true);
+    setError("");
+    try {
+      await deleteAccount();
+      window.location.assign("/");
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "The account could not be deleted."
+      );
+      setDeletingAccount(false);
     }
   }
 
@@ -289,7 +345,53 @@ export default function Account() {
         </div>
       </div>
 
-      <div className={cardClass}>
+      <div className={`${cardClass} mb-5`}>
+        <div className="flex items-center gap-2 mb-1">
+          <CreditCard size={18} className="text-slate-700" />
+          <h2 className="font-bold text-gray-900">Invoice payments</h2>
+        </div>
+        <p className="mb-5 text-sm text-gray-500">
+          Connect Stripe to place a secure Pay button on shared invoices. Only owners and co-owners can change the payout account.
+        </p>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-gray-900">
+                {activeWorkspace?.stripeChargesEnabled && activeWorkspace?.stripePayoutsEnabled
+                  ? "Stripe connected"
+                  : activeWorkspace?.stripeAccountId
+                    ? "Stripe setup incomplete"
+                    : "Stripe not connected"}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                {activeWorkspace?.stripeChargesEnabled && activeWorkspace?.stripePayoutsEnabled
+                  ? "Card payments and payouts are enabled for this workspace."
+                  : "Stripe securely collects business, identity, and bank information during onboarding."}
+              </p>
+            </div>
+            {(role === "owner" || role === "co_owner") && (
+              <button
+                type="button"
+                onClick={() => void connectStripe()}
+                disabled={stripeLoading || activeWorkspace?.isPersonal}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
+              >
+                <ExternalLink size={15} />
+                {stripeLoading
+                  ? "Opening Stripe…"
+                  : activeWorkspace?.stripeAccountId
+                    ? "Continue Stripe Setup"
+                    : "Connect Stripe"}
+              </button>
+            )}
+          </div>
+          {activeWorkspace?.isPersonal && (
+            <p className="mt-3 text-xs text-amber-700">Create or switch to a company/workgroup before enabling payments.</p>
+          )}
+        </div>
+      </div>
+
+      <div className={`${cardClass} mb-5`}>
         <div className="flex items-center gap-2 mb-4">
           <ShieldCheck size={18} className="text-slate-700" />
           <h2 className="font-bold text-gray-900">Workspace access</h2>
@@ -313,6 +415,26 @@ export default function Account() {
               {workspaceMembers.length}
             </p>
           </div>
+        </div>
+      </div>
+
+
+      <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-bold text-red-800">Delete account</h2>
+            <p className="mt-1 text-sm text-red-700">
+              Permanently deletes your authentication account, personal workspace, and data you own. This cannot be undone.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void removeAccount()}
+            disabled={deletingAccount}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            <Trash2 size={15} /> {deletingAccount ? "Deleting…" : "Delete Account"}
+          </button>
         </div>
       </div>
     </div>

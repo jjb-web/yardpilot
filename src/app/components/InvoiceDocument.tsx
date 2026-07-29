@@ -42,13 +42,7 @@ export default function InvoiceDocument({
         laborAssignments: snapshot.laborAssignments,
       })
     : 0;
-  const labor = snapshot?.laborAssignments?.length
-    ? snapshot.laborAssignments.reduce(
-        (sum, assignment) =>
-          sum + Number(assignment.hours) * Number(assignment.hourlyRate),
-        0
-      )
-    : Number(snapshot?.laborHours ?? 0) * Number(snapshot?.laborRate ?? 0);
+  const labor = hours * Number(snapshot?.laborRate ?? 0);
   const subtotal = materials + labor;
   const tax = subtotal * (Number(snapshot?.taxRate ?? 0) / 100);
   const discount = Number(snapshot?.discountAmount ?? 0);
@@ -196,7 +190,7 @@ export default function InvoiceDocument({
             <span>{formatMoney(materials)}</span>
           </div>
           <div className="flex justify-between gap-4 text-gray-600">
-            <span>Combined labor cost</span>
+            <span>Combined labor charge</span>
             <span>{formatMoney(labor)}</span>
           </div>
           {tax > 0 && (

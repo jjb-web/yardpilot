@@ -1,25 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import {
+  Ban,
   CheckCircle2,
-  ChevronRight,
+  Download,
+  Edit3,
+  Eye,
   Mail,
   MessageSquareText,
-  Plus,
   PackageCheck,
+  Plus,
   ReceiptText,
   Search,
+  Share2,
   Trash2,
   X,
 } from "lucide-react";
+import ConfirmDialog from "../components/ConfirmDialog";
+import CopyToast from "../components/CopyToast";
 import { useApp } from "../context/AppContext";
+import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type {
   Invoice,
   InvoiceSnapshot,
   InvoiceStatus,
   Project,
 } from "../data/types";
-import { formatMoney } from "../lib/estimate";
+import { formatMoney, invoiceShareUrl } from "../lib/estimate";
 
 function uid() {
   return (
@@ -47,7 +54,6 @@ type InvoiceDraft = {
   invoiceNumber: string;
   issueDate: string;
   dueDate: string;
-  status: InvoiceStatus;
   amount: string;
   notes: string;
 };
@@ -61,10 +67,23 @@ function blankDraft(): InvoiceDraft {
     invoiceNumber: newInvoiceNumber(),
     issueDate: today.toISOString().slice(0, 10),
     dueDate: addDays(today, 14),
-    status: "draft",
     amount: "",
     notes: "",
   };
+}
+
+function displayStatus(invoice: Invoice): InvoiceStatus {
+  if (invoice.paymentStatus === "paid" || invoice.status === "paid") {
+    return "paid";
+  }
+  if (invoice.status === "void") return "void";
+  if (
+    invoice.status === "sent" &&
+    new Date(`${invoice.dueDate}T23:59:59`).getTime() < Date.now()
+  ) {
+    return "overdue";
+  }
+  return invoice.status;
 }
 
 function statusClasses(status: InvoiceStatus) {
@@ -75,18 +94,9 @@ function statusClasses(status: InvoiceStatus) {
   return "bg-amber-100 text-amber-700";
 }
 
-function computedStatus(invoice: Invoice): InvoiceStatus {
-  if (
-    invoice.status !== "paid" &&
-    invoice.status !== "void" &&
-    new Date(`${invoice.dueDate}T23:59:59`).getTime() < Date.now()
-  ) {
-    return "overdue";
-  }
-  return invoice.status;
-}
-
-function snapshotFromProject(project: Project | undefined): InvoiceSnapshot | null {
+function snapshotFromProject(
+  project: Project | undefined
+): InvoiceSnapshot | null {
   if (!project) return null;
   return {
     estimateNumber: project.estimateNumber,
@@ -107,6 +117,7 @@ function snapshotFromProject(project: Project | undefined): InvoiceSnapshot | nu
     taxRate: project.taxRate,
     discountAmount: project.discountAmount,
     totalEstimate: project.totalEstimate,
+    internalOtherCost: project.internalOtherCost,
     responseName: project.responseName,
     signatureData: project.signatureData,
     acceptedAt: project.acceptedAt,
@@ -126,9 +137,13 @@ export default function Invoices() {
     addInvoice,
     updateInvoice,
     deleteInvoice,
+    setInvoiceSharing,
     completeInvoice,
+    voidInvoice,
+    markInvoicePaid,
   } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { copiedMessage, copyText } = useCopyFeedback();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -139,7 +154,11 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
-  const [completingId, setCompletingId] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "complete" | "void" | "delete";
+    invoice: Invoice;
+  } | null>(null);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -148,7 +167,7 @@ export default function Invoices() {
         if (invoice.archivedAt) return false;
         const project = projects.find((item) => item.id === invoice.projectId);
         const contact = contacts.find((item) => item.id === invoice.contactId);
-        const status = computedStatus(invoice);
+        const status = displayStatus(invoice);
         if (statusFilter !== "all" && status !== statusFilter) return false;
         if (!query) return true;
         return [
@@ -162,12 +181,18 @@ export default function Invoices() {
   }, [invoices, projects, contacts, search, statusFilter]);
 
   const totalOutstanding = invoices
-    .filter((invoice) =>
-      !invoice.archivedAt && !["paid", "void"].includes(computedStatus(invoice))
+    .filter(
+      (invoice) =>
+        !invoice.archivedAt &&
+        !["paid", "void"].includes(displayStatus(invoice))
     )
     .reduce((sum, invoice) => sum + invoice.amount, 0);
+
   const totalPaid = invoices
-    .filter((invoice) => invoice.status === "paid")
+    .filter(
+      (invoice) =>
+        invoice.paymentStatus === "paid" || invoice.status === "paid"
+    )
     .reduce((sum, invoice) => sum + invoice.amount, 0);
 
   const inputClass =
@@ -180,9 +205,9 @@ export default function Invoices() {
     if (!editId || invoicesLoading) return;
     const invoice = invoices.find((item) => item.id === editId);
     if (invoice) openInvoice(invoice);
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("edit");
-    setSearchParams(nextParams, { replace: true });
+    const next = new URLSearchParams(searchParams);
+    next.delete("edit");
+    setSearchParams(next, { replace: true });
   }, [searchParams, invoices, invoicesLoading, setSearchParams]);
 
   function openNew() {
@@ -201,7 +226,6 @@ export default function Invoices() {
       invoiceNumber: invoice.invoiceNumber,
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
-      status: invoice.status,
       amount: String(invoice.amount),
       notes: invoice.notes,
     });
@@ -224,6 +248,7 @@ export default function Invoices() {
       projectId,
       contactId: project?.contactId ?? current.contactId,
       propertyId: project?.propertyId ?? current.propertyId,
+      dueDate: project?.invoiceDueDate || current.dueDate,
       amount: project ? String(project.totalEstimate) : current.amount,
       notes:
         current.notes ||
@@ -239,13 +264,19 @@ export default function Invoices() {
       setModalError("Enter an invoice number.");
       return;
     }
+    if (!draft.dueDate) {
+      setModalError("Choose an invoice due date.");
+      return;
+    }
     if (!authUserId || !activeWorkspaceId) {
       setModalError("Workspace is still loading.");
       return;
     }
+
     setSaving(true);
     const now = new Date().toISOString();
     const linkedProject = projects.find((item) => item.id === draft.projectId);
+
     try {
       if (selected) {
         await updateInvoice({
@@ -256,8 +287,7 @@ export default function Invoices() {
           invoiceNumber: draft.invoiceNumber.trim(),
           issueDate: draft.issueDate,
           dueDate: draft.dueDate,
-          status: draft.status,
-          amount: Number(draft.amount || 0),
+          amount: Math.max(0, Number(draft.amount || 0)),
           notes: draft.notes.trim(),
           estimateSnapshot:
             selected.estimateSnapshot ?? snapshotFromProject(linkedProject),
@@ -274,14 +304,22 @@ export default function Invoices() {
           invoiceNumber: draft.invoiceNumber.trim(),
           issueDate: draft.issueDate,
           dueDate: draft.dueDate,
-          status: draft.status,
-          amount: Number(draft.amount || 0),
+          status: "draft",
+          amount: Math.max(0, Number(draft.amount || 0)),
           notes: draft.notes.trim(),
           estimateSnapshot: snapshotFromProject(linkedProject),
           shareToken: globalThis.crypto.randomUUID(),
           shareEnabled: false,
           sentAt: null,
           viewedAt: null,
+          paymentStatus: "unpaid",
+          paymentMethod: "",
+          stripeCheckoutUrl: null,
+          stripeCheckoutSessionId: null,
+          stripePaymentIntentId: null,
+          paidAt: null,
+          completedAt: null,
+          voidedAt: null,
           archivedAt: null,
           createdAt: now,
           updatedAt: now,
@@ -299,55 +337,89 @@ export default function Invoices() {
     }
   }
 
-  async function markPaid(invoice: Invoice) {
-    await updateInvoice({
-      ...invoice,
-      status: "paid",
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function removeInvoice(invoice: Invoice) {
-    if (!window.confirm(`Delete ${invoice.invoiceNumber}?`)) return;
+  async function shareInvoice(invoice: Invoice) {
+    setActionMessage("");
     try {
-      await deleteInvoice(invoice.id);
+      const shared =
+        invoice.shareEnabled && invoice.status !== "draft"
+          ? invoice
+          : await setInvoiceSharing(invoice.id, true);
+      const url = invoiceShareUrl(shared.shareToken);
+      if (navigator.share) {
+        await navigator.share({
+          title: `${shared.invoiceNumber} - Invoice`,
+          text: `Invoice ${shared.invoiceNumber} for ${formatMoney(
+            shared.amount
+          )}`,
+          url,
+        });
+      } else {
+        await copyText(url, "Invoice link copied");
+      }
+      setActionMessage(`${shared.invoiceNumber} is marked Sent.`);
     } catch (error) {
-      setModalError(
-        error instanceof Error ? error.message : "The invoice could not be deleted."
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setActionMessage(
+        error instanceof Error ? error.message : "Could not share the invoice."
       );
     }
   }
 
-  async function finishInvoice(invoice: Invoice) {
-    const finalStatus = computedStatus(invoice);
-    const confirmed = window.confirm(
-      `Complete ${invoice.invoiceNumber}? It will leave the active invoice list and appear on its Past Job as Archived · ${finalStatus}.`
-    );
-    if (!confirmed) return;
-
+  async function markPaid(invoice: Invoice) {
+    setBusyId(invoice.id);
     setActionMessage("");
-    setCompletingId(invoice.id);
     try {
-      await completeInvoice(invoice.id);
+      await markInvoicePaid(invoice.id, "offline");
       setActionMessage(
-        `${invoice.invoiceNumber} archived with status ${finalStatus}.`
+        `${invoice.invoiceNumber} was marked paid, completed, and archived.`
       );
     } catch (error) {
       setActionMessage(
-        error instanceof Error ? error.message : "The invoice could not be completed."
+        error instanceof Error
+          ? error.message
+          : "Could not mark the invoice paid."
       );
     } finally {
-      setCompletingId("");
+      setBusyId("");
+    }
+  }
+
+  async function runConfirmedAction() {
+    if (!confirmAction) return;
+    const { type, invoice } = confirmAction;
+    setBusyId(invoice.id);
+    setActionMessage("");
+    try {
+      if (type === "delete") {
+        await deleteInvoice(invoice.id);
+        setActionMessage(`${invoice.invoiceNumber} was deleted.`);
+      } else if (type === "void") {
+        await voidInvoice(invoice.id);
+        setActionMessage(`${invoice.invoiceNumber} was voided and archived.`);
+      } else {
+        await completeInvoice(invoice.id);
+        setActionMessage(
+          `${invoice.invoiceNumber} was completed and attached to its Past Job.`
+        );
+      }
+      setConfirmAction(null);
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error ? error.message : "The invoice action failed."
+      );
+    } finally {
+      setBusyId("");
     }
   }
 
   function reminder(invoice: Invoice, channel: "email" | "sms") {
     const contact = contacts.find((item) => item.id === invoice.contactId);
-    const message = `Reminder: invoice ${invoice.invoiceNumber} for ${formatMoney(
-      invoice.amount
-    )} is due ${new Date(`${invoice.dueDate}T12:00:00`).toLocaleDateString(
-      "en-US"
-    )}.`;
+    const message = `Reminder: invoice ${
+      invoice.invoiceNumber
+    } for ${formatMoney(invoice.amount)} is due ${new Date(
+      `${invoice.dueDate}T12:00:00`
+    ).toLocaleDateString("en-US")}.`;
+
     if (channel === "email") {
       window.location.href = `mailto:${encodeURIComponent(
         contact?.email ?? ""
@@ -367,7 +439,8 @@ export default function Invoices() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Completing a job automatically creates a final invoice from the agreed estimate.
+            Completed jobs create draft invoices automatically. Sharing marks
+            them Sent; payment or manual actions close them.
           </p>
         </div>
         <button
@@ -451,18 +524,24 @@ export default function Invoices() {
       ) : (
         <div className="space-y-3">
           {filtered.map((invoice) => {
-            const project = projects.find((item) => item.id === invoice.projectId);
-            const contact = contacts.find((item) => item.id === invoice.contactId);
-            const status = computedStatus(invoice);
+            const project = projects.find(
+              (item) => item.id === invoice.projectId
+            );
+            const contact = contacts.find(
+              (item) => item.id === invoice.contactId
+            );
+            const status = displayStatus(invoice);
+            const isBusy = busyId === invoice.id;
+
             return (
-              <div
+              <article
                 key={invoice.id}
                 className="rounded-xl border border-gray-200 bg-white p-5"
               >
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                   <Link
                     to={`/app/invoices/${invoice.id}`}
-                    className="min-w-[220px] flex-1 group"
+                    className="min-w-0 flex-1 group"
                   >
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       <p className="font-bold text-gray-900 group-hover:text-slate-700">
@@ -475,43 +554,81 @@ export default function Invoices() {
                       >
                         {status}
                       </span>
+                      {invoice.paymentMethod && status === "paid" && (
+                        <span className="text-xs text-gray-400 capitalize">
+                          via {invoice.paymentMethod}
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-500">
-                      {contact?.name || invoice.estimateSnapshot?.client || "No customer"}
+                      {contact?.name ||
+                        invoice.estimateSnapshot?.client ||
+                        "No customer"}
                       {project?.name || invoice.estimateSnapshot?.name
-                        ? ` · ${project?.name || invoice.estimateSnapshot?.name}`
+                        ? ` · ${
+                            project?.name || invoice.estimateSnapshot?.name
+                          }`
                         : ""}
                     </p>
                     <p className="mt-1 text-xs text-gray-400">
-                      Due {new Date(`${invoice.dueDate}T12:00:00`).toLocaleDateString("en-US")}
+                      Due{" "}
+                      {new Date(
+                        `${invoice.dueDate}T12:00:00`
+                      ).toLocaleDateString("en-US")}
+                      {invoice.viewedAt ? " · Viewed by client" : ""}
                     </p>
                   </Link>
 
-                  <div className="text-right">
-                    <p className="font-bold text-gray-900">
+                  <div className="shrink-0 lg:text-right">
+                    <p className="text-lg font-bold text-gray-900">
                       {formatMoney(invoice.amount)}
                     </p>
-                    {invoice.viewedAt && (
-                      <p className="mt-1 text-xs text-gray-400">Viewed by client</p>
-                    )}
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    {contact?.email && status !== "paid" && (
+                  <div className="flex flex-wrap items-center gap-2 lg:max-w-[520px] lg:justify-end">
+                    <Link
+                      to={`/app/invoices/${invoice.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      <Eye size={14} /> View
+                    </Link>
+                    <Link
+                      to={`/app/invoices/${invoice.id}?print=1`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      <Download size={14} /> PDF
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => void shareInvoice(invoice)}
+                      disabled={isBusy || status === "void"}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <Share2 size={14} /> Share
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openInvoice(invoice)}
+                      disabled={isBusy || status === "paid" || status === "void"}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <Edit3 size={14} /> Edit
+                    </button>
+                    {contact?.email && status !== "paid" && status !== "void" && (
                       <button
                         type="button"
                         onClick={() => reminder(invoice, "email")}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
                         aria-label="Email reminder"
                       >
                         <Mail size={16} />
                       </button>
                     )}
-                    {contact?.phone && status !== "paid" && (
+                    {contact?.phone && status !== "paid" && status !== "void" && (
                       <button
                         type="button"
                         onClick={() => reminder(invoice, "sms")}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
                         aria-label="Text reminder"
                       >
                         <MessageSquareText size={16} />
@@ -521,38 +638,47 @@ export default function Invoices() {
                       <button
                         type="button"
                         onClick={() => void markPaid(invoice)}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer"
-                        aria-label="Mark paid"
+                        disabled={isBusy}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                       >
-                        <CheckCircle2 size={17} />
+                        <CheckCircle2 size={14} /> Paid offline
+                      </button>
+                    )}
+                    {status !== "void" && status !== "paid" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfirmAction({ type: "void", invoice })
+                        }
+                        disabled={isBusy}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                      >
+                        <Ban size={14} /> Void
                       </button>
                     )}
                     <button
                       type="button"
-                      onClick={() => void finishInvoice(invoice)}
-                      disabled={Boolean(completingId)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+                      onClick={() =>
+                        setConfirmAction({ type: "complete", invoice })
+                      }
+                      disabled={isBusy}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
-                      <PackageCheck size={16} />
-                      {completingId === invoice.id ? "Completing…" : "Complete"}
+                      <PackageCheck size={14} /> Complete
                     </button>
                     <button
                       type="button"
-                      onClick={() => openInvoice(invoice)}
-                      className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 cursor-pointer"
+                      onClick={() =>
+                        setConfirmAction({ type: "delete", invoice })
+                      }
+                      disabled={isBusy}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
                     >
-                      Edit
+                      <Trash2 size={14} /> Delete
                     </button>
-                    <Link
-                      to={`/app/invoices/${invoice.id}`}
-                      className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
-                      aria-label="Open invoice"
-                    >
-                      <ChevronRight size={18} />
-                    </Link>
                   </div>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
@@ -567,7 +693,8 @@ export default function Invoices() {
                   {selected ? `Edit ${selected.invoiceNumber}` : "New Invoice"}
                 </h2>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  A completed job already creates this automatically; manual invoices remain available when needed.
+                  Status is automatic: Draft when created, Sent when shared,
+                  Overdue after its due date, and Paid after payment.
                 </p>
               </div>
               <button
@@ -616,22 +743,11 @@ export default function Invoices() {
                 </div>
                 <div>
                   <label className={labelClass}>Status</label>
-                  <select
-                    value={draft.status}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        status: event.target.value as InvoiceStatus,
-                      }))
-                    }
-                    className={inputClass}
+                  <div
+                    className={`${inputClass} flex items-center bg-gray-50 capitalize text-gray-600`}
                   >
-                    <option value="draft">Draft</option>
-                    <option value="sent">Sent</option>
-                    <option value="paid">Paid</option>
-                    <option value="overdue">Overdue</option>
-                    <option value="void">Void</option>
-                  </select>
+                    {selected ? displayStatus(selected) : "draft"}
+                  </div>
                 </div>
                 <div>
                   <label className={labelClass}>Issue Date</label>
@@ -639,7 +755,10 @@ export default function Invoices() {
                     type="date"
                     value={draft.issueDate}
                     onChange={(event) =>
-                      setDraft((current) => ({ ...current, issueDate: event.target.value }))
+                      setDraft((current) => ({
+                        ...current,
+                        issueDate: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
@@ -650,7 +769,10 @@ export default function Invoices() {
                     type="date"
                     value={draft.dueDate}
                     onChange={(event) =>
-                      setDraft((current) => ({ ...current, dueDate: event.target.value }))
+                      setDraft((current) => ({
+                        ...current,
+                        dueDate: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
@@ -662,7 +784,10 @@ export default function Invoices() {
                     inputMode="decimal"
                     value={draft.amount}
                     onChange={(event) =>
-                      setDraft((current) => ({ ...current, amount: event.target.value }))
+                      setDraft((current) => ({
+                        ...current,
+                        amount: event.target.value,
+                      }))
                     }
                     placeholder="0.00"
                     className={inputClass}
@@ -673,7 +798,10 @@ export default function Invoices() {
                   <select
                     value={draft.contactId}
                     onChange={(event) =>
-                      setDraft((current) => ({ ...current, contactId: event.target.value }))
+                      setDraft((current) => ({
+                        ...current,
+                        contactId: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   >
@@ -690,7 +818,10 @@ export default function Invoices() {
                   <select
                     value={draft.propertyId}
                     onChange={(event) =>
-                      setDraft((current) => ({ ...current, propertyId: event.target.value }))
+                      setDraft((current) => ({
+                        ...current,
+                        propertyId: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   >
@@ -698,7 +829,8 @@ export default function Invoices() {
                     {properties
                       .filter(
                         (property) =>
-                          !draft.contactId || property.contactId === draft.contactId
+                          !draft.contactId ||
+                          property.contactId === draft.contactId
                       )
                       .map((property) => (
                         <option key={property.id} value={property.id}>
@@ -713,7 +845,10 @@ export default function Invoices() {
                     rows={5}
                     value={draft.notes}
                     onChange={(event) =>
-                      setDraft((current) => ({ ...current, notes: event.target.value }))
+                      setDraft((current) => ({
+                        ...current,
+                        notes: event.target.value,
+                      }))
                     }
                     className={inputClass}
                   />
@@ -721,39 +856,62 @@ export default function Invoices() {
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
-              <div>
-                {selected && (
-                  <button
-                    type="button"
-                    onClick={() => void removeInvoice(selected)}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-red-600 cursor-pointer"
-                  >
-                    <Trash2 size={15} /> Delete Invoice
-                  </button>
-                )}
-              </div>
-              <div className="flex w-full gap-2 sm:w-auto">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 sm:flex-none cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void saveInvoice()}
-                  disabled={saving}
-                  className="flex-1 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:flex-none cursor-pointer"
-                >
-                  {saving ? "Saving…" : selected ? "Update & Close" : "Create & Close"}
-                </button>
-              </div>
+            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 bg-white px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-end sm:px-6 sm:py-4">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveInvoice()}
+                disabled={saving}
+                className="rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 cursor-pointer"
+              >
+                {saving
+                  ? "Saving…"
+                  : selected
+                    ? "Update & Close"
+                    : "Create & Close"}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={
+          confirmAction?.type === "delete"
+            ? `Delete ${confirmAction.invoice.invoiceNumber}?`
+            : confirmAction?.type === "void"
+              ? `Void ${confirmAction?.invoice.invoiceNumber}?`
+              : `Complete ${confirmAction?.invoice.invoiceNumber}?`
+        }
+        description={
+          confirmAction?.type === "delete"
+            ? "This permanently deletes the invoice record and cannot be undone."
+            : confirmAction?.type === "void"
+              ? "The payment link will be disabled. The invoice will be preserved as Void and archived beside its Past Job."
+              : "The invoice will leave the active list and remain attached to its Past Job. Completing an unpaid invoice does not falsely mark it paid."
+        }
+        confirmLabel={
+          confirmAction?.type === "delete"
+            ? "Delete Invoice"
+            : confirmAction?.type === "void"
+              ? "Void Invoice"
+              : "Complete Invoice"
+        }
+        destructive={
+          confirmAction?.type === "delete" || confirmAction?.type === "void"
+        }
+        busy={Boolean(busyId)}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void runConfirmedAction()}
+      />
+      <CopyToast message={copiedMessage} />
     </div>
   );
 }

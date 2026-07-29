@@ -37,15 +37,9 @@ export async function generateEstimate(
         0
       )
     : Number(project.laborHours || 0);
-  const labor = laborAssignments.length
-    ? laborAssignments.reduce(
-        (sum, assignment) =>
-          sum +
-          Number(assignment.hours || 0) *
-            Number(assignment.hourlyRate || 0),
-        0
-      )
-    : combinedHours * Number(project.laborRate || 0);
+  // Individual assignment rates are internal payroll costs. The customer-facing
+  // labor charge uses the estimate's combined billable crew rate.
+  const labor = combinedHours * Number(project.laborRate || 0);
 
   const subtotal = materials + labor;
   const tax = subtotal * (Number(project.taxRate || 0) / 100);
@@ -143,7 +137,7 @@ export async function generateEstimate(
   return [
     workSummary,
     clientLine,
-    `The current cost breakdown includes ${sentenceList(breakdown)}, producing an estimated total of ${money(total)}.`,
+    `The current price breakdown includes ${sentenceList(breakdown)}, producing an estimated total of ${money(total)}.`,
     driver,
     priceContext,
     pricingMethod,

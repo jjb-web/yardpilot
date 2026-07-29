@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -131,6 +131,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
 
   const visibleNav = useMemo(
     () => nav.filter((item) => role && item.roles.includes(role)),
@@ -146,6 +147,10 @@ export default function AppLayout() {
     document.body.classList.add("yardpilot-app-open");
     return () => document.body.classList.remove("yardpilot-app-open");
   }, []);
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [location.pathname]);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -338,11 +343,11 @@ export default function AppLayout() {
             className="flex items-center gap-1.5 px-4 py-2 bg-[#71877a] text-white text-sm font-semibold rounded-lg hover:bg-[#607568]"
           >
             <PlusCircle size={15} />
-            {role === "employee" ? "Submit Job Request" : "New Estimate"}
+            {role === "employee" ? "Propose Estimate" : "New Estimate"}
           </Link>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <main ref={mainScrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <Outlet />
         </main>
       </div>

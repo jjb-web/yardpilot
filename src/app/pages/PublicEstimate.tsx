@@ -51,6 +51,7 @@ function mapLineItems(value: unknown): LineItem[] {
       qty: numberValue(row.qty),
       unit: text(row.unit) || "each",
       unitCost: numberValue(row.unitCost),
+      internalCost: 0,
     };
   });
 }
@@ -72,6 +73,7 @@ function mapProject(row: Record<string, unknown>): Project {
     estimateNumber: text(row.estimate_number),
     issueDate: text(row.issue_date),
     validUntil: text(row.valid_until) || null,
+    invoiceDueDate: text(row.invoice_due_date) || null,
     projectType: text(row.project_type),
     billingMethod: (text(row.billing_method) || "fixed") as Project["billingMethod"],
     squareFootage: numberValue(row.square_footage),
@@ -86,6 +88,7 @@ function mapProject(row: Record<string, unknown>): Project {
     taxRate: numberValue(row.tax_rate),
     discountAmount: numberValue(row.discount_amount),
     totalEstimate: numberValue(row.total_estimate),
+    internalOtherCost: 0,
     notes: "",
     shareToken: text(row.share_token),
     shareEnabled: true,

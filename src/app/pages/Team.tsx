@@ -5,6 +5,7 @@ import {
   Clipboard,
   Copy,
   Edit3,
+  LogOut,
   Mail,
   Plus,
   ShieldCheck,
@@ -62,6 +63,7 @@ export default function Team() {
     acceptWorkspaceInvite,
     updateWorkspaceMember,
     removeWorkspaceMember,
+    leaveWorkspace,
     addJobRequest,
     approveJobRequest,
     declineJobRequest,
@@ -98,6 +100,8 @@ export default function Team() {
     title: "",
     client: "",
     address: "",
+    city: "",
+    projectType: "Other job type",
     scopeDescription: "",
     proposedStart: "",
   });
@@ -328,6 +332,8 @@ export default function Team() {
         title: requestDraft.title.trim(),
         client: requestDraft.client.trim(),
         address: requestDraft.address.trim(),
+        city: requestDraft.city.trim(),
+        projectType: requestDraft.projectType.trim() || "Other job type",
         scopeDescription: requestDraft.scopeDescription.trim(),
         proposedStart: requestDraft.proposedStart
           ? new Date(requestDraft.proposedStart).toISOString()
@@ -343,15 +349,17 @@ export default function Team() {
         title: "",
         client: "",
         address: "",
+        city: "",
+        projectType: "Other job type",
         scopeDescription: "",
         proposedStart: "",
       });
-      setMessage("Job proposal sent for approval.");
+      setMessage("Estimate proposal sent for approval.");
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Could not create job request."
+          : "Could not create estimate proposal."
       );
     } finally {
       setSaving(false);
@@ -362,12 +370,12 @@ export default function Team() {
     setError("");
     try {
       await approveJobRequest(request.id);
-      setMessage(`${request.title} was approved and added as a job.`);
+      setMessage(`${request.title} was approved and added as a draft estimate.`);
     } catch (approvalError) {
       setError(
         approvalError instanceof Error
           ? approvalError.message
-          : "Could not approve job request."
+          : "Could not approve estimate proposal."
       );
     }
   }
@@ -387,7 +395,7 @@ export default function Team() {
   }
 
   async function removeRequest(request: JobRequest) {
-    if (!window.confirm("Delete this job proposal?")) return;
+    if (!window.confirm("Delete this estimate proposal?")) return;
     try {
       await deleteJobRequest(request.id);
     } catch (deleteError) {
@@ -396,6 +404,29 @@ export default function Team() {
           ? deleteError.message
           : "Could not delete request."
       );
+    }
+  }
+
+  async function leaveActiveWorkspace() {
+    if (!activeWorkspace || activeWorkspace.isPersonal) return;
+    const warning =
+      role === "owner"
+        ? `Leave ${activeWorkspace.name}? If you are the only member, the workspace and its data will be deleted. If other members remain, another co-owner must be available to become owner.`
+        : `Leave ${activeWorkspace.name}? You will immediately lose access to its contacts, estimates, jobs, invoices, and schedule.`;
+    if (!window.confirm(warning)) return;
+    setSaving(true);
+    setError("");
+    try {
+      await leaveWorkspace(activeWorkspace.id);
+      setMessage(`You left ${activeWorkspace.name}.`);
+    } catch (leaveError) {
+      setError(
+        leaveError instanceof Error
+          ? leaveError.message
+          : "Could not leave the workspace."
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -430,7 +461,7 @@ export default function Team() {
               onClick={() => setRequestOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 cursor-pointer"
             >
-              <Clipboard size={16} /> Propose Job
+              <Clipboard size={16} /> Propose Estimate
             </button>
           )}
           {canInvite && activeWorkspace?.kind !== "personal" && (
@@ -545,8 +576,18 @@ export default function Team() {
               <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
                 {activeWorkspace.isPersonal
                   ? "Private personal workspace"
-                  : `Company workspace · ${roleLabel(activeWorkspace.role)}`}
+                  : `${activeWorkspace.kind === "workgroup" ? "Workgroup" : "Company workspace"} · ${roleLabel(activeWorkspace.role)}`}
               </div>
+            )}
+            {activeWorkspace && !activeWorkspace.isPersonal && (
+              <button
+                type="button"
+                onClick={() => void leaveActiveWorkspace()}
+                disabled={saving}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                <LogOut size={15} /> Leave Workspace
+              </button>
             )}
           </section>
 
@@ -624,10 +665,9 @@ export default function Team() {
       <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h2 className="font-bold text-gray-900">Job Proposals</h2>
+            <h2 className="font-bold text-gray-900">Estimate Proposals</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Employees can propose work. Managers approve it before it becomes
-              a real job.
+              Employees can propose an estimate. Owners, co-owners, or managers approve it before it enters the normal estimate lifecycle.
             </p>
           </div>
           <span className="text-sm text-gray-400">
@@ -641,7 +681,7 @@ export default function Team() {
           </div>
         ) : jobRequests.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-gray-400">
-            No job proposals yet.
+            No estimate proposals yet.
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -937,14 +977,14 @@ export default function Team() {
         <div className="app-modal-overlay fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
           <div className="w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h2 className="font-bold text-gray-900">Propose a Job</h2>
+              <h2 className="font-bold text-gray-900">Propose an Estimate</h2>
               <button type="button" onClick={() => setRequestOpen(false)} className="text-gray-400 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
             <div className="p-5 sm:p-6 grid min-h-0 flex-1 sm:grid-cols-2 gap-4 overflow-y-auto overscroll-contain">
               <div className="sm:col-span-2">
-                <label className={labelClass}>Job Title</label>
+                <label className={labelClass}>Estimate / Project Title</label>
                 <input value={requestDraft.title} onChange={(event) => setRequestDraft((current) => ({ ...current, title: event.target.value }))} className={inputClass} />
               </div>
               <div>
@@ -959,6 +999,14 @@ export default function Team() {
                 <label className={labelClass}>Address</label>
                 <input value={requestDraft.address} onChange={(event) => setRequestDraft((current) => ({ ...current, address: event.target.value }))} className={inputClass} />
               </div>
+              <div>
+                <label className={labelClass}>City</label>
+                <input value={requestDraft.city} onChange={(event) => setRequestDraft((current) => ({ ...current, city: event.target.value }))} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Job Type</label>
+                <input value={requestDraft.projectType} onChange={(event) => setRequestDraft((current) => ({ ...current, projectType: event.target.value }))} placeholder="Lawn maintenance, cleanup, other…" className={inputClass} />
+              </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>Scope / Description</label>
                 <textarea rows={4} value={requestDraft.scopeDescription} onChange={(event) => setRequestDraft((current) => ({ ...current, scopeDescription: event.target.value }))} className={inputClass} />
@@ -966,7 +1014,7 @@ export default function Team() {
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2 shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <button type="button" onClick={() => setRequestOpen(false)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button>
-              <button type="button" onClick={() => void createJobRequest()} disabled={saving} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">Send Proposal</button>
+              <button type="button" onClick={() => void createJobRequest()} disabled={saving} className="px-4 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">Send Estimate Proposal</button>
             </div>
           </div>
         </div>

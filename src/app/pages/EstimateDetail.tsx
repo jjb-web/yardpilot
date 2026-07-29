@@ -30,6 +30,10 @@ export default function EstimateDetail() {
   const photos = propertyPhotos.filter((item) => item.propertyId === property?.id);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [id]);
+
+  useEffect(() => {
     if (!project || searchParams.get("print") !== "1") return;
     const timer = window.setTimeout(() => window.print(), 450);
     return () => window.clearTimeout(timer);
@@ -162,6 +166,15 @@ export default function EstimateDetail() {
         property={property}
         photos={photos}
       />
+
+      <div className="no-print mt-6 flex justify-center">
+        <Link
+          to="/app/estimates"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          <ArrowLeft size={16} /> Back to estimates
+        </Link>
+      </div>
       <CopyToast message={copiedMessage} />
     </div>
   );

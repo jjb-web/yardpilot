@@ -20,6 +20,7 @@ import type {
   Invoice,
   InvoiceSnapshot,
   InvoiceStatus,
+  InvoicePaymentStatus,
   JobRequest,
   JobRequestStatus,
   LaborAssignment,
@@ -105,6 +106,9 @@ type AppContextType = {
     hourlyRate: number
   ) => Promise<void>;
   removeWorkspaceMember: (membershipId: string) => Promise<void>;
+  leaveWorkspace: (workspaceId: string) => Promise<void>;
+  startStripeOnboarding: () => Promise<string>;
+  deleteAccount: () => Promise<void>;
   updateMyWorkspaceRate: (
     positionTitle: string,
     hourlyRate: number
@@ -117,6 +121,7 @@ type AppContextType = {
   setProjectSharing: (id: string, enabled: boolean) => Promise<Project>;
   assignSelfToProject: (projectId: string) => Promise<void>;
   completeProject: (projectId: string) => Promise<string>;
+  bulkDeleteProjects: (projectIds: string[]) => Promise<void>;
 
   refreshContacts: () => Promise<void>;
   addContact: (contact: Contact) => Promise<Contact>;
@@ -140,6 +145,8 @@ type AppContextType = {
   deleteInvoice: (id: string) => Promise<void>;
   setInvoiceSharing: (id: string, enabled: boolean) => Promise<Invoice>;
   completeInvoice: (id: string) => Promise<void>;
+  voidInvoice: (id: string) => Promise<void>;
+  markInvoicePaid: (id: string, method?: string) => Promise<void>;
 
   refreshSchedule: () => Promise<void>;
   addScheduleEvent: (event: ScheduleEvent) => Promise<ScheduleEvent>;
@@ -176,6 +183,10 @@ type WorkspaceRow = {
   is_personal: boolean;
   created_by: string;
   role: WorkspaceRole;
+  stripe_account_id: string | null;
+  stripe_onboarding_complete: boolean | null;
+  stripe_charges_enabled: boolean | null;
+  stripe_payouts_enabled: boolean | null;
   created_at: string;
 };
 
@@ -221,6 +232,7 @@ type ProjectRow = {
   estimate_number: string;
   issue_date: string;
   valid_until: string | null;
+  invoice_due_date: string | null;
   project_type: string;
   billing_method: ProjectBillingMethod | null;
   square_footage: number | string;
@@ -234,6 +246,7 @@ type ProjectRow = {
   tax_rate: number | string;
   discount_amount: number | string;
   total_estimate: number | string;
+  internal_other_cost: number | string | null;
   notes: string;
   share_token: string;
   share_enabled: boolean;
@@ -324,6 +337,14 @@ type InvoiceRow = {
   share_enabled: boolean;
   sent_at: string | null;
   viewed_at: string | null;
+  payment_status: InvoicePaymentStatus | null;
+  payment_method: string | null;
+  stripe_checkout_url: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  paid_at: string | null;
+  completed_at: string | null;
+  voided_at: string | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -375,6 +396,8 @@ type JobRequestRow = {
   title: string;
   client: string;
   address: string;
+  city: string | null;
+  project_type: string | null;
   scope_description: string;
   proposed_start: string | null;
   status: JobRequestStatus;
@@ -439,6 +462,7 @@ function normalizeLineItems(value: unknown): LineItem[] {
       unit:
         typeof candidate.unit === "string" ? candidate.unit : "each",
       unitCost: Number(candidate.unitCost ?? 0),
+      internalCost: Number(candidate.internalCost ?? 0),
     };
   });
 }
@@ -452,6 +476,10 @@ function rowToWorkspace(row: WorkspaceRow): Workspace {
     isPersonal: Boolean(row.is_personal),
     createdBy: row.created_by,
     role: row.role,
+    stripeAccountId: row.stripe_account_id ?? null,
+    stripeOnboardingComplete: Boolean(row.stripe_onboarding_complete),
+    stripeChargesEnabled: Boolean(row.stripe_charges_enabled),
+    stripePayoutsEnabled: Boolean(row.stripe_payouts_enabled),
     createdAt: row.created_at,
   };
 }
@@ -507,6 +535,7 @@ function rowToProject(
     estimateNumber: row.estimate_number ?? `EST-${row.id.slice(0, 8)}`,
     issueDate: row.issue_date ?? row.created_at.slice(0, 10),
     validUntil: row.valid_until,
+    invoiceDueDate: row.invoice_due_date ?? null,
     projectType: row.project_type,
     billingMethod: row.billing_method ?? "fixed",
     squareFootage: Number(row.square_footage),
@@ -521,6 +550,7 @@ function rowToProject(
     taxRate: Number(row.tax_rate ?? 0),
     discountAmount: Number(row.discount_amount ?? 0),
     totalEstimate: Number(row.total_estimate ?? 0),
+    internalOtherCost: Number(row.internal_other_cost ?? 0),
     notes: row.notes ?? "",
     shareToken: row.share_token,
     shareEnabled: Boolean(row.share_enabled),
@@ -628,6 +658,7 @@ function normalizeInvoiceSnapshot(value: unknown): InvoiceSnapshot | null {
     taxRate: Number(candidate.tax_rate ?? candidate.taxRate ?? 0),
     discountAmount: Number(candidate.discount_amount ?? candidate.discountAmount ?? 0),
     totalEstimate: Number(candidate.total_estimate ?? candidate.totalEstimate ?? 0),
+    internalOtherCost: Number(candidate.internal_other_cost ?? candidate.internalOtherCost ?? 0),
     responseName: String(candidate.response_name ?? candidate.responseName ?? ""),
     signatureData: String(candidate.signature_data ?? candidate.signatureData ?? ""),
     acceptedAt:
@@ -656,6 +687,14 @@ function rowToInvoice(row: InvoiceRow): Invoice {
     shareEnabled: Boolean(row.share_enabled),
     sentAt: row.sent_at,
     viewedAt: row.viewed_at,
+    paymentStatus: row.payment_status ?? (row.status === "paid" ? "paid" : "unpaid"),
+    paymentMethod: row.payment_method ?? "",
+    stripeCheckoutUrl: row.stripe_checkout_url ?? null,
+    stripeCheckoutSessionId: row.stripe_checkout_session_id ?? null,
+    stripePaymentIntentId: row.stripe_payment_intent_id ?? null,
+    paidAt: row.paid_at ?? null,
+    completedAt: row.completed_at ?? null,
+    voidedAt: row.voided_at ?? null,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -719,6 +758,8 @@ function rowToJobRequest(
     title: row.title,
     client: row.client,
     address: row.address,
+    city: row.city ?? "",
+    projectType: row.project_type ?? "Other job type",
     scopeDescription: row.scope_description,
     proposedStart: row.proposed_start,
     status: row.status,
@@ -845,6 +886,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function ensureManager() {
     if (role !== "owner" && role !== "co_owner" && role !== "manager") {
       throw new Error("Only an owner, co-owner, or manager can do that.");
+    }
+  }
+
+  function ensureAdmin() {
+    if (role !== "owner" && role !== "co_owner") {
+      throw new Error("Only an owner or co-owner can manage payment settings.");
     }
   }
 
@@ -1172,6 +1219,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }, 0);
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "invoices",
+          filter: `workspace_id=eq.${activeWorkspaceId}`,
+        },
+        () => {
+          window.setTimeout(() => {
+            void refreshCurrentBundle();
+          }, 0);
+        }
+      )
       .subscribe();
 
     return () => {
@@ -1425,16 +1486,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function removeWorkspaceMember(membershipId: string) {
     ensureManager();
-    const workspaceId = currentWorkspaceOrThrow();
-    const { error } = await supabase
-      .from("workspace_memberships")
-      .delete()
-      .eq("id", membershipId)
-      .eq("workspace_id", workspaceId);
+    const { error } = await supabase.rpc("remove_workspace_member", {
+      requested_membership_id: membershipId,
+    });
     if (error) throw new Error(error.message);
     setWorkspaceMembers((previous) =>
       previous.filter((member) => member.id !== membershipId)
     );
+  }
+
+  async function leaveWorkspace(workspaceId: string) {
+    const { error } = await supabase.rpc("leave_workspace", {
+      requested_workspace_id: workspaceId,
+    });
+    if (error) throw new Error(error.message);
+
+    const remaining = workspaces.filter((workspace) => workspace.id !== workspaceId);
+    setWorkspaces(remaining);
+    const next = remaining.find((workspace) => workspace.isPersonal) ?? remaining[0] ?? null;
+    if (next) {
+      await switchWorkspace(next.id);
+    } else {
+      setActiveWorkspaceId(null);
+      clearWorkspaceData();
+    }
+  }
+
+  async function startStripeOnboarding() {
+    ensureAdmin();
+    const { data, error } = await supabase.functions.invoke("stripe-connect-account", {
+      body: {
+        workspaceId: currentWorkspaceOrThrow(),
+        returnUrl: `${window.location.origin}/app/account?stripe=return`,
+        refreshUrl: `${window.location.origin}/app/account?stripe=refresh`,
+      },
+    });
+    if (error) throw new Error(error.message);
+    const url = typeof data?.url === "string" ? data.url : "";
+    if (!url) throw new Error("Stripe did not return an onboarding link.");
+    return url;
+  }
+
+  async function deleteAccount() {
+    const { error } = await supabase.functions.invoke("delete-account", {
+      body: { confirmation: "DELETE" },
+    });
+    if (error) throw new Error(error.message);
+    clearAccount();
   }
 
   function projectToDatabase(project: Project) {
@@ -1454,6 +1552,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       estimate_number: project.estimateNumber,
       issue_date: project.issueDate,
       valid_until: project.validUntil || null,
+      invoice_due_date: project.invoiceDueDate || null,
       project_type: project.projectType,
       billing_method: project.billingMethod,
       square_footage: project.squareFootage,
@@ -1467,6 +1566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tax_rate: project.taxRate,
       discount_amount: project.discountAmount,
       total_estimate: project.totalEstimate,
+      internal_other_cost: project.internalOtherCost,
       notes: project.notes,
       share_token: project.shareToken,
       share_enabled: project.shareEnabled,
@@ -1636,6 +1736,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
     await Promise.all([refreshProjects(), refreshInvoices(), refreshSchedule()]);
     return String(data);
+  }
+
+  async function bulkDeleteProjects(projectIds: string[]) {
+    ensureManager();
+    if (!projectIds.length) return;
+    const { error } = await supabase.rpc("bulk_delete_projects", {
+      requested_project_ids: projectIds,
+    });
+    if (error) throw new Error(error.message);
+    const selected = new Set(projectIds);
+    setProjects((previous) => previous.filter((project) => !selected.has(project.id)));
+    setInvoices((previous) =>
+      previous.filter((invoice) => !invoice.projectId || !selected.has(invoice.projectId))
+    );
+    await Promise.all([refreshSchedule(), refreshFollowUps()]);
   }
 
   async function refreshContacts() {
@@ -1879,6 +1994,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       share_enabled: invoice.shareEnabled,
       sent_at: invoice.sentAt,
       viewed_at: invoice.viewedAt,
+      payment_status: invoice.paymentStatus,
+      payment_method: invoice.paymentMethod,
+      stripe_checkout_url: invoice.stripeCheckoutUrl,
+      stripe_checkout_session_id: invoice.stripeCheckoutSessionId,
+      stripe_payment_intent_id: invoice.stripePaymentIntentId,
+      paid_at: invoice.paidAt,
+      completed_at: invoice.completedAt,
+      voided_at: invoice.voidedAt,
       archived_at: invoice.archivedAt,
       created_at: invoice.createdAt,
       updated_at: invoice.updatedAt,
@@ -1981,6 +2104,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ensureManager();
     const { error } = await supabase.rpc("complete_invoice", {
       requested_invoice_id: id,
+    });
+    if (error) throw new Error(error.message);
+    await Promise.all([refreshInvoices(), refreshSchedule(), refreshFollowUps()]);
+  }
+
+  async function voidInvoice(id: string) {
+    ensureManager();
+    const { error } = await supabase.rpc("void_invoice", {
+      requested_invoice_id: id,
+    });
+    if (error) throw new Error(error.message);
+    await Promise.all([refreshInvoices(), refreshSchedule(), refreshFollowUps()]);
+  }
+
+  async function markInvoicePaid(id: string, method = "offline") {
+    ensureManager();
+    const { error } = await supabase.rpc("mark_invoice_paid", {
+      requested_invoice_id: id,
+      requested_method: method,
     });
     if (error) throw new Error(error.message);
     await Promise.all([refreshInvoices(), refreshSchedule(), refreshFollowUps()]);
@@ -2149,6 +2291,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       title: request.title,
       client: request.client,
       address: request.address,
+      city: request.city,
+      project_type: request.projectType,
       scope_description: request.scopeDescription,
       proposed_start: request.proposedStart,
       status: request.status,
@@ -2304,6 +2448,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         acceptWorkspaceInvite,
         updateWorkspaceMember,
         removeWorkspaceMember,
+        leaveWorkspace,
+        startStripeOnboarding,
+        deleteAccount,
         updateMyWorkspaceRate,
         refreshProjects,
         addProject,
@@ -2312,6 +2459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setProjectSharing,
         assignSelfToProject,
         completeProject,
+        bulkDeleteProjects,
         refreshContacts,
         addContact,
         updateContact,
@@ -2328,6 +2476,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteInvoice,
         setInvoiceSharing,
         completeInvoice,
+        voidInvoice,
+        markInvoicePaid,
         refreshSchedule,
         addScheduleEvent,
         updateScheduleEvent,

@@ -5,6 +5,7 @@ import type {
   Property,
 } from "../data/types";
 
+/** Internal payroll estimate. This is never shown on client documents. */
 export function laborAssignmentsTotal(assignments: LaborAssignment[]) {
   return assignments.reduce(
     (sum, assignment) =>
@@ -12,7 +13,6 @@ export function laborAssignmentsTotal(assignments: LaborAssignment[]) {
     0
   );
 }
-
 
 export function combinedLaborHours(
   project: Pick<Project, "laborHours" | "laborAssignments">
@@ -25,6 +25,22 @@ export function combinedLaborHours(
     : Number(project.laborHours || 0);
 }
 
+/** Customer-facing material/service revenue. */
+export function lineItemsTotal(lineItems: LineItem[]) {
+  return lineItems.reduce(
+    (sum, item) => sum + Number(item.qty) * Number(item.unitCost),
+    0
+  );
+}
+
+/** Internal material/service cost. */
+export function lineItemsInternalCost(lineItems: LineItem[]) {
+  return lineItems.reduce(
+    (sum, item) => sum + Number(item.qty) * Number(item.internalCost || 0),
+    0
+  );
+}
+
 export function calculateEstimate(
   project: Pick<
     Project,
@@ -34,28 +50,42 @@ export function calculateEstimate(
     | "laborAssignments"
     | "taxRate"
     | "discountAmount"
+    | "internalOtherCost"
   >
 ) {
-  const materials = project.lineItems.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.unitCost),
-    0
-  );
-  const assignedLabor = laborAssignmentsTotal(project.laborAssignments ?? []);
-  const legacyLabor = Number(project.laborHours) * Number(project.laborRate);
-  const labor = project.laborAssignments?.length ? assignedLabor : legacyLabor;
+  const materials = lineItemsTotal(project.lineItems);
+  const hours = combinedLaborHours(project);
+
+  // laborRate is the customer-facing billable crew rate. Individual team rates
+  // in laborAssignments are internal payroll costs only.
+  const labor = hours * Number(project.laborRate || 0);
   const subtotal = materials + labor;
   const tax = subtotal * (Number(project.taxRate) / 100);
   const discount = Math.max(0, Number(project.discountAmount));
   const total = Math.max(0, subtotal + tax - discount);
 
-  return { materials, labor, subtotal, tax, discount, total };
-}
+  const materialCost = lineItemsInternalCost(project.lineItems);
+  const laborCost = laborAssignmentsTotal(project.laborAssignments ?? []);
+  const otherCost = Math.max(0, Number(project.internalOtherCost || 0));
+  const estimatedCost = materialCost + laborCost + otherCost;
+  const grossProfit = total - estimatedCost;
+  const marginPercent = total > 0 ? (grossProfit / total) * 100 : 0;
 
-export function lineItemsTotal(lineItems: LineItem[]) {
-  return lineItems.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.unitCost),
-    0
-  );
+  return {
+    materials,
+    labor,
+    hours,
+    subtotal,
+    tax,
+    discount,
+    total,
+    materialCost,
+    laborCost,
+    otherCost,
+    estimatedCost,
+    grossProfit,
+    marginPercent,
+  };
 }
 
 export function propertyAddress(property: Property | null | undefined) {

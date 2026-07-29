@@ -1,0 +1,27 @@
+# Local Supabase CLI configuration for YardPilot.
+# The hosted project is linked separately with:
+# npx supabase@latest link --project-ref zuaikajypdcrbfcksiuf
+
+project_id = "yardpilot"
+
+# Authenticated owner/co-owner action.
+[functions.stripe-connect-account]
+enabled = true
+verify_jwt = true
+
+# Public customer checkout endpoint.
+# The function validates the invoice share token itself.
+[functions.create-invoice-checkout]
+enabled = true
+verify_jwt = false
+
+# Public Stripe webhook endpoint.
+# The function validates Stripe's webhook signature itself.
+[functions.stripe-webhook]
+enabled = true
+verify_jwt = false
+
+# Authenticated account-deletion action.
+[functions.delete-account]
+enabled = true
+verify_jwt = true

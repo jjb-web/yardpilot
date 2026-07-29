@@ -30,7 +30,6 @@ import type {
 import {
   calculateEstimate,
   formatMoney,
-  laborAssignmentsTotal,
   propertyAddress,
 } from "../lib/estimate";
 
@@ -99,11 +98,13 @@ type EstimateForm = {
   estimateNumber: string;
   issueDate: string;
   validUntil: string;
+  invoiceDueDate: string;
   scopeDescription: string;
   clientNotes: string;
   terms: string;
   taxRate: number;
   discountAmount: number;
+  internalOtherCost: number;
   scheduledStart: string;
   scheduledEnd: string;
   followUpAt: string;
@@ -155,6 +156,7 @@ function blankItem(): LineItem {
     qty: 1,
     unit: "each",
     unitCost: 0,
+    internalCost: 0,
   };
 }
 
@@ -178,11 +180,13 @@ function blankForm(): EstimateForm {
     estimateNumber: newEstimateNumber(),
     issueDate: today.toISOString().slice(0, 10),
     validUntil: addDays(today, 30),
+    invoiceDueDate: "",
     scopeDescription: "",
     clientNotes: "",
     terms: DEFAULT_TERMS,
     taxRate: 0,
     discountAmount: 0,
+    internalOtherCost: 0,
     scheduledStart: "",
     scheduledEnd: "",
     followUpAt: "",
@@ -208,11 +212,13 @@ function formFromProject(project: Project): EstimateForm {
     estimateNumber: project.estimateNumber,
     issueDate: project.issueDate,
     validUntil: project.validUntil ?? "",
+    invoiceDueDate: project.invoiceDueDate ?? "",
     scopeDescription: project.scopeDescription,
     clientNotes: project.clientNotes,
     terms: project.terms,
     taxRate: project.taxRate,
     discountAmount: project.discountAmount,
+    internalOtherCost: project.internalOtherCost,
     scheduledStart: toDateTimeLocal(project.scheduledStart),
     scheduledEnd: toDateTimeLocal(project.scheduledEnd),
     followUpAt: toDateTimeLocal(project.followUpAt),
@@ -246,6 +252,10 @@ export default function EstimateBuilder() {
   } = useApp();
   const navigate = useNavigate();
   const draftReadyRef = useRef(false);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [id]);
 
   const editing = Boolean(id) && id !== "new";
   const existing = editing
@@ -357,6 +367,7 @@ export default function EstimateBuilder() {
     laborRate: form.laborRate,
     taxRate: form.taxRate,
     discountAmount: form.discountAmount,
+    internalOtherCost: form.internalOtherCost,
   });
   const combinedLaborHours = laborAssignments.length
     ? laborAssignments.reduce(
@@ -462,23 +473,21 @@ export default function EstimateBuilder() {
         (sum, assignment) => sum + assignment.hours,
         0
       );
-      const laborTotal = laborAssignmentsTotal(laborAssignments);
       const result = await generateEstimate({
         ...(existing ?? {}),
         ...form,
         contactId: form.contactId || null,
         propertyId: form.propertyId || null,
         validUntil: form.validUntil || null,
+        invoiceDueDate: form.invoiceDueDate || null,
         scheduledStart: toIso(form.scheduledStart),
         scheduledEnd: toIso(form.scheduledEnd),
         followUpAt: toIso(form.followUpAt),
         lineItems,
         laborAssignments,
         laborHours: laborAssignments.length ? totalHours : form.laborHours,
-        laborRate:
-          laborAssignments.length && totalHours > 0
-            ? laborTotal / totalHours
-            : form.laborRate,
+        laborRate: form.laborRate,
+        internalOtherCost: form.internalOtherCost,
         totalEstimate: totals.total,
       });
       setGeneratedDescription(result);
@@ -518,11 +527,6 @@ export default function EstimateBuilder() {
           0
         )
       : form.laborHours;
-    const laborTotal = laborAssignments.length
-      ? laborAssignmentsTotal(laborAssignments)
-      : form.laborHours * form.laborRate;
-    const averageLaborRate =
-      totalLaborHours > 0 ? laborTotal / totalLaborHours : 0;
 
     try {
       let savedProject: Project;
@@ -535,10 +539,11 @@ export default function EstimateBuilder() {
         contactId: form.contactId || null,
         propertyId: form.propertyId || null,
         validUntil: form.validUntil || null,
+        invoiceDueDate: form.invoiceDueDate || null,
         lineItems,
         laborAssignments,
         laborHours: totalLaborHours,
-        laborRate: averageLaborRate,
+        laborRate: form.laborRate,
         aiEstimate: generatedDescription,
         totalEstimate: totals.total,
         scheduledStart: toIso(form.scheduledStart),
@@ -852,7 +857,7 @@ export default function EstimateBuilder() {
               <CalendarDays size={17} className="text-green-700" />
               <h2 className="font-bold text-gray-900">Schedule & follow-up</h2>
             </div>
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <label className={labelClass}>Scheduled Start</label>
                 <input
@@ -886,6 +891,20 @@ export default function EstimateBuilder() {
                   className={inputClass}
                 />
               </div>
+              <div>
+                <label className={labelClass}>Future Invoice Due Date</label>
+                <input
+                  type="date"
+                  value={form.invoiceDueDate}
+                  onChange={(event) =>
+                    setField("invoiceDueDate", event.target.value)
+                  }
+                  className={inputClass}
+                />
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Optional. Transfers to the invoice when this job is completed.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -895,8 +914,7 @@ export default function EstimateBuilder() {
               <h2 className="font-bold text-gray-900">Crew labor & combined hours</h2>
             </div>
             <p className="text-sm text-gray-500 mb-5">
-              Select workers and enter their estimated hours. Each person's
-              saved hourly rate is used automatically.
+              Select workers and enter their estimated hours. Individual rates are internal payroll costs. The customer is billed using the combined crew rate below.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-3">
@@ -980,15 +998,13 @@ export default function EstimateBuilder() {
               })}
             </div>
 
-            {laborAssignments.length === 0 && (
-              <div className="mt-5 rounded-xl border border-dashed border-gray-300 p-4">
-                <p className="text-sm font-semibold text-gray-700">
-                  No team member assigned
-                </p>
-                <p className="text-xs text-gray-400 mt-1 mb-4">
-                  Use these fallback fields for solo work or a single combined labor rate.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-4">
+            <div className="mt-5 rounded-xl border border-dashed border-gray-300 p-4">
+              <p className="text-sm font-semibold text-gray-700">Customer labor charge</p>
+              <p className="text-xs text-gray-400 mt-1 mb-4">
+                Employee hourly rates above are internal costs. This combined rate is what the customer is charged per total crew hour.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {laborAssignments.length === 0 ? (
                   <div>
                     <label className={labelClass}>Total Combined Labor Hours</label>
                     <input
@@ -1002,22 +1018,30 @@ export default function EstimateBuilder() {
                       className={inputClass}
                     />
                   </div>
+                ) : (
                   <div>
-                    <label className={labelClass}>Combined Labor Rate</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={numericText(form.laborRate)}
-                      onChange={(event) =>
-                        setField("laborRate", parseNumeric(event.target.value))
-                      }
-                      placeholder="0"
-                      className={inputClass}
-                    />
+                    <label className={labelClass}>Total Combined Labor Hours</label>
+                    <div className={`${inputClass} flex items-center bg-gray-50 text-gray-600`}>
+                      {combinedLaborHours.toLocaleString("en-US")}
+                    </div>
                   </div>
+                )}
+                <div>
+                  <label className={labelClass}>Customer Billable Crew Rate</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={numericText(form.laborRate)}
+                    onChange={(event) =>
+                      setField("laborRate", parseNumeric(event.target.value))
+                    }
+                    placeholder="0"
+                    className={inputClass}
+                  />
                 </div>
               </div>
-            )}
+            </div>
+
           </section>
 
           <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
@@ -1124,7 +1148,7 @@ export default function EstimateBuilder() {
                   key={item.id}
                   className="grid grid-cols-12 gap-2 items-end rounded-xl bg-gray-50 border border-gray-100 p-3"
                 >
-                  <div className="col-span-12 sm:col-span-5">
+                  <div className="col-span-12 sm:col-span-3">
                     <label className={labelClass}>Description</label>
                     <input
                       value={item.description}
@@ -1167,8 +1191,8 @@ export default function EstimateBuilder() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <label className={labelClass}>Unit Cost</label>
+                  <div className="col-span-6 sm:col-span-2">
+                    <label className={labelClass}>Customer Price / Unit</label>
                     <input
                       type="text"
                       inputMode="decimal"
@@ -1177,6 +1201,23 @@ export default function EstimateBuilder() {
                         updateItem(
                           item.id,
                           "unitCost",
+                          parseNumeric(event.target.value)
+                        )
+                      }
+                      placeholder="0"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <label className={labelClass}>Internal Cost / Unit</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={numericText(item.internalCost)}
+                      onChange={(event) =>
+                        updateItem(
+                          item.id,
+                          "internalCost",
                           parseNumeric(event.target.value)
                         )
                       }
@@ -1196,7 +1237,7 @@ export default function EstimateBuilder() {
               ))}
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4 mt-5">
+            <div className="grid sm:grid-cols-3 gap-4 mt-5">
               <div>
                 <label className={labelClass}>Tax Rate %</label>
                 <input
@@ -1222,6 +1263,20 @@ export default function EstimateBuilder() {
                   placeholder="0"
                   className={inputClass}
                 />
+              </div>
+              <div>
+                <label className={labelClass}>Other Internal Costs</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={numericText(form.internalOtherCost)}
+                  onChange={(event) =>
+                    setField("internalOtherCost", parseNumeric(event.target.value))
+                  }
+                  placeholder="0"
+                  className={inputClass}
+                />
+                <p className="mt-1.5 text-xs text-gray-400">Fuel, rentals, disposal fees, overhead, or other costs not separately billed.</p>
               </div>
             </div>
           </section>
@@ -1249,7 +1304,7 @@ export default function EstimateBuilder() {
                 <span>{combinedLaborHours.toLocaleString("en-US")}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-green-200">Combined labor cost</span>
+                <span className="text-green-200">Customer labor charge</span>
                 <span>{formatMoney(totals.labor)}</span>
               </div>
               <div className="flex justify-between">
@@ -1260,6 +1315,19 @@ export default function EstimateBuilder() {
                 <span className="text-green-200">Discount</span>
                 <span>-{formatMoney(totals.discount)}</span>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <p className="text-xs uppercase tracking-wider font-bold text-gray-400">Internal estimate economics</p>
+            <p className="mt-1 text-xs text-gray-400">Never shown to the customer.</p>
+            <div className="mt-4 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-gray-500">Material cost</span><span>{formatMoney(totals.materialCost)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Payroll cost</span><span>{formatMoney(totals.laborCost)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Other costs</span><span>{formatMoney(totals.otherCost)}</span></div>
+              <div className="flex justify-between border-t border-gray-100 pt-2 font-semibold"><span>Estimated total cost</span><span>{formatMoney(totals.estimatedCost)}</span></div>
+              <div className={`flex justify-between font-bold ${totals.grossProfit < 0 ? "text-red-600" : "text-emerald-700"}`}><span>Estimated gross profit</span><span>{formatMoney(totals.grossProfit)}</span></div>
+              <div className="flex justify-between text-xs text-gray-500"><span>Estimated margin</span><span>{totals.marginPercent.toFixed(1)}%</span></div>
             </div>
           </div>
 

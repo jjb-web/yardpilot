@@ -11,6 +11,7 @@ import {
   Users,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { calculateEstimate } from "../lib/estimate";
 
 function money(value: number) {
   return value.toLocaleString("en-US", {
@@ -61,9 +62,20 @@ export default function Dashboard() {
   const customers = contacts.filter(
     (contact) => contact.contactType === "customer"
   );
-  const paidRevenue = invoices
-    .filter((invoice) => invoice.status === "paid")
-    .reduce((sum, invoice) => sum + invoice.amount, 0);
+  const paidInvoices = invoices.filter(
+    (invoice) => invoice.paymentStatus === "paid" || invoice.status === "paid"
+  );
+  const paidRevenue = paidInvoices.reduce(
+    (sum, invoice) => sum + invoice.amount,
+    0
+  );
+  const paidProjectIds = new Set(
+    paidInvoices.map((invoice) => invoice.projectId).filter(Boolean)
+  );
+  const paidEstimatedCosts = projects
+    .filter((project) => paidProjectIds.has(project.id))
+    .reduce((sum, project) => sum + calculateEstimate(project).estimatedCost, 0);
+  const estimatedGrossProfit = paidRevenue - paidEstimatedCosts;
   const estimateValue = projects.reduce(
     (sum, project) => sum + project.totalEstimate,
     0
@@ -105,10 +117,13 @@ export default function Dashboard() {
       className: "bg-green-50 text-green-700",
     },
     {
-      label: "Due Follow-ups",
-      value: dueFollowUps.length,
+      label: "Est. Gross Profit",
+      value: money(estimatedGrossProfit),
       icon: AlertCircle,
-      className: "bg-amber-50 text-amber-700",
+      className:
+        estimatedGrossProfit < 0
+          ? "bg-red-50 text-red-700"
+          : "bg-amber-50 text-amber-700",
     },
   ];
 
@@ -132,7 +147,7 @@ export default function Dashboard() {
       className: "bg-violet-50 text-violet-700",
     },
     {
-      label: "My Requests",
+      label: "My Proposals",
       value: pendingRequests.filter(
         (request) => request.requestedBy === authUserId
       ).length,
@@ -200,6 +215,12 @@ export default function Dashboard() {
       </div>
 
       {!isEmployee && (
+        <p className="-mt-5 mb-8 text-xs text-gray-400">
+          Estimated gross profit equals paid invoice revenue minus saved internal material, payroll, and other costs. It is an operating estimate, not accounting or tax profit.
+        </p>
+      )}
+
+      {!isEmployee && (
         <div className="grid md:grid-cols-3 gap-4 mb-8">
           <Link
             to="/app/estimates"
@@ -226,7 +247,7 @@ export default function Dashboard() {
             className="rounded-xl border border-gray-200 bg-white p-5 hover:border-green-300 hover:shadow-sm transition-all"
           >
             <Users className="text-green-700 mb-3" size={21} />
-            <p className="font-bold text-gray-900">Job proposals</p>
+            <p className="font-bold text-gray-900">Estimate proposals</p>
             <p className="text-sm text-gray-500 mt-1">
               {pendingRequests.length} awaiting review
             </p>

@@ -21,7 +21,10 @@ export type LineItem = {
   description: string;
   qty: number;
   unit: string;
+  /** Customer-facing price per unit. */
   unitCost: number;
+  /** Internal cost per unit. Never shown on client documents. */
+  internalCost: number;
 };
 
 export type LaborAssignment = {
@@ -46,6 +49,7 @@ export type Project = {
   estimateNumber: string;
   issueDate: string;
   validUntil: string | null;
+  invoiceDueDate: string | null;
   projectType: string;
   billingMethod: ProjectBillingMethod;
   squareFootage: number;
@@ -60,6 +64,7 @@ export type Project = {
   taxRate: number;
   discountAmount: number;
   totalEstimate: number;
+  internalOtherCost: number;
   notes: string;
   shareToken: string;
   shareEnabled: boolean;
@@ -134,6 +139,10 @@ export type Workspace = {
   isPersonal: boolean;
   createdBy: string;
   role: WorkspaceRole;
+  stripeAccountId: string | null;
+  stripeOnboardingComplete: boolean;
+  stripeChargesEnabled: boolean;
+  stripePayoutsEnabled: boolean;
   createdAt: string;
 };
 
@@ -164,6 +173,7 @@ export type WorkspaceInvite = {
 };
 
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "void";
+export type InvoicePaymentStatus = "unpaid" | "paid" | "failed" | "refunded";
 
 export type InvoiceSnapshot = {
   estimateNumber: string;
@@ -184,6 +194,7 @@ export type InvoiceSnapshot = {
   taxRate: number;
   discountAmount: number;
   totalEstimate: number;
+  internalOtherCost: number;
   responseName: string;
   signatureData: string;
   acceptedAt: string | null;
@@ -207,6 +218,14 @@ export type Invoice = {
   shareEnabled: boolean;
   sentAt: string | null;
   viewedAt: string | null;
+  paymentStatus: InvoicePaymentStatus;
+  paymentMethod: string;
+  stripeCheckoutUrl: string | null;
+  stripeCheckoutSessionId: string | null;
+  stripePaymentIntentId: string | null;
+  paidAt: string | null;
+  completedAt: string | null;
+  voidedAt: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -274,6 +293,8 @@ export type JobRequest = {
   title: string;
   client: string;
   address: string;
+  city: string;
+  projectType: string;
   scopeDescription: string;
   proposedStart: string | null;
   status: JobRequestStatus;

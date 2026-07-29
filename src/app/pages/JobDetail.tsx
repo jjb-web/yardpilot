@@ -5,8 +5,10 @@ import {
   CheckCircle2,
   MapPin,
   UserRound,
+  Clock3,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { combinedLaborHours } from "../lib/estimate";
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
@@ -42,6 +44,7 @@ export default function JobDetail() {
     .map((userId) => workspaceMembers.find((member) => member.userId === userId))
     .filter(Boolean);
   const isAssigned = Boolean(authUserId && project.assignedMemberIds.includes(authUserId));
+  const totalHours = combinedLaborHours(project);
   const canClaim = role === "employee" && project.assignedMemberIds.length === 0;
 
   return (
@@ -124,7 +127,17 @@ export default function JobDetail() {
                 <span className="text-xs font-bold uppercase tracking-wide">Location</span>
               </div>
               <p className="text-sm font-semibold text-gray-900">
-                {project.address || "No address listed"}
+                {[project.address, project.city].filter(Boolean).join(", ") || "No address listed"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <Clock3 size={16} />
+                <span className="text-xs font-bold uppercase tracking-wide">Estimated Time</span>
+              </div>
+              <p className="text-sm font-semibold text-gray-900">
+                {totalHours.toLocaleString("en-US")} combined crew hours
               </p>
             </div>
 
