@@ -411,8 +411,8 @@ export default function FollowUps() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-[70] flex min-h-0 items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[92vh] sm:rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col">
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <h2 className="font-bold text-gray-900">New Follow-up</h2>
               <button
@@ -423,7 +423,7 @@ export default function FollowUps() {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-5 sm:p-6 min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4">
               {modalError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {modalError}

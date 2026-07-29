@@ -142,6 +142,11 @@ export default function AppLayout() {
     localStorage.setItem("yardpilot-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
 
+  useEffect(() => {
+    document.body.classList.add("yardpilot-app-open");
+    return () => document.body.classList.remove("yardpilot-app-open");
+  }, []);
+
   if (!user) return <Navigate to="/login" replace />;
 
   async function handleLogout() {
@@ -167,7 +172,7 @@ export default function AppLayout() {
     <div className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5 px-1">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-9 h-9 rounded-lg border border-white/15 bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
             <img
               src="/yardpilot-logo.png"
               alt="YardPilotUSA logo"
@@ -269,16 +274,16 @@ export default function AppLayout() {
 
   return (
     <div
-      className="app-shell flex h-screen bg-gray-50 overflow-hidden"
+      className="app-shell flex h-[100dvh] min-h-0 bg-[#edf0ee] overflow-hidden"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
-      <aside className="hidden md:flex flex-col w-60 bg-blue-50 shrink-0">
+      <aside className="hidden md:flex flex-col w-60 bg-[#18211c] shrink-0">
         <Sidebar />
       </aside>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="w-72 flex flex-col">
+          <div className="w-72 bg-[#18211c] flex flex-col min-h-0">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <span className="text-white font-bold">Menu</span>
               <button
@@ -289,7 +294,7 @@ export default function AppLayout() {
                 <X size={20} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               <Sidebar />
             </div>
           </div>
@@ -302,8 +307,8 @@ export default function AppLayout() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-200 px-5 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+        <header className="bg-[#f8faf9] border-b border-gray-300 px-5 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -331,7 +336,7 @@ export default function AppLayout() {
           </Link>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <Outlet />
         </main>
       </div>

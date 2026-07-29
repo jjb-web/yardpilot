@@ -120,6 +120,8 @@ export default function Contacts() {
   const [draft, setDraft] = useState<ContactDraft>(emptyContact);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
+  const [newPropertyDraft, setNewPropertyDraft] =
+    useState<PropertyDraft>(emptyProperty);
 
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -172,9 +174,21 @@ export default function Contacts() {
     setPropertyDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function setNewPropertyField<K extends keyof PropertyDraft>(
+    key: K,
+    value: PropertyDraft[K]
+  ) {
+    setNewPropertyDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function hasNewPropertyData() {
+    return Object.values(newPropertyDraft).some((value) => value.trim() !== "");
+  }
+
   function openNewContact() {
     setSelected(null);
     setDraft(emptyContact());
+    setNewPropertyDraft(emptyProperty());
     setActiveTab("details");
     setModalError("");
     setLinkProjectId("");
@@ -198,6 +212,7 @@ export default function Contacts() {
       source: contact.source,
       notes: contact.notes,
     });
+    setNewPropertyDraft(emptyProperty());
     setActiveTab("details");
     setModalError("");
     setLinkProjectId("");
@@ -211,6 +226,7 @@ export default function Contacts() {
     setModalOpen(false);
     setSelected(null);
     setDraft(emptyContact());
+    setNewPropertyDraft(emptyProperty());
     setModalError("");
     setLinkProjectId("");
     setLinkPropertyId("");
@@ -244,7 +260,7 @@ export default function Contacts() {
         setSelected(saved);
       } else {
         if (!activeWorkspaceId) throw new Error("Workspace is still loading.");
-        await addContact({
+        const savedContact = await addContact({
           id: uid(),
           workspaceId: activeWorkspaceId,
           ...draft,
@@ -259,10 +275,30 @@ export default function Contacts() {
           createdAt: now,
           updatedAt: now,
         });
+
+        if (hasNewPropertyData()) {
+          await addProperty({
+            id: uid(),
+            workspaceId: activeWorkspaceId,
+            contactId: savedContact.id,
+            ...newPropertyDraft,
+            name: newPropertyDraft.name.trim() || "Primary Property",
+            address: newPropertyDraft.address.trim(),
+            city: newPropertyDraft.city.trim(),
+            state: newPropertyDraft.state.trim(),
+            zip: newPropertyDraft.zip.trim(),
+            description: newPropertyDraft.description.trim(),
+            internalNotes: newPropertyDraft.internalNotes.trim(),
+            clientNotes: newPropertyDraft.clientNotes.trim(),
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
       }
       setModalOpen(false);
       setSelected(null);
       setDraft(emptyContact());
+      setNewPropertyDraft(emptyProperty());
       setLinkProjectId("");
       setLinkPropertyId("");
       setLinkMessage("");
@@ -332,11 +368,6 @@ export default function Contacts() {
   async function saveProperty() {
     if (!selected) return;
     setPropertyError("");
-    if (!propertyDraft.name.trim()) {
-      setPropertyError("Enter a property name or label.");
-      return;
-    }
-
     setPropertySaving(true);
     const now = new Date().toISOString();
     try {
@@ -344,7 +375,7 @@ export default function Contacts() {
         const saved = await updateProperty({
           ...selectedProperty,
           ...propertyDraft,
-          name: propertyDraft.name.trim(),
+          name: propertyDraft.name.trim() || "Primary Property",
           updatedAt: now,
         });
         setSelectedProperty(saved);
@@ -355,7 +386,7 @@ export default function Contacts() {
           workspaceId: activeWorkspaceId,
           contactId: selected.id,
           ...propertyDraft,
-          name: propertyDraft.name.trim(),
+          name: propertyDraft.name.trim() || "Primary Property",
           createdAt: now,
           updatedAt: now,
         });
@@ -541,10 +572,10 @@ export default function Contacts() {
 
             <div className="px-4 sm:px-6 pt-3 sm:pt-4 border-b border-gray-100 flex gap-2 overflow-x-auto shrink-0">
               <button type="button" onClick={() => setActiveTab("details")} className={`px-4 py-2.5 text-sm font-semibold border-b-2 cursor-pointer ${activeTab === "details" ? "border-green-700 text-green-700" : "border-transparent text-gray-500"}`}>Contact Details</button>
-              <button type="button" disabled={!selected} onClick={() => setActiveTab("properties")} className={`px-4 py-2.5 text-sm font-semibold border-b-2 cursor-pointer disabled:opacity-40 ${activeTab === "properties" ? "border-green-700 text-green-700" : "border-transparent text-gray-500"}`}>Properties & History</button>
+              <button type="button" onClick={() => setActiveTab("properties")} className={`px-4 py-2.5 text-sm font-semibold border-b-2 cursor-pointer ${activeTab === "properties" ? "border-green-700 text-green-700" : "border-transparent text-gray-500"}`}>Properties & History</button>
             </div>
 
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+            <div className="p-4 sm:p-6 min-h-0 overflow-y-auto overscroll-contain flex-1">
               {modalError && <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{modalError}</div>}
 
               {activeTab === "details" ? (
@@ -559,6 +590,27 @@ export default function Contacts() {
                   <div><label className={labelClass}>Activity</label><select value={draft.activityStatus} onChange={(event) => setContactField("activityStatus", event.target.value as ContactActivity)} className={inputClass}>{ACTIVITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
                   <div><label className={labelClass}>Source</label><select value={draft.source} onChange={(event) => setContactField("source", event.target.value)} className={inputClass}>{SOURCE_OPTIONS.map((source) => <option key={source || "blank"} value={source}>{source || "Blank"}</option>)}</select></div>
                   <div className="sm:col-span-2"><label className={labelClass}>Contact Notes</label><textarea value={draft.notes} onChange={(event) => setContactField("notes", event.target.value)} rows={4} className={inputClass} /></div>
+                </div>
+              ) : !selected ? (
+                <div className="space-y-5">
+                  <div className="rounded-xl border border-green-200 bg-green-50/60 p-4">
+                    <h3 className="font-bold text-gray-900">Add a property now — optional</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Fill in any property information you already have. Clicking Create Contact saves the contact and property together, so you do not need to reopen the contact.
+                    </p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2"><label className={labelClass}>Property Name / Label</label><input value={newPropertyDraft.name} onChange={(event) => setNewPropertyField("name", event.target.value)} placeholder="Primary Property (optional)" className={inputClass} /></div>
+                    <div className="sm:col-span-2"><label className={labelClass}>Street Address</label><input value={newPropertyDraft.address} onChange={(event) => setNewPropertyField("address", event.target.value)} className={inputClass} /></div>
+                    <div><label className={labelClass}>City</label><input value={newPropertyDraft.city} onChange={(event) => setNewPropertyField("city", event.target.value)} className={inputClass} /></div>
+                    <div className="grid grid-cols-2 gap-4"><div><label className={labelClass}>State</label><input value={newPropertyDraft.state} onChange={(event) => setNewPropertyField("state", event.target.value)} className={inputClass} /></div><div><label className={labelClass}>ZIP</label><input value={newPropertyDraft.zip} onChange={(event) => setNewPropertyField("zip", event.target.value)} className={inputClass} /></div></div>
+                    <div className="sm:col-span-2"><label className={labelClass}>Property Description</label><textarea value={newPropertyDraft.description} onChange={(event) => setNewPropertyField("description", event.target.value)} rows={3} className={inputClass} /></div>
+                    <div><label className={labelClass}>Client-visible Notes</label><textarea value={newPropertyDraft.clientNotes} onChange={(event) => setNewPropertyField("clientNotes", event.target.value)} rows={3} className={inputClass} /></div>
+                    <div><label className={labelClass}>Internal Notes</label><textarea value={newPropertyDraft.internalNotes} onChange={(event) => setNewPropertyField("internalNotes", event.target.value)} rows={3} className={inputClass} /></div>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Photos and estimate history become available immediately after the contact and property are created.
+                  </p>
                 </div>
               ) : (
                 <div>
@@ -635,7 +687,7 @@ export default function Contacts() {
 
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div>{selected && <button type="button" onClick={() => void removeContact()} className="inline-flex items-center gap-2 text-red-600 text-sm font-semibold cursor-pointer"><Trash2 size={15} /> Delete</button>}</div>
-              <div className="flex w-full sm:w-auto gap-2"><button type="button" onClick={closeContactModal} className="flex-1 sm:flex-none px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveContact()} disabled={saving} className="flex-1 sm:flex-none px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{saving ? "Saving..." : selected ? "Update Contact" : "Create Contact"}</button></div>
+              <div className="flex w-full sm:w-auto gap-2"><button type="button" onClick={closeContactModal} className="flex-1 sm:flex-none px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 cursor-pointer">Cancel</button><button type="button" onClick={() => void saveContact()} disabled={saving} className="flex-1 sm:flex-none px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer">{saving ? "Saving..." : selected ? "Update Contact" : hasNewPropertyData() ? "Create Contact & Property" : "Create Contact"}</button></div>
             </div>
           </div>
         </div>
@@ -645,7 +697,7 @@ export default function Contacts() {
         <div className="fixed inset-0 z-[90] bg-black/60 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
           <div className="w-full h-[100dvh] sm:h-auto sm:max-w-4xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 flex justify-between items-center shrink-0"><div><h2 className="text-xl font-bold text-gray-900">{selectedProperty ? selectedProperty.name : "Add Property"}</h2><p className="text-sm text-gray-500 mt-0.5">Linked to {selected.name}</p></div><button type="button" onClick={closePropertyModal} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg cursor-pointer"><X size={20} /></button></div>
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
+            <div className="p-4 sm:p-6 min-h-0 overflow-y-auto overscroll-contain flex-1 space-y-6">
               {propertyError && <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{propertyError}</div>}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2"><label className={labelClass}>Property Name / Label</label><input value={propertyDraft.name} onChange={(event) => setPropertyField("name", event.target.value)} placeholder="Primary Home, Rental, Commercial Site..." className={inputClass} /></div>

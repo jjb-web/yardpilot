@@ -9,9 +9,17 @@ import {
   Search,
   Share2,
 } from "lucide-react";
+import CopyToast from "../components/CopyToast";
 import { useApp } from "../context/AppContext";
+import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type { EstimateStatus, Project } from "../data/types";
-import { calculateEstimate, estimateShareUrl, formatMoney, propertyAddress } from "../lib/estimate";
+import {
+  calculateEstimate,
+  combinedLaborHours,
+  estimateShareUrl,
+  formatMoney,
+  propertyAddress,
+} from "../lib/estimate";
 
 const STATUS_OPTIONS: Array<{ value: "all" | EstimateStatus; label: string }> = [
   { value: "all", label: "All" },
@@ -47,6 +55,7 @@ export default function Estimates() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | EstimateStatus>("all");
   const [actionMessage, setActionMessage] = useState("");
+  const { copyText, copiedMessage } = useCopyFeedback();
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -62,6 +71,7 @@ export default function Estimates() {
           project.name,
           project.client,
           project.address,
+          project.city,
           project.estimateNumber,
           project.projectType,
           contact?.name ?? "",
@@ -101,11 +111,14 @@ export default function Estimates() {
       if (navigator.share) {
         await navigator.share(shareData);
         setActionMessage("Estimate marked Sent and shared.");
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        setActionMessage("Estimate marked Sent and public link copied.");
       } else {
-        window.prompt("Copy this public estimate link:", url);
+        const copied = await copyText(url, "Public estimate link copied");
+        if (!copied) window.prompt("Copy this public estimate link:", url);
+        setActionMessage(
+          copied
+            ? "Estimate marked Sent and public link copied."
+            : "Estimate marked Sent. Copy the public link from the prompt."
+        );
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -190,6 +203,7 @@ export default function Estimates() {
         <div className="space-y-5">
           {filtered.map((project) => {
             const totals = calculateEstimate(project);
+            const laborHours = combinedLaborHours(project);
             const contact = contacts.find((item) => item.id === project.contactId);
             const property = properties.find((item) => item.id === project.propertyId);
 
@@ -222,7 +236,7 @@ export default function Estimates() {
                     </p>
                     <p className="text-sm text-gray-500 mt-1 line-clamp-2">
                       {property?.name ? `${property.name} · ` : ""}
-                      {propertyAddress(property) || project.address || "No property address"}
+                      {propertyAddress(property) || [project.address, project.city].filter(Boolean).join(", ") || "No property address"}
                     </p>
                     {project.scopeDescription && (
                       <p className="text-sm text-gray-600 mt-4 line-clamp-3 leading-relaxed">
@@ -241,7 +255,13 @@ export default function Estimates() {
                         <span className="font-semibold text-gray-900">{formatMoney(totals.materials)}</span>
                       </div>
                       <div className="flex justify-between gap-4">
-                        <span className="text-gray-500">Labor</span>
+                        <span className="text-gray-500">Total combined labor hours</span>
+                        <span className="font-semibold text-gray-900">
+                          {laborHours.toLocaleString("en-US")}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-gray-500">Combined labor cost</span>
                         <span className="font-semibold text-gray-900">{formatMoney(totals.labor)}</span>
                       </div>
                       {project.taxRate > 0 && (
@@ -265,7 +285,12 @@ export default function Estimates() {
                       <p className="text-3xl font-extrabold text-green-800 mt-2">
                         {formatMoney(totals.total)}
                       </p>
-                      <p className="text-xs text-gray-400 mt-2">
+                      <p className="text-xs text-gray-500 mt-2">
+                        {project.billingMethod === "hourly"
+                          ? "Time & materials · total hours"
+                          : "Fixed price · job completion"}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
                         Updated {new Date(project.updatedAt).toLocaleDateString("en-US")}
                       </p>
                     </div>
@@ -319,6 +344,7 @@ export default function Estimates() {
           })}
         </div>
       )}
+      <CopyToast message={copiedMessage} />
     </div>
   );
 }

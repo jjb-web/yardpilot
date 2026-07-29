@@ -365,3 +365,42 @@ input[type="number"] {
     min-height: 100dvh;
   }
 }
+
+
+/* Application scrolling ---------------------------------------------------- */
+body.yardpilot-app-open {
+  overflow: hidden;
+  background: #edf0ee;
+}
+
+body.yardpilot-app-open #root {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-shell {
+  color: #1f2933;
+}
+
+.app-shell main,
+.app-shell [class*="overflow-y-auto"] {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* A firmer neutral base with restrained landscape-green accents. */
+.app-shell .bg-green-950 {
+  background-color: #18211c !important;
+}
+
+.app-shell .bg-green-700 {
+  background-color: #2d5b40;
+}
+
+.app-shell .hover\:bg-green-800:hover {
+  background-color: #234832;
+}
+
+.app-shell .border-gray-200 {
+  border-color: #d6dcda;
+}

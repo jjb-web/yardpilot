@@ -13,6 +13,18 @@ export function laborAssignmentsTotal(assignments: LaborAssignment[]) {
   );
 }
 
+
+export function combinedLaborHours(
+  project: Pick<Project, "laborHours" | "laborAssignments">
+) {
+  return project.laborAssignments?.length
+    ? project.laborAssignments.reduce(
+        (sum, assignment) => sum + Number(assignment.hours || 0),
+        0
+      )
+    : Number(project.laborHours || 0);
+}
+
 export function calculateEstimate(
   project: Pick<
     Project,

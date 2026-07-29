@@ -24,6 +24,7 @@ import type {
   LaborAssignment,
   LineItem,
   Project,
+  ProjectBillingMethod,
   ProjectStatus,
   Property,
   PropertyPhoto,
@@ -89,7 +90,8 @@ type AppContextType = {
   createCompanyWorkspace: (name: string) => Promise<string>;
   createWorkspaceInvite: (
     email: string,
-    role: Exclude<WorkspaceRole, "owner">
+    role: Exclude<WorkspaceRole, "owner">,
+    customCode?: string
   ) => Promise<WorkspaceInvite>;
   revokeWorkspaceInvite: (id: string) => Promise<void>;
   acceptWorkspaceInvite: (code: string) => Promise<string>;
@@ -185,6 +187,7 @@ type WorkspaceInviteRow = {
   email: string;
   role: Exclude<WorkspaceRole, "owner">;
   token: string;
+  code: string | null;
   status: WorkspaceInvite["status"];
   expires_at: string;
   created_at: string;
@@ -198,6 +201,7 @@ type ProjectRow = {
   name: string;
   client: string;
   address: string;
+  city: string | null;
   contact_id: string | null;
   property_id: string | null;
   status: ProjectStatus;
@@ -206,6 +210,7 @@ type ProjectRow = {
   issue_date: string;
   valid_until: string | null;
   project_type: string;
+  billing_method: ProjectBillingMethod | null;
   square_footage: number | string;
   labor_rate: number | string;
   labor_hours: number | string;
@@ -452,6 +457,7 @@ function rowToWorkspaceInvite(row: WorkspaceInviteRow): WorkspaceInvite {
     email: row.email,
     role: row.role,
     token: row.token,
+    code: row.code || row.token.slice(0, 8).toUpperCase(),
     status: row.status,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
@@ -471,6 +477,7 @@ function rowToProject(
     name: row.name,
     client: row.client,
     address: row.address,
+    city: row.city ?? "",
     contactId: row.contact_id,
     propertyId: row.property_id,
     status: row.status,
@@ -479,6 +486,7 @@ function rowToProject(
     issueDate: row.issue_date ?? row.created_at.slice(0, 10),
     validUntil: row.valid_until,
     projectType: row.project_type,
+    billingMethod: row.billing_method ?? "fixed",
     squareFootage: Number(row.square_footage),
     laborRate: Number(row.labor_rate),
     laborHours: Number(row.labor_hours),
@@ -1173,19 +1181,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function createWorkspaceInvite(
     email: string,
-    inviteRole: Exclude<WorkspaceRole, "owner">
+    inviteRole: Exclude<WorkspaceRole, "owner">,
+    customCode = ""
   ) {
     ensureManager();
     const workspaceId = currentWorkspaceOrThrow();
     const userId = currentUserOrThrow();
+    const insertValues: Record<string, unknown> = {
+      workspace_id: workspaceId,
+      email: email.trim().toLowerCase(),
+      role: inviteRole,
+      invited_by: userId,
+    };
+    const cleanedCode = customCode.trim().toUpperCase();
+    if (cleanedCode) insertValues.code = cleanedCode;
+
     const { data, error } = await supabase
       .from("workspace_invites")
-      .insert({
-        workspace_id: workspaceId,
-        email: email.trim().toLowerCase(),
-        role: inviteRole,
-        invited_by: userId,
-      })
+      .insert(insertValues)
       .select("*")
       .single();
     if (error) throw new Error(error.message);
@@ -1279,6 +1292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       name: project.name,
       client: project.client,
       address: project.address,
+      city: project.city,
       contact_id: project.contactId,
       property_id: project.propertyId,
       status: project.status,
@@ -1287,6 +1301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       issue_date: project.issueDate,
       valid_until: project.validUntil || null,
       project_type: project.projectType,
+      billing_method: project.billingMethod,
       square_footage: project.squareFootage,
       labor_rate: project.laborRate,
       labor_hours: project.laborHours,

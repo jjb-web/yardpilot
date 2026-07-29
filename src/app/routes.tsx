@@ -2,6 +2,10 @@ import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import AppLayout from "./components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
@@ -44,6 +48,10 @@ function ManagerOnly({ children }: { children: ReactNode }) {
 export const router = createBrowserRouter([
   { path: "/", Component: Landing },
   { path: "/login", Component: Login },
+  { path: "/forgot-password", Component: ForgotPassword },
+  { path: "/reset-password", Component: ResetPassword },
+  { path: "/terms", Component: Terms },
+  { path: "/privacy", Component: Privacy },
   { path: "/estimate/share/:token", Component: PublicEstimate },
   {
     path: "/app",

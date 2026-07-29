@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import type { Invoice, InvoiceStatus } from "../data/types";
+import { combinedLaborHours } from "../lib/estimate";
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
@@ -369,6 +370,13 @@ export default function Invoices() {
                       {contact?.name || project?.client || "No customer"}
                       {project ? ` · ${project.name}` : ""}
                     </p>
+                    {project && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        {combinedLaborHours(project).toLocaleString("en-US")} total combined labor hours · {project.billingMethod === "hourly"
+                          ? "Time & materials"
+                          : "Fixed price"}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-400 mt-2">
                       Issued {new Date(`${invoice.issueDate}T12:00:00`).toLocaleDateString("en-US")} · Due {new Date(`${invoice.dueDate}T12:00:00`).toLocaleDateString("en-US")}
                     </p>
@@ -415,7 +423,7 @@ export default function Invoices() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-4">
+        <div className="fixed inset-0 z-[70] flex min-h-0 items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-4">
           <div className="w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h2 className="font-bold text-gray-900">
@@ -425,7 +433,7 @@ export default function Invoices() {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-4 sm:p-6 grid sm:grid-cols-2 gap-4 overflow-y-auto flex-1">
+            <div className="p-4 sm:p-6 grid sm:grid-cols-2 gap-4 min-h-0 overflow-y-auto overscroll-contain flex-1">
               {modalError && (
                 <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {modalError}
@@ -468,6 +476,19 @@ export default function Invoices() {
                   ))}
                 </select>
               </div>
+              {draft.projectId && (() => {
+                const linkedProject = projects.find((item) => item.id === draft.projectId);
+                return linkedProject ? (
+                  <div className="sm:col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+                    <p className="font-semibold text-gray-800">Linked job pricing</p>
+                    <p className="text-gray-600 mt-1">
+                      {combinedLaborHours(linkedProject).toLocaleString("en-US")} total combined labor hours · {linkedProject.billingMethod === "hourly"
+                        ? "Time & materials based on total hours"
+                        : "Fixed price due by job completion"}
+                    </p>
+                  </div>
+                ) : null;
+              })()}
               <div>
                 <label className={labelClass}>Contact</label>
                 <select

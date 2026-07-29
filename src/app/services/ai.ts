@@ -48,9 +48,10 @@ export async function generateEstimate(
       ? `The proposed work includes ${itemDescriptions.join(", ")}.`
       : `The proposed work covers the listed ${project.projectType || "landscaping"} services.`;
 
-  const location = project.address?.trim()
-    ? ` at ${project.address.trim()}`
-    : "";
+  const locationText = [project.address?.trim(), project.city?.trim()]
+    .filter(Boolean)
+    .join(", ");
+  const location = locationText ? ` at ${locationText}` : "";
   const customer = project.client?.trim()
     ? ` for ${project.client.trim()}`
     : "";
@@ -73,5 +74,10 @@ export async function generateEstimate(
     ? `The cost breakdown includes ${breakdownParts.join(", ")}, for an estimated total of ${money(total)}.`
     : `The current estimated total is ${money(total)}.`;
 
-  return `${workSummary} This estimate is prepared${customer}${location}. ${breakdown} Final pricing may change if the scope, quantities, access conditions, or requested work changes.`;
+  const pricing =
+    project.billingMethod === "hourly"
+      ? "Pricing is based on estimated combined crew hours and materials; the final invoice may reflect actual hours and materials used."
+      : "This is a fixed-price estimate for the described scope, with payment due according to the stated job-completion terms.";
+
+  return `${workSummary} This estimate is prepared${customer}${location}. ${breakdown} ${pricing} Final pricing may change if the scope, quantities, access conditions, or requested work changes.`;
 }

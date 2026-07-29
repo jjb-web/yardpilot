@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { ArrowLeft, Download, Edit3, Share2 } from "lucide-react";
+import CopyToast from "../components/CopyToast";
 import EstimateDocument from "../components/EstimateDocument";
 import { useApp } from "../context/AppContext";
+import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import { estimateShareUrl } from "../lib/estimate";
 
 export default function EstimateDetail() {
@@ -19,6 +21,7 @@ export default function EstimateDetail() {
     setProjectSharing,
   } = useApp();
   const [message, setMessage] = useState("");
+  const { copyText, copiedMessage } = useCopyFeedback();
 
   const project = projects.find((item) => item.id === id) ?? null;
   const contact = contacts.find((item) => item.id === project?.contactId) ?? null;
@@ -50,11 +53,14 @@ export default function EstimateDetail() {
       if (navigator.share) {
         await navigator.share(data);
         setMessage("Estimate marked Sent and shared.");
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        setMessage("Estimate marked Sent and public link copied.");
       } else {
-        window.prompt("Copy this public estimate link:", url);
+        const copied = await copyText(url, "Public estimate link copied");
+        if (!copied) window.prompt("Copy this public estimate link:", url);
+        setMessage(
+          copied
+            ? "Estimate marked Sent and public link copied."
+            : "Estimate marked Sent. Copy the public link from the prompt."
+        );
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -130,6 +136,7 @@ export default function EstimateDetail() {
         property={property}
         photos={photos}
       />
+      <CopyToast message={copiedMessage} />
     </div>
   );
 }

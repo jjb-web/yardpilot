@@ -24,6 +24,7 @@ import type {
   LaborAssignment,
   LineItem,
   Project,
+  ProjectBillingMethod,
   ProjectStatus,
 } from "../data/types";
 import {
@@ -34,17 +35,36 @@ import {
 } from "../lib/estimate";
 
 const PROJECT_TYPES = [
+  "Lawn Mowing & Edging",
   "Lawn Maintenance",
+  "Spring / Fall Cleanup",
+  "Leaf Removal",
+  "Aeration",
+  "Dethatching",
+  "Fertilization",
+  "Weed Control",
   "Landscape Design",
-  "Hardscaping",
-  "Irrigation",
-  "Tree & Shrub Care",
-  "Sod Installation",
+  "Planting & Garden Beds",
   "Mulching & Beds",
+  "Decorative Rock Installation",
+  "Sod Installation",
+  "Artificial Turf",
+  "Irrigation Installation",
+  "Irrigation Repair",
   "Drainage",
+  "Grading & Excavation",
+  "Hardscaping",
+  "Paver Patio / Walkway",
+  "Retaining Wall",
+  "Fence Installation / Repair",
+  "Tree & Shrub Care",
+  "Pruning & Trimming",
+  "Stump / Brush Removal",
   "Outdoor Lighting",
-  "Other",
+  "Pressure Washing",
 ];
+
+const CUSTOM_PROJECT_TYPE = "__custom__";
 
 const UNIT_OPTIONS = [
   "each",
@@ -65,9 +85,11 @@ type EstimateForm = {
   name: string;
   client: string;
   address: string;
+  city: string;
   contactId: string;
   propertyId: string;
   projectType: string;
+  billingMethod: ProjectBillingMethod;
   squareFootage: number;
   laborRate: number;
   laborHours: number;
@@ -142,9 +164,11 @@ function blankForm(): EstimateForm {
     name: "",
     client: "",
     address: "",
+    city: "",
     contactId: "",
     propertyId: "",
     projectType: PROJECT_TYPES[0],
+    billingMethod: "fixed",
     squareFootage: 0,
     laborRate: 0,
     laborHours: 0,
@@ -170,9 +194,11 @@ function formFromProject(project: Project): EstimateForm {
     name: project.name,
     client: project.client,
     address: project.address,
+    city: project.city,
     contactId: project.contactId ?? "",
     propertyId: project.propertyId ?? "",
     projectType: project.projectType,
+    billingMethod: project.billingMethod,
     squareFootage: project.squareFootage,
     laborRate: project.laborRate,
     laborHours: project.laborHours,
@@ -332,6 +358,13 @@ export default function EstimateBuilder() {
     taxRate: form.taxRate,
     discountAmount: form.discountAmount,
   });
+  const combinedLaborHours = laborAssignments.length
+    ? laborAssignments.reduce(
+        (sum, assignment) => sum + Number(assignment.hours || 0),
+        0
+      )
+    : form.laborHours;
+  const usesCustomProjectType = !PROJECT_TYPES.includes(form.projectType);
 
   const inputClass =
     "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/30";
@@ -352,16 +385,8 @@ export default function EstimateBuilder() {
       contactId,
       propertyId: "",
       client: contact?.name ?? current.client,
-      address: contact
-        ? [
-            contact.address,
-            [contact.city, contact.state, contact.zip]
-              .filter(Boolean)
-              .join(" "),
-          ]
-            .filter(Boolean)
-            .join(", ")
-        : current.address,
+      address: contact?.address ?? current.address,
+      city: contact?.city ?? current.city,
     }));
   }
 
@@ -370,7 +395,8 @@ export default function EstimateBuilder() {
     setForm((current) => ({
       ...current,
       propertyId,
-      address: propertyAddress(property) || current.address,
+      address: property?.address || current.address,
+      city: property?.city || current.city,
       name: current.name || property?.name || "",
     }));
   }
@@ -505,6 +531,7 @@ export default function EstimateBuilder() {
         name: form.name.trim(),
         client: form.client.trim(),
         address: form.address.trim(),
+        city: form.city.trim(),
         contactId: form.contactId || null,
         propertyId: form.propertyId || null,
         validUntil: form.validUntil || null,
@@ -717,10 +744,19 @@ export default function EstimateBuilder() {
                 />
               </div>
               <div>
-                <label className={labelClass}>Service Address</label>
+                <label className={labelClass}>Street Address</label>
                 <input
                   value={form.address}
                   onChange={(event) => setField("address", event.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>City</label>
+                <input
+                  value={form.city}
+                  onChange={(event) => setField("city", event.target.value)}
+                  placeholder="Salem"
                   className={inputClass}
                 />
               </div>
@@ -735,18 +771,51 @@ export default function EstimateBuilder() {
                 />
               </div>
               <div>
-                <label className={labelClass}>Project Type</label>
+                <label className={labelClass}>Service / Job Type</label>
                 <select
-                  value={form.projectType}
+                  value={usesCustomProjectType ? CUSTOM_PROJECT_TYPE : form.projectType}
                   onChange={(event) =>
-                    setField("projectType", event.target.value)
+                    setField(
+                      "projectType",
+                      event.target.value === CUSTOM_PROJECT_TYPE
+                        ? ""
+                        : event.target.value
+                    )
                   }
                   className={inputClass}
                 >
                   {PROJECT_TYPES.map((type) => (
-                    <option key={type}>{type}</option>
+                    <option key={type} value={type}>{type}</option>
                   ))}
+                  <option value={CUSTOM_PROJECT_TYPE}>Custom service…</option>
                 </select>
+                {usesCustomProjectType && (
+                  <input
+                    value={form.projectType}
+                    onChange={(event) => setField("projectType", event.target.value)}
+                    placeholder="Enter a custom landscaping service"
+                    className={`${inputClass} mt-2`}
+                  />
+                )}
+              </div>
+              <div>
+                <label className={labelClass}>Pricing Method</label>
+                <select
+                  value={form.billingMethod}
+                  onChange={(event) =>
+                    setField(
+                      "billingMethod",
+                      event.target.value as ProjectBillingMethod
+                    )
+                  }
+                  className={inputClass}
+                >
+                  <option value="fixed">Fixed price — due by job completion</option>
+                  <option value="hourly">Time & materials — based on total hours</option>
+                </select>
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Hourly estimates are projections. The final invoice can use actual combined crew hours.
+                </p>
               </div>
               <div>
                 <label className={labelClass}>Issue Date</label>
@@ -863,7 +932,7 @@ export default function EstimateBuilder() {
           <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-2">
               <Users size={17} className="text-green-700" />
-              <h2 className="font-bold text-gray-900">Crew labor</h2>
+              <h2 className="font-bold text-gray-900">Crew labor & combined hours</h2>
             </div>
             <p className="text-sm text-gray-500 mb-5">
               Select workers and enter their estimated hours. Each person's
@@ -957,11 +1026,11 @@ export default function EstimateBuilder() {
                   No team member assigned
                 </p>
                 <p className="text-xs text-gray-400 mt-1 mb-4">
-                  Use these fallback fields for solo or flat labor pricing.
+                  Use these fallback fields for solo work or a single combined labor rate.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={labelClass}>Labor Hours</label>
+                    <label className={labelClass}>Total Combined Labor Hours</label>
                     <input
                       type="text"
                       inputMode="decimal"
@@ -974,7 +1043,7 @@ export default function EstimateBuilder() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Labor Rate</label>
+                    <label className={labelClass}>Combined Labor Rate</label>
                     <input
                       type="text"
                       inputMode="decimal"
@@ -1208,7 +1277,11 @@ export default function EstimateBuilder() {
                 <span>{formatMoney(totals.materials)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-green-200">Labor</span>
+                <span className="text-green-200">Total combined labor hours</span>
+                <span>{combinedLaborHours.toLocaleString("en-US")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-green-200">Combined labor cost</span>
                 <span>{formatMoney(totals.labor)}</span>
               </div>
               <div className="flex justify-between">

@@ -222,12 +222,28 @@ export default function Login() {
 
     if (signupError) {
       setLoading(false);
-      setError(signupError.message);
+      if (/already|registered|exists/i.test(signupError.message)) {
+        setMode("login");
+        setError(
+          "Account found. Sign in with Google or your password, or reset your password."
+        );
+      } else {
+        setError(signupError.message);
+      }
       return;
     }
 
     if (data.session) {
       processingSessionRef.current = false;
+      return;
+    }
+
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      setLoading(false);
+      setMode("login");
+      setError(
+        "Account found. Sign in with Google or your password, or reset your password."
+      );
       return;
     }
 
@@ -419,6 +435,17 @@ export default function Login() {
               />
             </div>
 
+            {mode === "login" && (
+              <div className="-mt-2 text-right">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-semibold text-green-700 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
             <div>
               <label className={labelClass}>
                 Team Invite Code <span className="text-gray-400">(optional)</span>
@@ -445,6 +472,19 @@ export default function Login() {
               </p>
             )}
 
+            {mode === "register" && (
+              <p className="text-xs leading-relaxed text-gray-500">
+                By creating an account, you agree to the {" "}
+                <Link to="/terms" className="font-semibold text-green-700 hover:underline">
+                  Terms and Conditions
+                </Link>{" "}
+                and acknowledge the {" "}
+                <Link to="/privacy" className="font-semibold text-green-700 hover:underline">
+                  Privacy Policy
+                </Link>.
+              </p>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -460,6 +500,11 @@ export default function Login() {
             </button>
           </form>
         </div>
+        <p className="mt-5 text-center text-xs text-gray-500">
+          <Link to="/terms" className="hover:text-gray-800 hover:underline">Terms</Link>
+          <span className="mx-2">·</span>
+          <Link to="/privacy" className="hover:text-gray-800 hover:underline">Privacy</Link>
+        </p>
       </div>
     </div>
   );

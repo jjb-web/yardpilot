@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
+import CopyToast from "../components/CopyToast";
+import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type {
   JobRequest,
   WorkspaceMember,
@@ -67,15 +69,18 @@ export default function Team() {
     deleteJobRequest,
   } = useApp();
 
-  const manager = role !== "employee";
+  const isEmployee = role === "employee";
+  const manager = !isEmployee;
   const admin = role === "owner" || role === "co_owner";
   const canInvite = manager;
+  const { copiedMessage, copyText } = useCopyFeedback();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<
     Exclude<WorkspaceRole, "owner">
   >("employee");
+  const [inviteCode, setInviteCode] = useState("");
   const [lastInviteLink, setLastInviteLink] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [companyOpen, setCompanyOpen] = useState(false);
@@ -126,10 +131,18 @@ export default function Team() {
     }
     setSaving(true);
     try {
-      const invite = await createWorkspaceInvite(inviteEmail, inviteRole);
+      const cleanedCode = inviteCode.trim().toUpperCase();
+      if (cleanedCode && !/^[A-Z0-9_-]{6,32}$/.test(cleanedCode)) {
+        throw new Error("Custom codes must be 6–32 characters using letters, numbers, dashes, or underscores.");
+      }
+      const invite = await createWorkspaceInvite(
+        inviteEmail,
+        inviteRole,
+        cleanedCode
+      );
       const link = inviteLink(invite.token);
       setLastInviteLink(link);
-      await navigator.clipboard?.writeText(link).catch(() => undefined);
+      const copied = await copyText(link, "Invite link copied");
 
       const { error: sendError } = await supabase.functions.invoke(
         "send-team-invite",
@@ -142,10 +155,15 @@ export default function Team() {
 
       setMessage(
         sendError
-          ? "Invite created and link copied. Automatic email is not configured yet, so send the copied link manually."
-          : `Invite emailed to ${invite.email} and copied to your clipboard.`
+          ? copied
+            ? "Invite created and link copied. Automatic email could not be sent, so send the copied link manually."
+            : "Invite created, but automatic email and clipboard copy were unavailable. Use Copy Link on the pending invitation."
+          : copied
+            ? `Invite emailed to ${invite.email} and copied to your clipboard.`
+            : `Invite emailed to ${invite.email}.`
       );
       setInviteEmail("");
+      setInviteCode("");
       setInviteOpen(false);
     } catch (inviteError) {
       setError(
@@ -213,9 +231,12 @@ export default function Team() {
 
   async function copyInvite(token: string) {
     const link = inviteLink(token);
-    await navigator.clipboard?.writeText(link);
     setLastInviteLink(link);
-    setMessage("Invite link copied.");
+    await copyText(link, "Invite link copied");
+  }
+
+  async function copyInviteCode(code: string) {
+    await copyText(code, "Team code copied");
   }
 
   function emailInvite(email: string, token: string) {
@@ -387,13 +408,15 @@ export default function Team() {
           >
             <BriefcaseBusiness size={16} /> Create Company
           </button>
-          <button
-            type="button"
-            onClick={() => setRequestOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 cursor-pointer"
-          >
-            <Clipboard size={16} /> Propose Job
-          </button>
+          {isEmployee && (
+            <button
+              type="button"
+              onClick={() => setRequestOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 cursor-pointer"
+            >
+              <Clipboard size={16} /> Propose Job
+            </button>
+          )}
           {canInvite && activeWorkspace?.kind === "company" && (
             <button
               type="button"
@@ -552,9 +575,16 @@ export default function Team() {
                       {invite.email}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
-                      {roleLabel(invite.role)} · expires {new Date(invite.expiresAt).toLocaleDateString("en-US")}
+                      {roleLabel(invite.role)} · code <span className="font-mono font-semibold text-gray-600">{invite.code}</span> · expires {new Date(invite.expiresAt).toLocaleDateString("en-US")}
                     </p>
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => void copyInviteCode(invite.code)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 cursor-pointer"
+                      >
+                        <Copy size={13} /> Copy Code
+                      </button>
                       <button
                         type="button"
                         onClick={() => void copyInvite(invite.token)}
@@ -683,8 +713,8 @@ export default function Team() {
       </section>
 
       {companyOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-bold text-gray-900">Create Company Workspace</h2>
               <button type="button" onClick={() => setCompanyOpen(false)} className="text-gray-400 cursor-pointer">
@@ -717,15 +747,15 @@ export default function Team() {
       )}
 
       {inviteOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-bold text-gray-900">Invite Team Member</h2>
               <button type="button" onClick={() => setInviteOpen(false)} className="text-gray-400 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-5 sm:p-6 space-y-4">
+            <div className="p-5 sm:p-6 min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4">
               <div>
                 <label className={labelClass}>Email Address</label>
                 <input
@@ -734,6 +764,27 @@ export default function Team() {
                   onChange={(event) => setInviteEmail(event.target.value)}
                   className={inputClass}
                 />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Custom Team Code <span className="text-gray-400">(optional)</span>
+                </label>
+                <input
+                  value={inviteCode}
+                  onChange={(event) =>
+                    setInviteCode(
+                      event.target.value
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9_-]/g, "")
+                        .slice(0, 32)
+                    )
+                  }
+                  placeholder="JOHNSLAWN24"
+                  className={inputClass}
+                />
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Leave blank to generate a secure code automatically. Codes are tied to the invited email and expire.
+                </p>
               </div>
               <div>
                 <label className={labelClass}>Access Level</label>
@@ -773,8 +824,8 @@ export default function Team() {
       )}
 
       {memberOpen && selectedMember && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="font-bold text-gray-900">Edit Team Member</h2>
@@ -784,7 +835,7 @@ export default function Team() {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-5 sm:p-6 space-y-4">
+            <div className="p-5 sm:p-6 min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4">
               <div>
                 <label className={labelClass}>Role</label>
                 <select
@@ -842,16 +893,18 @@ export default function Team() {
         </div>
       )}
 
-      {requestOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-2xl max-h-[100dvh] sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <CopyToast message={copiedMessage} />
+
+      {requestOpen && isEmployee && (
+        <div className="fixed inset-0 z-[90] flex min-h-0 items-stretch sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+          <div className="w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[92vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h2 className="font-bold text-gray-900">Propose a Job</h2>
               <button type="button" onClick={() => setRequestOpen(false)} className="text-gray-400 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-5 sm:p-6 grid sm:grid-cols-2 gap-4 overflow-y-auto">
+            <div className="p-5 sm:p-6 grid min-h-0 flex-1 sm:grid-cols-2 gap-4 overflow-y-auto overscroll-contain">
               <div className="sm:col-span-2">
                 <label className={labelClass}>Job Title</label>
                 <input value={requestDraft.title} onChange={(event) => setRequestDraft((current) => ({ ...current, title: event.target.value }))} className={inputClass} />

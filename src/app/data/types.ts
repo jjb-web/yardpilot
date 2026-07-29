@@ -6,6 +6,8 @@ export type EstimateStatus =
   | "accepted"
   | "declined";
 
+export type ProjectBillingMethod = "fixed" | "hourly";
+
 export type WorkspaceRole =
   | "owner"
   | "co_owner"
@@ -36,6 +38,7 @@ export type Project = {
   name: string;
   client: string;
   address: string;
+  city: string;
   contactId: string | null;
   propertyId: string | null;
   status: ProjectStatus;
@@ -44,6 +47,7 @@ export type Project = {
   issueDate: string;
   validUntil: string | null;
   projectType: string;
+  billingMethod: ProjectBillingMethod;
   squareFootage: number;
   laborRate: number;
   laborHours: number;
@@ -153,6 +157,7 @@ export type WorkspaceInvite = {
   email: string;
   role: Exclude<WorkspaceRole, "owner">;
   token: string;
+  code: string;
   status: "pending" | "accepted" | "revoked" | "expired";
   expiresAt: string;
   createdAt: string;

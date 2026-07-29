@@ -5,7 +5,12 @@ import type {
   PropertyPhoto,
   User,
 } from "../data/types";
-import { calculateEstimate, formatMoney, propertyAddress } from "../lib/estimate";
+import {
+  calculateEstimate,
+  combinedLaborHours,
+  formatMoney,
+  propertyAddress,
+} from "../lib/estimate";
 
 type EstimateDocumentProps = {
   project: Project;
@@ -32,11 +37,18 @@ export default function EstimateDocument({
   photos = [],
 }: EstimateDocumentProps) {
   const totals = calculateEstimate(project);
-  const serviceAddress = propertyAddress(property) || project.address;
+  const laborHours = combinedLaborHours(project);
+  const serviceAddress =
+    propertyAddress(property) ||
+    [project.address, project.city].filter(Boolean).join(", ");
+  const billingLabel =
+    project.billingMethod === "hourly"
+      ? "Time & materials — based on total hours"
+      : "Fixed price — due at job completion";
 
   return (
     <article className="estimate-print-root mx-auto w-full max-w-[850px] bg-white text-gray-900 shadow-sm border border-gray-200 rounded-2xl overflow-hidden print:max-w-none print:shadow-none print:border-0 print:rounded-none">
-      <div className="text-white px-8 py-7 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between print:bg-green-950 print:text-white">
+      <div className="bg-green-950 text-white px-8 py-7 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between print:bg-green-950 print:text-white">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-xl bg-white/95 overflow-hidden flex items-center justify-center shrink-0">
             <img
@@ -94,6 +106,8 @@ export default function EstimateDocument({
               <span className="font-semibold">{formatDate(project.validUntil)}</span>
               <span className="text-gray-500">Project type</span>
               <span className="font-semibold">{project.projectType}</span>
+              <span className="text-gray-500">Pricing method</span>
+              <span className="font-semibold">{billingLabel}</span>
             </div>
           </div>
         </section>
@@ -172,17 +186,12 @@ export default function EstimateDocument({
                   </tr>
                 ))}
                 <tr>
-                  <td className="px-4 py-3 font-medium">Labor</td>
+                  <td className="px-4 py-3 font-medium">Combined labor</td>
                   <td className="px-4 py-3 text-right text-gray-600">
-                    {(project.laborAssignments.length
-                      ? project.laborAssignments.reduce(
-                          (sum, assignment) => sum + Number(assignment.hours || 0),
-                          0
-                        )
-                      : project.laborHours).toLocaleString("en-US")} hours
+{laborHours.toLocaleString("en-US")} hours
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600">
-                    Crew labor
+                    Total combined hours
                   </td>
                   <td className="px-4 py-3 text-right font-semibold">
                     {formatMoney(totals.labor)}
@@ -198,7 +207,11 @@ export default function EstimateDocument({
               <span className="font-semibold">{formatMoney(totals.materials)}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-gray-600">Labor</span>
+              <span className="text-gray-600">Total combined labor hours</span>
+              <span className="font-semibold">{laborHours.toLocaleString("en-US")}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-gray-600">Combined labor cost</span>
               <span className="font-semibold">{formatMoney(totals.labor)}</span>
             </div>
             <div className="flex justify-between gap-4">
@@ -224,6 +237,11 @@ export default function EstimateDocument({
               </span>
             </div>
           </div>
+          <p className="mt-3 text-xs text-gray-500 leading-relaxed max-w-xl ml-auto">
+            {project.billingMethod === "hourly"
+              ? "This estimate is based on projected combined crew hours and materials. The final invoice may be adjusted to the actual combined labor hours and materials used."
+              : "This is a fixed-price estimate for the described scope. Payment is due according to the terms, normally when the job is completed."}
+          </p>
         </section>
 
         {photos.filter((photo) => photo.url).length > 0 && (
