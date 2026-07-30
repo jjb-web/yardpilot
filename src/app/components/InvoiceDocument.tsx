@@ -8,6 +8,7 @@ import type {
 import {
   combinedLaborHours,
   formatMoney,
+  laborTotal,
   lineItemsTotal,
   propertyAddress,
 } from "../lib/estimate";
@@ -42,7 +43,13 @@ export default function InvoiceDocument({
         laborAssignments: snapshot.laborAssignments,
       })
     : 0;
-  const labor = hours * Number(snapshot?.laborRate ?? 0);
+  const labor = snapshot
+    ? laborTotal({
+        laborHours: snapshot.laborHours,
+        laborRate: snapshot.laborRate,
+        laborAssignments: snapshot.laborAssignments,
+      })
+    : 0;
   const subtotal = materials + labor;
   const tax = subtotal * (Number(snapshot?.taxRate ?? 0) / 100);
   const discount = Number(snapshot?.discountAmount ?? 0);
@@ -190,7 +197,7 @@ export default function InvoiceDocument({
             <span>{formatMoney(materials)}</span>
           </div>
           <div className="flex justify-between gap-4 text-gray-600">
-            <span>Combined labor charge</span>
+            <span>Labor</span>
             <span>{formatMoney(labor)}</span>
           </div>
           {tax > 0 && (

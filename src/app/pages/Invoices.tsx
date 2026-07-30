@@ -117,7 +117,6 @@ function snapshotFromProject(
     taxRate: project.taxRate,
     discountAmount: project.discountAmount,
     totalEstimate: project.totalEstimate,
-    internalOtherCost: project.internalOtherCost,
     responseName: project.responseName,
     signatureData: project.signatureData,
     acceptedAt: project.acceptedAt,

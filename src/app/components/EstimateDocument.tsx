@@ -211,7 +211,7 @@ export default function EstimateDocument({
               <span className="font-semibold">{laborHours.toLocaleString("en-US")}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-gray-600">Combined labor cost</span>
+              <span className="text-gray-600">Labor</span>
               <span className="font-semibold">{formatMoney(totals.labor)}</span>
             </div>
             <div className="flex justify-between gap-4">

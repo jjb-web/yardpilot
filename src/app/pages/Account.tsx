@@ -561,7 +561,7 @@ export default function Account() {
           <h2 className="font-bold text-gray-900">My labor profile</h2>
         </div>
         <p className="mb-5 text-sm text-gray-500">
-          This rate is internal and is used when you assign yourself hours on an estimate. It is stored separately for each workspace.
+          This hourly rate is used when you assign yourself hours on an estimate. It is stored separately for each workspace.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -574,7 +574,7 @@ export default function Account() {
             />
           </div>
           <div>
-            <label className={labelClass}>Internal Hourly Rate</label>
+            <label className={labelClass}>Hourly Rate</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
               <input

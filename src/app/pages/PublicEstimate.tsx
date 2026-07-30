@@ -51,7 +51,6 @@ function mapLineItems(value: unknown): LineItem[] {
       qty: numberValue(row.qty),
       unit: text(row.unit) || "each",
       unitCost: numberValue(row.unitCost),
-      internalCost: 0,
     };
   });
 }
@@ -79,7 +78,18 @@ function mapProject(row: Record<string, unknown>): Project {
     squareFootage: numberValue(row.square_footage),
     laborRate: numberValue(row.labor_rate),
     laborHours: numberValue(row.labor_hours),
-    laborAssignments: [],
+    laborAssignments: Array.isArray(row.labor_assignments)
+      ? (row.labor_assignments as Array<Record<string, unknown>>).map(
+          (assignment) => ({
+            userId: text(assignment.user_id ?? assignment.userId),
+            name: text(assignment.name) || "Crew member",
+            hours: numberValue(assignment.hours),
+            hourlyRate: numberValue(
+              assignment.hourly_rate ?? assignment.hourlyRate
+            ),
+          })
+        )
+      : [],
     lineItems: mapLineItems(row.line_items),
     aiEstimate: text(row.estimate_summary) || null,
     scopeDescription: text(row.scope_description),
@@ -88,7 +98,6 @@ function mapProject(row: Record<string, unknown>): Project {
     taxRate: numberValue(row.tax_rate),
     discountAmount: numberValue(row.discount_amount),
     totalEstimate: numberValue(row.total_estimate),
-    internalOtherCost: 0,
     notes: "",
     shareToken: text(row.share_token),
     shareEnabled: true,

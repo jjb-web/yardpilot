@@ -49,8 +49,6 @@ export type LineItem = {
   unit: string;
   /** Customer-facing price per unit. */
   unitCost: number;
-  /** Internal cost per unit. Never shown on client documents. */
-  internalCost: number;
 };
 
 export type LaborAssignment = {
@@ -90,7 +88,6 @@ export type Project = {
   taxRate: number;
   discountAmount: number;
   totalEstimate: number;
-  internalOtherCost: number;
   notes: string;
   shareToken: string;
   shareEnabled: boolean;
@@ -232,7 +229,6 @@ export type InvoiceSnapshot = {
   taxRate: number;
   discountAmount: number;
   totalEstimate: number;
-  internalOtherCost: number;
   responseName: string;
   signatureData: string;
   acceptedAt: string | null;

@@ -266,7 +266,6 @@ type ProjectRow = {
   tax_rate: number | string;
   discount_amount: number | string;
   total_estimate: number | string;
-  internal_other_cost: number | string | null;
   notes: string;
   share_token: string;
   share_enabled: boolean;
@@ -515,7 +514,6 @@ function normalizeLineItems(value: unknown): LineItem[] {
       unit:
         typeof candidate.unit === "string" ? candidate.unit : "each",
       unitCost: Number(candidate.unitCost ?? 0),
-      internalCost: Number(candidate.internalCost ?? 0),
     };
   });
 }
@@ -616,7 +614,6 @@ function rowToProject(
     taxRate: Number(row.tax_rate ?? 0),
     discountAmount: Number(row.discount_amount ?? 0),
     totalEstimate: Number(row.total_estimate ?? 0),
-    internalOtherCost: Number(row.internal_other_cost ?? 0),
     notes: row.notes ?? "",
     shareToken: row.share_token,
     shareEnabled: Boolean(row.share_enabled),
@@ -724,7 +721,6 @@ function normalizeInvoiceSnapshot(value: unknown): InvoiceSnapshot | null {
     taxRate: Number(candidate.tax_rate ?? candidate.taxRate ?? 0),
     discountAmount: Number(candidate.discount_amount ?? candidate.discountAmount ?? 0),
     totalEstimate: Number(candidate.total_estimate ?? candidate.totalEstimate ?? 0),
-    internalOtherCost: Number(candidate.internal_other_cost ?? candidate.internalOtherCost ?? 0),
     responseName: String(candidate.response_name ?? candidate.responseName ?? ""),
     signatureData: String(candidate.signature_data ?? candidate.signatureData ?? ""),
     acceptedAt:
@@ -1671,7 +1667,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tax_rate: project.taxRate,
       discount_amount: project.discountAmount,
       total_estimate: project.totalEstimate,
-      internal_other_cost: project.internalOtherCost,
       notes: project.notes,
       share_token: project.shareToken,
       share_enabled: project.shareEnabled,

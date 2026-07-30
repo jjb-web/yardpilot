@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CreditCard, Download, Loader2 } from "lucide-react";
 import { useParams, useSearchParams } from "react-router";
 import InvoiceDocument from "../components/InvoiceDocument";
-import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type {
   Contact,
@@ -14,19 +13,6 @@ import type {
   User,
 } from "../data/types";
 import { formatMoney } from "../lib/estimate";
-
-async function edgeFunctionMessage(error: unknown) {
-  if (error instanceof FunctionsHttpError) {
-    try {
-      const payload = (await error.context.clone().json()) as Record<string, unknown>;
-      const message = payload.error ?? payload.message;
-      if (typeof message === "string" && message.trim()) return message;
-    } catch {
-      // Fall through to the normal error message.
-    }
-  }
-  return error instanceof Error ? error.message : "The payment request failed.";
-}
 
 function text(value: unknown) {
   return typeof value === "string" ? value : "";
@@ -49,7 +35,6 @@ function mapLineItems(value: unknown): LineItem[] {
       qty: numberValue(row.qty),
       unit: text(row.unit) || "flat",
       unitCost: numberValue(row.unit_cost ?? row.unitCost),
-      internalCost: 0,
     };
   });
 }
@@ -90,7 +75,6 @@ function mapSnapshot(value: unknown): InvoiceSnapshot | null {
     taxRate: numberValue(row.tax_rate ?? row.taxRate),
     discountAmount: numberValue(row.discount_amount ?? row.discountAmount),
     totalEstimate: numberValue(row.total_estimate ?? row.totalEstimate),
-    internalOtherCost: 0,
     responseName: text(row.response_name ?? row.responseName),
     signatureData: text(row.signature_data ?? row.signatureData),
     acceptedAt: text(row.accepted_at ?? row.acceptedAt) || null,
@@ -302,16 +286,7 @@ export default function PublicInvoice() {
         "create-invoice-checkout",
         { body: { shareToken: token } }
       );
-      if (functionError) throw new Error(await edgeFunctionMessage(functionError));
-      if (data?.paid === true) {
-        setPaymentMessage("This invoice has already been paid.");
-        await load();
-        setPaying(false);
-        return;
-      }
-      if (typeof data?.error === "string" && data.error.trim()) {
-        throw new Error(data.error);
-      }
+      if (functionError) throw new Error(functionError.message);
       const url = typeof data?.url === "string" ? data.url : "";
       if (!url) throw new Error("Stripe did not return a payment page.");
       window.location.assign(url);

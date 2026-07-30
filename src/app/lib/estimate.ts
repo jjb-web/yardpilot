@@ -5,15 +5,6 @@ import type {
   Property,
 } from "../data/types";
 
-/** Internal payroll estimate. This is never shown on client documents. */
-export function laborAssignmentsTotal(assignments: LaborAssignment[]) {
-  return assignments.reduce(
-    (sum, assignment) =>
-      sum + Number(assignment.hours || 0) * Number(assignment.hourlyRate || 0),
-    0
-  );
-}
-
 export function combinedLaborHours(
   project: Pick<Project, "laborHours" | "laborAssignments">
 ) {
@@ -25,18 +16,39 @@ export function combinedLaborHours(
     : Number(project.laborHours || 0);
 }
 
-/** Customer-facing material/service revenue. */
-export function lineItemsTotal(lineItems: LineItem[]) {
-  return lineItems.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.unitCost),
-    0
+/**
+ * Customer-facing labor total.
+ *
+ * When workers are assigned, each worker's hours are multiplied by that
+ * worker's estimate rate. If no workers are assigned, the estimate falls back
+ * to the manual labor hours and hourly rate fields.
+ */
+export function laborTotal(
+  project: Pick<
+    Project,
+    "laborHours" | "laborRate" | "laborAssignments"
+  >
+) {
+  if (project.laborAssignments?.length) {
+    return project.laborAssignments.reduce(
+      (sum, assignment) =>
+        sum +
+        Number(assignment.hours || 0) *
+          Number(assignment.hourlyRate || 0),
+      0
+    );
+  }
+
+  return (
+    Number(project.laborHours || 0) *
+    Number(project.laborRate || 0)
   );
 }
 
-/** Internal material/service cost. */
-export function lineItemsInternalCost(lineItems: LineItem[]) {
+export function lineItemsTotal(lineItems: LineItem[]) {
   return lineItems.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.internalCost || 0),
+    (sum, item) =>
+      sum + Number(item.qty || 0) * Number(item.unitCost || 0),
     0
   );
 }
@@ -50,26 +62,15 @@ export function calculateEstimate(
     | "laborAssignments"
     | "taxRate"
     | "discountAmount"
-    | "internalOtherCost"
   >
 ) {
   const materials = lineItemsTotal(project.lineItems);
   const hours = combinedLaborHours(project);
-
-  // laborRate is the customer-facing billable crew rate. Individual team rates
-  // in laborAssignments are internal payroll costs only.
-  const labor = hours * Number(project.laborRate || 0);
+  const labor = laborTotal(project);
   const subtotal = materials + labor;
-  const tax = subtotal * (Number(project.taxRate) / 100);
-  const discount = Math.max(0, Number(project.discountAmount));
+  const tax = subtotal * (Number(project.taxRate || 0) / 100);
+  const discount = Math.max(0, Number(project.discountAmount || 0));
   const total = Math.max(0, subtotal + tax - discount);
-
-  const materialCost = lineItemsInternalCost(project.lineItems);
-  const laborCost = laborAssignmentsTotal(project.laborAssignments ?? []);
-  const otherCost = Math.max(0, Number(project.internalOtherCost || 0));
-  const estimatedCost = materialCost + laborCost + otherCost;
-  const grossProfit = total - estimatedCost;
-  const marginPercent = total > 0 ? (grossProfit / total) * 100 : 0;
 
   return {
     materials,
@@ -79,12 +80,6 @@ export function calculateEstimate(
     tax,
     discount,
     total,
-    materialCost,
-    laborCost,
-    otherCost,
-    estimatedCost,
-    grossProfit,
-    marginPercent,
   };
 }
 
