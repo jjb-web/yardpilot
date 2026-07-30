@@ -7,6 +7,7 @@ import {
   FileText,
   PlusCircle,
   ReceiptText,
+  AlertCircle,
   Users,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
