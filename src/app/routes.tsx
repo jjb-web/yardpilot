@@ -108,14 +108,7 @@ export const router = createBrowserRouter([
       },
       { path: "jobs/:id", Component: JobDetail },
       { path: "projects/current", element: <Projects status="active" /> },
-      {
-        path: "projects/past",
-        element: (
-          <ManagerOnly>
-            <Projects status="completed" />
-          </ManagerOnly>
-        ),
-      },
+      { path: "projects/past", element: <Projects status="completed" /> },
       {
         path: "invoices",
         element: (

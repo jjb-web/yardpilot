@@ -64,6 +64,9 @@ export default function Projects({ status }: { status: ProjectStatus }) {
             ? project.status === "completed" || project.status === "archived"
             : project.status === "active" && project.estimateStatus === "accepted";
           if (!statusMatches) return false;
+          if (isEmployee && isPast && !project.assignedMemberIds.includes(authUserId ?? "")) {
+            return false;
+          }
           return !isPast || withinTimeFilter(project.updatedAt, timeFilter);
         })
         .sort(
@@ -221,9 +224,7 @@ export default function Projects({ status }: { status: ProjectStatus }) {
               authUserId ?? ""
             );
             const unassigned = project.assignedMemberIds.length === 0;
-            const jobHref = isEmployee
-              ? `/app/jobs/${project.id}`
-              : `/app/estimates/${project.id}`;
+            const jobHref = `/app/jobs/${project.id}`;
             const invoice = invoices.find((item) => item.projectId === project.id);
             const totalHours = combinedLaborHours(project);
             const assignedNames = project.laborAssignments
@@ -252,7 +253,9 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                         {project.name}
                       </p>
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                        {project.projectType || "Other job type"}
+                        {project.jobSections?.length
+                          ? `${project.jobSections.length} ${project.jobSections.length === 1 ? "job" : "jobs"}`
+                          : project.projectType || "Other job type"}
                       </span>
                       {isPast && (
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
@@ -276,6 +279,11 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                       {project.address || "No address"}
                       {project.city ? `, ${project.city}` : ""}
                     </p>
+                    {project.jobSections?.length > 0 && (
+                      <p className="mt-2 text-sm font-medium text-gray-700">
+                        {project.jobSections.map((job) => job.title).join(" · ")}
+                      </p>
+                    )}
 
                     {isEmployee && project.scopeDescription && (
                       <p className="mt-2 line-clamp-2 text-sm text-gray-600">
@@ -331,6 +339,15 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                     )}
 
                     {!isEmployee && !isPast && (
+                      <Link
+                        to={`/app/estimates/${project.id}`}
+                        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        <FileText size={15} /> Show estimate
+                      </Link>
+                    )}
+
+                    {!isEmployee && !isPast && (
                       <button
                         type="button"
                         onClick={() =>
@@ -352,7 +369,7 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                         to={`/app/estimates/${project.id}`}
                         className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                       >
-                        <FileText size={15} /> Archived Estimate
+                        <FileText size={15} /> Show archived estimate
                       </Link>
                     )}
 

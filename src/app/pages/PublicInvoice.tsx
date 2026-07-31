@@ -5,6 +5,7 @@ import InvoiceDocument from "../components/InvoiceDocument";
 import { supabase } from "../lib/supabase";
 import type {
   Contact,
+  EstimateJob,
   Invoice,
   InvoiceSnapshot,
   LineItem,
@@ -34,7 +35,56 @@ function mapLineItems(value: unknown): LineItem[] {
       description: text(row.description),
       qty: numberValue(row.qty),
       unit: text(row.unit) || "flat",
+      itemType:
+        text(row.itemType ?? row.item_type) === "fuel"
+          ? "fuel"
+          : text(row.itemType ?? row.item_type) === "service"
+            ? "service"
+            : "material",
       unitCost: numberValue(row.unit_cost ?? row.unitCost),
+    };
+  });
+}
+
+function mapJobSections(value: unknown): EstimateJob[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const row =
+      typeof item === "object" && item
+        ? (item as Record<string, unknown>)
+        : {};
+    const assignments = row.laborAssignments ?? row.labor_assignments;
+    return {
+      id: text(row.id) || `job-${index + 1}`,
+      title: text(row.title) || `Job ${index + 1}`,
+      projectType: text(row.projectType ?? row.project_type),
+      scopeDescription: text(row.scopeDescription ?? row.scope_description),
+      internalNotes: "",
+      squareFootage: numberValue(row.squareFootage ?? row.square_footage),
+      pricePerSquareFoot: numberValue(
+        row.pricePerSquareFoot ?? row.price_per_square_foot
+      ),
+      scheduledStart: text(row.scheduledStart ?? row.scheduled_start) || null,
+      scheduledEnd: text(row.scheduledEnd ?? row.scheduled_end) || null,
+      laborRate: numberValue(row.laborRate ?? row.labor_rate),
+      laborHours: numberValue(row.laborHours ?? row.labor_hours),
+      laborAssignments: Array.isArray(assignments)
+        ? assignments.map((item) => {
+            const assignment = item as Record<string, unknown>;
+            return {
+              userId: text(assignment.userId ?? assignment.user_id),
+              name: text(assignment.name) || "Crew member",
+              hours: numberValue(assignment.hours),
+              hourlyRate: numberValue(
+                assignment.hourlyRate ?? assignment.hourly_rate
+              ),
+            };
+          })
+        : [],
+      lineItems: mapLineItems(row.lineItems ?? row.line_items),
+      photoIds: Array.isArray(row.photoIds ?? row.photo_ids)
+        ? ((row.photoIds ?? row.photo_ids) as unknown[]).map(text).filter(Boolean)
+        : [],
     };
   });
 }
@@ -50,6 +100,7 @@ function mapSnapshot(value: unknown): InvoiceSnapshot | null {
     address: text(row.address),
     city: text(row.city),
     projectType: text(row.project_type ?? row.projectType),
+    jobSections: mapJobSections(row.job_sections ?? row.jobSections),
     billingMethod:
       text(row.billing_method ?? row.billingMethod) === "hourly"
         ? "hourly"
@@ -321,6 +372,8 @@ export default function PublicInvoice() {
 
   const isPaid = invoice.paymentStatus === "paid" || invoice.status === "paid";
   const isVoid = invoice.status === "void";
+  const copyOnly = searchParams.get("mode") === "copy";
+  const onlinePaymentAvailable = paymentsEnabled && !copyOnly;
   const isOverdue =
     invoice.status === "sent" &&
     new Date(`${invoice.dueDate}T23:59:59`).getTime() < Date.now();
@@ -354,7 +407,7 @@ export default function PublicInvoice() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {paymentsEnabled && !isPaid && !isVoid && (
+          {onlinePaymentAvailable && !isPaid && !isVoid && (
             <button
               type="button"
               onClick={() => void payInvoice()}
@@ -379,10 +432,11 @@ export default function PublicInvoice() {
         </div>
       </div>
 
-      {!paymentsEnabled && !isPaid && !isVoid && (
+      {!onlinePaymentAvailable && !isPaid && !isVoid && (
         <div className="no-print mx-auto mb-4 max-w-4xl rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-          Online payment is not enabled for this business. Contact the sender for
-          payment instructions.
+          {copyOnly
+            ? "This is a shareable invoice copy. Contact the sender for payment instructions or request their online payment link."
+            : "Online payment is not enabled for this business. Contact the sender for payment instructions."}
         </div>
       )}
 

@@ -69,7 +69,7 @@ const nav: NavItem[] = [
     to: "/app/projects/past",
     icon: Archive,
     label: "Past Jobs",
-    roles: ["owner", "co_owner", "manager"],
+    roles: ["owner", "co_owner", "manager", "employee"],
   },
   {
     to: "/app/invoices",
@@ -129,6 +129,11 @@ export default function AppLayout() {
   } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const routeLabel = nav.find((item) => location.pathname.startsWith(item.to))?.label;
+    document.title = routeLabel ? `${routeLabel} · YardPilotUSA` : "YardPilotUSA";
+  }, [location.pathname]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
   const mainScrollRef = useRef<HTMLElement | null>(null);

@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import {
+  AlertCircle,
   CalendarDays,
   CheckCircle2,
   ClipboardList,
@@ -7,7 +8,6 @@ import {
   FileText,
   PlusCircle,
   ReceiptText,
-  AlertCircle,
   Users,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
@@ -267,7 +267,7 @@ export default function Dashboard() {
                   <Link
                     key={project.id}
                     to={
-                      isEmployee
+                      project.estimateStatus === "accepted"
                         ? `/app/jobs/${project.id}`
                         : `/app/estimates/${project.id}`
                     }

@@ -15,6 +15,7 @@ import EstimateDocument from "../components/EstimateDocument";
 import { supabase } from "../lib/supabase";
 import type {
   Contact,
+  EstimateJob,
   LineItem,
   Project,
   Property,
@@ -50,7 +51,55 @@ function mapLineItems(value: unknown): LineItem[] {
       description: text(row.description),
       qty: numberValue(row.qty),
       unit: text(row.unit) || "each",
-      unitCost: numberValue(row.unitCost),
+      itemType:
+        text(row.itemType) === "fuel" ||
+        text(row.itemType) === "service"
+          ? (text(row.itemType) as LineItem["itemType"])
+          : "material",
+      unitCost: numberValue(row.unitCost ?? row.unit_cost),
+    };
+  });
+}
+
+function mapJobSections(value: unknown): EstimateJob[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const row =
+      typeof item === "object" && item
+        ? (item as Record<string, unknown>)
+        : {};
+    return {
+      id: text(row.id) || `job-${index + 1}`,
+      title: text(row.title) || `Job ${index + 1}`,
+      projectType: text(row.projectType ?? row.project_type),
+      scopeDescription: text(row.scopeDescription ?? row.scope_description),
+      internalNotes: "",
+      squareFootage: numberValue(row.squareFootage ?? row.square_footage),
+      pricePerSquareFoot: numberValue(
+        row.pricePerSquareFoot ?? row.price_per_square_foot
+      ),
+      scheduledStart: text(row.scheduledStart ?? row.scheduled_start) || null,
+      scheduledEnd: text(row.scheduledEnd ?? row.scheduled_end) || null,
+      laborRate: numberValue(row.laborRate ?? row.labor_rate),
+      laborHours: numberValue(row.laborHours ?? row.labor_hours),
+      laborAssignments: Array.isArray(
+        row.laborAssignments ?? row.labor_assignments
+      )
+        ? ((row.laborAssignments ?? row.labor_assignments) as Array<
+            Record<string, unknown>
+          >).map((assignment) => ({
+            userId: text(assignment.userId ?? assignment.user_id),
+            name: text(assignment.name) || "Crew member",
+            hours: numberValue(assignment.hours),
+            hourlyRate: numberValue(
+              assignment.hourlyRate ?? assignment.hourly_rate
+            ),
+          }))
+        : [],
+      lineItems: mapLineItems(row.lineItems ?? row.line_items),
+      photoIds: Array.isArray(row.photoIds ?? row.photo_ids)
+        ? ((row.photoIds ?? row.photo_ids) as unknown[]).map(text).filter(Boolean)
+        : [],
     };
   });
 }
@@ -74,6 +123,7 @@ function mapProject(row: Record<string, unknown>): Project {
     validUntil: text(row.valid_until) || null,
     invoiceDueDate: text(row.invoice_due_date) || null,
     projectType: text(row.project_type),
+    jobSections: mapJobSections(row.job_sections),
     billingMethod: (text(row.billing_method) || "fixed") as Project["billingMethod"],
     squareFootage: numberValue(row.square_footage),
     laborRate: numberValue(row.labor_rate),

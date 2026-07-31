@@ -2,6 +2,7 @@ import { useEffect, useState, type SyntheticEvent } from "react";
 import { CheckCircle2, KeyRound } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { supabase } from "../lib/supabase";
+import { passwordError, passwordRequirements } from "../lib/password";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -58,8 +59,9 @@ export default function ResetPassword() {
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    if (password.length < 8) {
-      setError("Use at least 8 characters.");
+    const strongPasswordError = passwordError(password);
+    if (strongPasswordError) {
+      setError(strongPasswordError);
       return;
     }
     if (password !== confirm) {
@@ -94,11 +96,18 @@ export default function ResetPassword() {
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">New password</label>
-              <input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full min-h-11 rounded-lg border border-gray-300 px-4 py-2.5 text-base sm:text-sm" />
+              <input required minLength={10} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full min-h-11 rounded-lg border border-gray-300 px-4 py-2.5 text-base sm:text-sm" />
+              <ul className="mt-2 grid gap-1 text-[11px] sm:grid-cols-2">
+                {passwordRequirements(password).map((requirement) => (
+                  <li key={requirement.label} className={requirement.met ? "text-green-700" : "text-gray-400"}>
+                    {requirement.met ? "✓" : "○"} {requirement.label}
+                  </li>
+                ))}
+              </ul>
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">Confirm password</label>
-              <input required minLength={8} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} className="w-full min-h-11 rounded-lg border border-gray-300 px-4 py-2.5 text-base sm:text-sm" />
+              <input required minLength={10} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} className="w-full min-h-11 rounded-lg border border-gray-300 px-4 py-2.5 text-base sm:text-sm" />
             </div>
             {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             <button type="submit" disabled={!ready || loading} className="w-full rounded-lg bg-green-800 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">

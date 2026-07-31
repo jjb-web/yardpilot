@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import {
   Ban,
   CheckCircle2,
+  CreditCard,
   Download,
   Edit3,
   Eye,
@@ -105,6 +106,7 @@ function snapshotFromProject(
     address: project.address,
     city: project.city,
     projectType: project.projectType,
+    jobSections: project.jobSections,
     billingMethod: project.billingMethod,
     lineItems: project.lineItems,
     laborAssignments: project.laborAssignments,
@@ -127,6 +129,7 @@ export default function Invoices() {
   const {
     authUserId,
     activeWorkspaceId,
+    activeWorkspace,
     invoices,
     invoicesLoading,
     invoicesError,
@@ -154,6 +157,8 @@ export default function Invoices() {
   const [modalError, setModalError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [confirmAction, setConfirmAction] = useState<{
     type: "complete" | "void" | "delete";
     invoice: Invoice;
@@ -193,6 +198,10 @@ export default function Invoices() {
         invoice.paymentStatus === "paid" || invoice.status === "paid"
     )
     .reduce((sum, invoice) => sum + invoice.amount, 0);
+
+  const stripeReady = Boolean(
+    activeWorkspace?.stripeChargesEnabled && activeWorkspace?.stripePayoutsEnabled
+  );
 
   const inputClass =
     "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/25";
@@ -336,26 +345,41 @@ export default function Invoices() {
     }
   }
 
-  async function shareInvoice(invoice: Invoice) {
+  async function shareInvoice(invoice: Invoice, onlinePayment: boolean) {
     setActionMessage("");
+    if (onlinePayment && !stripeReady) {
+      setActionMessage(
+        "Connect Stripe under Account → Invoice payments before sending an online payment link."
+      );
+      return;
+    }
     try {
       const shared =
         invoice.shareEnabled && invoice.status !== "draft"
           ? invoice
           : await setInvoiceSharing(invoice.id, true);
-      const url = invoiceShareUrl(shared.shareToken);
+      const baseUrl = invoiceShareUrl(shared.shareToken);
+      const url = onlinePayment ? baseUrl : `${baseUrl}?mode=copy`;
+      const text = onlinePayment
+        ? `Pay invoice ${shared.invoiceNumber} online for ${formatMoney(shared.amount)}`
+        : `Invoice ${shared.invoiceNumber} for ${formatMoney(shared.amount)}`;
       if (navigator.share) {
         await navigator.share({
           title: `${shared.invoiceNumber} - Invoice`,
-          text: `Invoice ${shared.invoiceNumber} for ${formatMoney(
-            shared.amount
-          )}`,
+          text,
           url,
         });
       } else {
-        await copyText(url, "Invoice link copied");
+        await copyText(
+          url,
+          onlinePayment ? "Online payment link copied" : "Invoice copy link copied"
+        );
       }
-      setActionMessage(`${shared.invoiceNumber} is marked Sent.`);
+      setActionMessage(
+        onlinePayment
+          ? `${shared.invoiceNumber} is marked Sent and its online payment link is ready.`
+          : `${shared.invoiceNumber} is marked Sent and its invoice-copy link is ready.`
+      );
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setActionMessage(
@@ -364,13 +388,13 @@ export default function Invoices() {
     }
   }
 
-  async function markPaid(invoice: Invoice) {
+  async function markPaid(invoice: Invoice, method: string) {
     setBusyId(invoice.id);
     setActionMessage("");
     try {
-      await markInvoicePaid(invoice.id, "offline");
+      await markInvoicePaid(invoice.id, method);
       setActionMessage(
-        `${invoice.invoiceNumber} was marked paid, completed, and archived.`
+        `${invoice.invoiceNumber} was marked paid in person (${method.replaceAll("_", " ")}), completed, and archived.`
       );
     } catch (error) {
       setActionMessage(
@@ -460,6 +484,14 @@ export default function Invoices() {
       {actionMessage && (
         <div className="mb-5 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           {actionMessage}
+        </div>
+      )}
+
+      {!stripeReady && (
+        <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <p className="font-semibold">Want customers to pay invoices online?</p>
+          <p className="mt-1">Connect Stripe under Account → Invoice payments. You can still share invoice copies and record cash, check, or other in-person payments without Stripe.</p>
+          <Link to="/app/account" className="mt-2 inline-flex font-semibold underline">Open payment settings</Link>
         </div>
       )}
 
@@ -599,11 +631,20 @@ export default function Invoices() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => void shareInvoice(invoice)}
+                      onClick={() => void shareInvoice(invoice, false)}
                       disabled={isBusy || status === "void"}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
-                      <Share2 size={14} /> Share
+                      <Share2 size={14} /> Share invoice copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void shareInvoice(invoice, true)}
+                      disabled={isBusy || status === "void" || !stripeReady}
+                      title={stripeReady ? "Send a public invoice link with online Stripe payment" : "Connect Stripe in Account first"}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      <CreditCard size={14} /> Send online payment link
                     </button>
                     <button
                       type="button"
@@ -636,11 +677,11 @@ export default function Invoices() {
                     {status !== "paid" && status !== "void" && (
                       <button
                         type="button"
-                        onClick={() => void markPaid(invoice)}
+                        onClick={() => { setPaymentInvoice(invoice); setPaymentMethod("cash"); }}
                         disabled={isBusy}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                       >
-                        <CheckCircle2 size={14} /> Paid offline
+                        <CheckCircle2 size={14} /> Paid in person
                       </button>
                     )}
                     {status !== "void" && status !== "paid" && (
@@ -875,6 +916,29 @@ export default function Invoices() {
                     ? "Update & Close"
                     : "Create & Close"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentInvoice && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-gray-900">Mark paid in person</h2>
+            <p className="mt-2 text-sm text-gray-500">Choose how {paymentInvoice.invoiceNumber} was paid outside YardPilot.</p>
+            <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Payment method</label>
+            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className={`${inputClass} mt-2`}>
+              <option value="cash">Cash</option>
+              <option value="check">Check</option>
+              <option value="card_outside_yardpilot">Card outside YardPilot</option>
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="cash_app">Cash App</option>
+              <option value="venmo">Venmo</option>
+              <option value="other">Other</option>
+            </select>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setPaymentInvoice(null)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700">Cancel</button>
+              <button type="button" disabled={Boolean(busyId)} onClick={() => { const invoice = paymentInvoice; setPaymentInvoice(null); void markPaid(invoice, paymentMethod); }} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">Mark paid</button>
             </div>
           </div>
         </div>

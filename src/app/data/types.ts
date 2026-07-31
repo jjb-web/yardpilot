@@ -42,13 +42,33 @@ export type StripeConnectionStatus = {
   syncedAt: string | null;
 };
 
+export type LineItemType = "material" | "service" | "fuel";
+
 export type LineItem = {
   id: string;
   description: string;
   qty: number;
   unit: string;
+  itemType?: LineItemType;
   /** Customer-facing price per unit. */
   unitCost: number;
+};
+
+export type EstimateJob = {
+  id: string;
+  title: string;
+  projectType: string;
+  scopeDescription: string;
+  internalNotes: string;
+  squareFootage: number;
+  pricePerSquareFoot: number;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  laborRate: number;
+  laborHours: number;
+  laborAssignments: LaborAssignment[];
+  lineItems: LineItem[];
+  photoIds: string[];
 };
 
 export type LaborAssignment = {
@@ -75,6 +95,7 @@ export type Project = {
   validUntil: string | null;
   invoiceDueDate: string | null;
   projectType: string;
+  jobSections: EstimateJob[];
   billingMethod: ProjectBillingMethod;
   squareFootage: number;
   laborRate: number;
@@ -217,6 +238,7 @@ export type InvoiceSnapshot = {
   address: string;
   city: string;
   projectType: string;
+  jobSections: EstimateJob[];
   billingMethod: ProjectBillingMethod;
   lineItems: LineItem[];
   laborAssignments: LaborAssignment[];

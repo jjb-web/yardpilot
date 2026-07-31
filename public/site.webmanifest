@@ -1,0 +1,17 @@
+{
+  "name": "YardPilotUSA",
+  "short_name": "YardPilotUSA",
+  "description": "Landscaping estimates, jobs, invoices, teams, and online payments.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#052e16",
+  "icons": [
+    {
+      "src": "/yardpilot-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

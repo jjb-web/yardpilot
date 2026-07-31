@@ -268,25 +268,48 @@ export default function Account() {
   }, [activeWorkspace?.id, activeWorkspace?.stripeAccountId, role]);
 
   useEffect(() => {
-    if (stripeUiState(liveStripeStatus ?? workspaceStripeStatus(activeWorkspace)) !== "in_review") {
+    if (
+      !activeWorkspace?.stripeAccountId ||
+      (role !== "owner" && role !== "co_owner")
+    ) {
       return;
     }
 
+    let cancelled = false;
+    let refreshing = false;
+
+    async function pollStripeStatus() {
+      if (document.visibilityState === "hidden" || refreshing) return;
+      refreshing = true;
+      try {
+        const status = await refreshStripeConnection();
+        if (!cancelled) setLiveStripeStatus(status);
+      } catch (statusError) {
+        if (!cancelled) {
+          console.error("Could not poll Stripe status:", statusError);
+        }
+      } finally {
+        refreshing = false;
+      }
+    }
+
     const timer = window.setInterval(() => {
-      void refreshStripeConnection()
-        .then((status) => setLiveStripeStatus(status))
-        .catch((statusError) =>
-          console.error("Could not poll Stripe verification status:", statusError)
-        );
+      void pollStripeStatus();
     }, 30_000);
 
-    return () => window.clearInterval(timer);
-  }, [
-    activeWorkspace?.id,
-    liveStripeStatus?.pendingVerification.join("|"),
-    liveStripeStatus?.chargesEnabled,
-    liveStripeStatus?.payoutsEnabled,
-  ]);
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void pollStripeStatus();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [activeWorkspace?.id, activeWorkspace?.stripeAccountId, role]);
 
   const stripeStatus =
     liveStripeStatus ?? workspaceStripeStatus(activeWorkspace);

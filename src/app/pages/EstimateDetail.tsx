@@ -102,10 +102,10 @@ export default function EstimateDetail() {
           <h1 className="text-xl font-bold text-gray-900">Estimate not found</h1>
           <button
             type="button"
-            onClick={() => navigate("/app/estimates")}
+            onClick={() => navigate(-1)}
             className="mt-4 text-green-700 font-semibold text-sm cursor-pointer"
           >
-            Return to estimates
+            Back
           </button>
         </div>
       </div>
@@ -115,12 +115,13 @@ export default function EstimateDetail() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="no-print flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-        <Link
-          to="/app/estimates"
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
           className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
         >
-          <ArrowLeft size={16} /> Back to estimates
-        </Link>
+          <ArrowLeft size={16} /> Back
+        </button>
 
         <div className="flex flex-wrap gap-2">
           <Link
@@ -168,12 +169,13 @@ export default function EstimateDetail() {
       />
 
       <div className="no-print mt-6 flex justify-center">
-        <Link
-          to="/app/estimates"
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
         >
-          <ArrowLeft size={16} /> Back to estimates
-        </Link>
+          <ArrowLeft size={16} /> Back
+        </button>
       </div>
       <CopyToast message={copiedMessage} />
     </div>

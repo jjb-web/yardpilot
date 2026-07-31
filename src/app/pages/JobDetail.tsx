@@ -1,190 +1,165 @@
-import { Link, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  Clock3,
+  FileText,
+  Image as ImageIcon,
   MapPin,
   UserRound,
-  Clock3,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { combinedLaborHours } from "../lib/estimate";
+import type { EstimateJob } from "../data/types";
+
+function dateTime(value: string | null) {
+  if (!value) return "Not scheduled";
+  return new Date(value).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const {
     authUserId,
     role,
     projects,
     projectsLoading,
     workspaceMembers,
+    propertyPhotos,
     assignSelfToProject,
   } = useApp();
 
   const project = projects.find((item) => item.id === id) ?? null;
 
   if (projectsLoading) {
-    return <div className="p-6 text-sm text-gray-500">Loading job...</div>;
+    return <div className="p-6 text-sm text-gray-500">Loading job…</div>;
   }
 
   if (!project) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+      <div className="mx-auto max-w-4xl p-6">
+        <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
           <h1 className="text-xl font-bold text-gray-900">Job not found</h1>
-          <Link to="/app/projects/current" className="inline-block mt-4 text-sm font-semibold text-green-700">
-            Return to current jobs
-          </Link>
+          <button type="button" onClick={() => navigate(-1)} className="mt-4 text-sm font-semibold text-green-700">Back</button>
         </div>
       </div>
     );
   }
 
-  const assigned = project.assignedMemberIds
-    .map((userId) => workspaceMembers.find((member) => member.userId === userId))
-    .filter(Boolean);
+  const fallback: EstimateJob = {
+    id: "legacy-job",
+    title: project.name,
+    projectType: project.projectType,
+    scopeDescription: project.scopeDescription,
+    internalNotes: project.notes,
+    squareFootage: project.squareFootage,
+    pricePerSquareFoot: 0,
+    scheduledStart: project.scheduledStart,
+    scheduledEnd: project.scheduledEnd,
+    laborRate: project.laborRate,
+    laborHours: project.laborHours,
+    laborAssignments: project.laborAssignments,
+    lineItems: project.lineItems,
+    photoIds: [],
+  };
+  const jobs = project.jobSections?.length ? project.jobSections : [fallback];
   const isAssigned = Boolean(authUserId && project.assignedMemberIds.includes(authUserId));
-  const totalHours = combinedLaborHours(project);
-  const canClaim = role === "employee" && project.assignedMemberIds.length === 0;
+  const canClaim = role === "employee" && project.assignedMemberIds.length === 0 && project.status === "active";
+  const isPast = project.status === "completed" || project.status === "archived";
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <Link
-        to="/app/projects/current"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 mb-5"
-      >
-        <ArrowLeft size={15} /> Current Jobs
-      </Link>
+    <div className="mx-auto max-w-6xl p-4 sm:p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900">
+          <ArrowLeft size={15} /> Back
+        </button>
+        {role !== "employee" && (
+          <button type="button" onClick={() => navigate(`/app/estimates/${project.id}`)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
+            <FileText size={15} /> {isPast ? "Show archived estimate" : "Show estimate"}
+          </button>
+        )}
+      </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="bg-green-950 text-white p-7">
-          <div className="flex flex-col md:flex-row md:items-start gap-5">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <div className="bg-green-950 p-7 text-white">
+          <div className="flex flex-col gap-5 md:flex-row md:items-start">
             <div className="flex-1">
-              <p className="text-green-300 text-xs font-bold uppercase tracking-wider">
-                {project.projectType}
-              </p>
-              <h1 className="text-3xl font-bold mt-2">{project.name}</h1>
-              <p className="text-green-100 mt-2">{project.client || "No customer listed"}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-green-300">{isPast ? "Past job" : "Current job"}</p>
+              <h1 className="mt-2 text-3xl font-bold">{project.name}</h1>
+              <p className="mt-2 text-green-100">{project.client || "No customer listed"}</p>
+              <p className="mt-1 text-sm text-green-200">{jobs.length} {jobs.length === 1 ? "separate job" : "separate jobs"}</p>
             </div>
-            {isAssigned && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1.5 text-sm font-semibold text-green-200">
-                <CheckCircle2 size={15} /> Assigned to you
-              </span>
+            {isAssigned && !isPast && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1.5 text-sm font-semibold text-green-200"><CheckCircle2 size={15} /> Assigned to you</span>
             )}
             {canClaim && (
-              <button
-                type="button"
-                onClick={() => void assignSelfToProject(project.id)}
-                className="rounded-lg bg-green-500 px-4 py-2.5 text-sm font-bold text-green-950 cursor-pointer"
-              >
-                Claim This Job
-              </button>
+              <button type="button" onClick={() => void assignSelfToProject(project.id)} className="rounded-lg bg-green-500 px-4 py-2.5 text-sm font-bold text-green-950">Claim this job</button>
             )}
           </div>
         </div>
 
-        <div className="p-7 grid lg:grid-cols-[1fr_280px] gap-7">
-          <div className="space-y-6">
-            <section>
-              <h2 className="font-bold text-gray-900 mb-3">Scope of Work</h2>
-              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
-                {project.scopeDescription || project.aiEstimate || "No scope description has been added yet."}
-              </p>
-            </section>
-
-            {project.clientNotes && (
-              <section>
-                <h2 className="font-bold text-gray-900 mb-3">Job Notes</h2>
-                <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
-                  {project.clientNotes}
-                </p>
-              </section>
-            )}
-
-            {project.lineItems.length > 0 && (
-              <section>
-                <h2 className="font-bold text-gray-900 mb-3">Materials and Tasks</h2>
-                <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
-                  {project.lineItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                      <p className="text-sm font-semibold text-gray-800">
-                        {item.description || "Unlabeled item"}
-                      </p>
-                      <p className="text-sm text-gray-500 shrink-0">
-                        {item.qty} {item.unit}
-                      </p>
+        <div className="grid gap-7 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_290px]">
+          <main className="space-y-5">
+            {jobs.map((job, index) => {
+              const assigned = job.laborAssignments
+                .map((assignment) => workspaceMembers.find((member) => member.userId === assignment.userId))
+                .filter(Boolean);
+              const hours = job.laborAssignments.length
+                ? job.laborAssignments.reduce((sum, assignment) => sum + Number(assignment.hours || 0), 0)
+                : job.laborHours;
+              const photos = propertyPhotos.filter((photo) => job.photoIds.includes(photo.id));
+              return (
+                <section key={job.id} className="overflow-hidden rounded-xl border border-gray-200">
+                  <header className="bg-gray-50 px-5 py-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Job {index + 1}</p>
+                    <h2 className="mt-1 text-xl font-bold text-gray-900">{job.title}</h2>
+                    <p className="mt-1 text-sm text-gray-500">{job.projectType}</p>
+                  </header>
+                  <div className="space-y-5 p-5">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900">Work to complete</h3>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{job.scopeDescription || "No scope description has been added."}</p>
                     </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
+                    {job.internalNotes && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                        <h3 className="text-sm font-bold text-amber-900">Internal instructions</h3>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-800">{job.internalNotes}</p>
+                      </div>
+                    )}
+                    {(job.lineItems.length > 0 || job.squareFootage > 0) && (
+                      <div>
+                        <h3 className="mb-2 text-sm font-bold text-gray-900">Materials and tasks</h3>
+                        <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                          {job.squareFootage > 0 && <div className="flex justify-between gap-4 px-4 py-3 text-sm"><span>Square-foot work</span><span className="text-gray-500">{job.squareFootage.toLocaleString()} sq ft</span></div>}
+                          {job.lineItems.map((item) => <div key={item.id} className="flex justify-between gap-4 px-4 py-3 text-sm"><span className="font-semibold text-gray-800">{item.description || "Material or service"}</span><span className="shrink-0 text-gray-500">{item.qty} {item.unit}</span></div>)}
+                        </div>
+                      </div>
+                    )}
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg border border-gray-200 p-4"><div className="flex items-center gap-2 text-gray-500"><CalendarDays size={15} /><span className="text-xs font-bold uppercase">Start</span></div><p className="mt-2 text-sm font-semibold">{dateTime(job.scheduledStart)}</p></div>
+                      <div className="rounded-lg border border-gray-200 p-4"><div className="flex items-center gap-2 text-gray-500"><Clock3 size={15} /><span className="text-xs font-bold uppercase">Expected time</span></div><p className="mt-2 text-sm font-semibold">{hours.toLocaleString()} crew hours</p></div>
+                      <div className="rounded-lg border border-gray-200 p-4"><div className="flex items-center gap-2 text-gray-500"><UserRound size={15} /><span className="text-xs font-bold uppercase">Crew</span></div><p className="mt-2 text-sm font-semibold">{assigned.length ? assigned.map((member) => member!.name).join(", ") : "Unassigned"}</p></div>
+                    </div>
+                    {photos.length > 0 && (
+                      <div>
+                        <div className="mb-2 flex items-center gap-2"><ImageIcon size={15} className="text-gray-500" /><h3 className="text-sm font-bold">Photos</h3></div>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{photos.map((photo) => <figure key={photo.id} className="overflow-hidden rounded-lg border border-gray-200"><img src={photo.url} alt={photo.caption || job.title} className="aspect-[4/3] w-full object-cover" />{photo.caption && <figcaption className="p-2 text-xs text-gray-500">{photo.caption}</figcaption>}</figure>)}</div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </main>
 
           <aside className="space-y-4">
-            <div className="rounded-xl border border-gray-200 p-5">
-              <div className="flex items-center gap-2 text-gray-500 mb-2">
-                <MapPin size={16} />
-                <span className="text-xs font-bold uppercase tracking-wide">Location</span>
-              </div>
-              <p className="text-sm font-semibold text-gray-900">
-                {[project.address, project.city].filter(Boolean).join(", ") || "No address listed"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-5">
-              <div className="flex items-center gap-2 text-gray-500 mb-2">
-                <Clock3 size={16} />
-                <span className="text-xs font-bold uppercase tracking-wide">Estimated Time</span>
-              </div>
-              <p className="text-sm font-semibold text-gray-900">
-                {totalHours.toLocaleString("en-US")} combined crew hours
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-5">
-              <div className="flex items-center gap-2 text-gray-500 mb-2">
-                <CalendarDays size={16} />
-                <span className="text-xs font-bold uppercase tracking-wide">Schedule</span>
-              </div>
-              <p className="text-sm font-semibold text-gray-900">
-                {project.scheduledStart
-                  ? new Date(project.scheduledStart).toLocaleString("en-US", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })
-                  : "Not scheduled"}
-              </p>
-              {project.scheduledEnd && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Ends {new Date(project.scheduledEnd).toLocaleString("en-US", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-5">
-              <div className="flex items-center gap-2 text-gray-500 mb-3">
-                <UserRound size={16} />
-                <span className="text-xs font-bold uppercase tracking-wide">Assigned Crew</span>
-              </div>
-              {assigned.length === 0 ? (
-                <p className="text-sm text-gray-400">Unassigned</p>
-              ) : (
-                <div className="space-y-2">
-                  {assigned.map((member) => (
-                    <p key={member!.userId} className="text-sm font-semibold text-gray-900">
-                      {member!.name}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-xl bg-gray-50 p-5 text-xs text-gray-500">
-              Employee view hides labor rates, line-item prices, estimate totals, discounts, taxes, and internal notes.
-            </div>
+            <div className="rounded-xl border border-gray-200 p-5"><div className="mb-2 flex items-center gap-2 text-gray-500"><MapPin size={16} /><span className="text-xs font-bold uppercase tracking-wide">Location</span></div><p className="text-sm font-semibold text-gray-900">{[project.address, project.city].filter(Boolean).join(", ") || "No address listed"}</p></div>
+            {project.clientNotes && <div className="rounded-xl border border-gray-200 p-5"><p className="text-xs font-bold uppercase tracking-wide text-gray-500">Customer notes</p><p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{project.clientNotes}</p></div>}
+            <div className="rounded-xl bg-gray-50 p-5 text-xs leading-5 text-gray-500">This job view focuses on instructions, schedule, crew, materials, location, and photos. Estimate pricing and customer-facing terms remain in the linked estimate.</div>
           </aside>
         </div>
       </div>

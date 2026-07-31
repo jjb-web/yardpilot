@@ -11,8 +11,8 @@ const problems = [
 ];
 
 const features = [
-  { icon: Zap, title: "AI Estimate Generator", desc: "Describe the job, get a professional estimate in seconds." },
-  { icon: Camera, title: "Property Photo Analysis", desc: "Upload site photos and get AI-powered pricing suggestions." },
+  { icon: Zap, title: "Flexible Estimate Builder", desc: "Create clear estimates with multiple jobs, labor, materials, and custom units." },
+  { icon: Camera, title: "Property Photos", desc: "Keep property and job photos with the customer record and work instructions." },
   { icon: Users, title: "Customer CRM", desc: "Track every lead, estimate, and relationship in one place." },
   { icon: FileText, title: "Proposal Builder", desc: "Send professional PDF proposals directly from the app." },
   { icon: Bell, title: "Follow-Up Automation", desc: "Never let a lead go cold — automated reminders keep you on top." },
@@ -52,11 +52,11 @@ function DashboardMockup() {
           ))}
         </div>
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-          <p className="text-xs text-green-700 font-medium mb-1">✦ AI Estimate</p>
-          <p className="text-sm text-gray-700 leading-snug">Estimated total: <strong>$4,280 – $4,680</strong>. Labor is ~42% of cost.</p>
+          <p className="text-xs text-green-700 font-medium mb-1">Estimate total</p>
+          <p className="text-sm text-gray-700 leading-snug">Materials, labor, and multiple job sections combine into one professional estimate: <strong>$4,480</strong>.</p>
         </div>
         <div className="bg-green-700 text-white text-center text-xs font-semibold py-2.5 rounded-lg">
-          Generate Full Proposal →
+          Create Estimate →
         </div>
       </div>
     </div>
@@ -118,7 +118,7 @@ export default function Landing() {
               <span className="text-green-700">Minutes,</span> Not Hours
             </h1>
             <p className="text-lg text-gray-500 leading-relaxed mb-8 max-w-lg">
-              AI-powered estimating software built specifically for landscapers. Generate quotes, proposals, and pricing recommendations faster than ever.
+              Business software built specifically for landscapers. Create estimates, organize jobs, schedule crews, invoice customers, and collect payments in one place.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
@@ -173,7 +173,7 @@ export default function Landing() {
             Meet YardPilotUSA
           </h2>
           <p className="text-green-100 text-lg mb-10 max-w-xl mx-auto">
-            An AI-powered estimating platform designed specifically for landscaping businesses.
+            A straightforward estimating and job-management platform designed specifically for landscaping businesses.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left max-w-3xl mx-auto">
             {["Generate estimates in minutes", "Upload property photos", "Track leads and proposals", "Automate follow-ups", "Manage customers in one place", "Works on mobile, on the job"].map((item) => (

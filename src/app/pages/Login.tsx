@@ -11,6 +11,8 @@ import {
 } from "react-router";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { checkTextSafety } from "../lib/contentSafety";
+import { passwordError, passwordRequirements } from "../lib/password";
 
 type FormData = {
   name: string;
@@ -202,6 +204,15 @@ export default function Login() {
     setMessage("");
     setLoading(true);
     rememberInvite();
+
+    const unsafeName = checkTextSafety(form.name, "Full name").message;
+    const unsafeCompany = checkTextSafety(form.company, "Business name").message;
+    const strongPasswordError = passwordError(form.password);
+    if (unsafeName || unsafeCompany || strongPasswordError) {
+      setLoading(false);
+      setError(unsafeName || unsafeCompany || strongPasswordError || "Check the highlighted information.");
+      return;
+    }
 
     const inviteQuery = form.inviteCode.trim()
       ? `?confirmed=true&invite=${encodeURIComponent(form.inviteCode.trim())}`
@@ -423,7 +434,7 @@ export default function Login() {
               <label className={labelClass}>Password</label>
               <input
                 required
-                minLength={6}
+                minLength={mode === "register" ? 10 : 6}
                 type="password"
                 autoComplete={
                   mode === "login" ? "current-password" : "new-password"
@@ -433,6 +444,18 @@ export default function Login() {
                 onChange={(event) => set("password", event.target.value)}
                 className={inputClass}
               />
+              {mode === "register" && (
+                <ul className="mt-2 grid gap-1 text-[11px] text-gray-500 sm:grid-cols-2">
+                  {passwordRequirements(form.password).map((requirement) => (
+                    <li
+                      key={requirement.label}
+                      className={requirement.met ? "text-green-700" : "text-gray-400"}
+                    >
+                      {requirement.met ? "✓" : "○"} {requirement.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {mode === "login" && (

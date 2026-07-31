@@ -13,10 +13,12 @@ import {
   type User as SupabaseAuthUser,
 } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { assertSafeValues } from "../lib/contentSafety";
 import type {
   Contact,
   ContactActivity,
   ContactType,
+  EstimateJob,
   EstimateStatus,
   FollowUp,
   FollowUpChannel,
@@ -254,6 +256,7 @@ type ProjectRow = {
   valid_until: string | null;
   invoice_due_date: string | null;
   project_type: string;
+  job_sections: unknown;
   billing_method: ProjectBillingMethod | null;
   square_footage: number | string;
   labor_rate: number | string;
@@ -513,7 +516,73 @@ function normalizeLineItems(value: unknown): LineItem[] {
       qty: Number(candidate.qty ?? 0),
       unit:
         typeof candidate.unit === "string" ? candidate.unit : "each",
+      itemType:
+        candidate.itemType === "fuel" ||
+        candidate.itemType === "service" ||
+        candidate.itemType === "material"
+          ? candidate.itemType
+          : "material",
       unitCost: Number(candidate.unitCost ?? 0),
+    };
+  });
+}
+
+function normalizeLaborAssignments(value: unknown): LaborAssignment[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const candidate =
+      typeof item === "object" && item !== null
+        ? (item as Record<string, unknown>)
+        : {};
+    return {
+      userId: String(candidate.userId ?? candidate.user_id ?? ""),
+      name: String(candidate.name ?? "Team member"),
+      hours: Number(candidate.hours ?? 0),
+      hourlyRate: Number(candidate.hourlyRate ?? candidate.hourly_rate ?? 0),
+    };
+  });
+}
+
+function normalizeJobSections(value: unknown): EstimateJob[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const candidate =
+      typeof item === "object" && item !== null
+        ? (item as Record<string, unknown>)
+        : {};
+    return {
+      id: String(candidate.id ?? `job-${index + 1}`),
+      title: String(candidate.title ?? `Job ${index + 1}`),
+      projectType: String(candidate.projectType ?? candidate.project_type ?? ""),
+      scopeDescription: String(
+        candidate.scopeDescription ?? candidate.scope_description ?? ""
+      ),
+      internalNotes: String(
+        candidate.internalNotes ?? candidate.internal_notes ?? ""
+      ),
+      squareFootage: Number(
+        candidate.squareFootage ?? candidate.square_footage ?? 0
+      ),
+      pricePerSquareFoot: Number(
+        candidate.pricePerSquareFoot ?? candidate.price_per_square_foot ?? 0
+      ),
+      scheduledStart:
+        typeof (candidate.scheduledStart ?? candidate.scheduled_start) === "string"
+          ? String(candidate.scheduledStart ?? candidate.scheduled_start)
+          : null,
+      scheduledEnd:
+        typeof (candidate.scheduledEnd ?? candidate.scheduled_end) === "string"
+          ? String(candidate.scheduledEnd ?? candidate.scheduled_end)
+          : null,
+      laborRate: Number(candidate.laborRate ?? candidate.labor_rate ?? 0),
+      laborHours: Number(candidate.laborHours ?? candidate.labor_hours ?? 0),
+      laborAssignments: normalizeLaborAssignments(
+        candidate.laborAssignments ?? candidate.labor_assignments
+      ),
+      lineItems: normalizeLineItems(candidate.lineItems ?? candidate.line_items),
+      photoIds: Array.isArray(candidate.photoIds ?? candidate.photo_ids)
+        ? ((candidate.photoIds ?? candidate.photo_ids) as unknown[]).map(String)
+        : [],
     };
   });
 }
@@ -601,6 +670,7 @@ function rowToProject(
     validUntil: row.valid_until,
     invoiceDueDate: row.invoice_due_date ?? null,
     projectType: row.project_type,
+    jobSections: normalizeJobSections(row.job_sections),
     billingMethod: row.billing_method ?? "fixed",
     squareFootage: Number(row.square_footage),
     laborRate: Number(row.labor_rate),
@@ -699,6 +769,9 @@ function normalizeInvoiceSnapshot(value: unknown): InvoiceSnapshot | null {
     address: String(candidate.address ?? ""),
     city: String(candidate.city ?? ""),
     projectType: String(candidate.project_type ?? candidate.projectType ?? ""),
+    jobSections: normalizeJobSections(
+      candidate.job_sections ?? candidate.jobSections
+    ),
     billingMethod: (candidate.billing_method ?? candidate.billingMethod) === "hourly" ? "hourly" : "fixed",
     lineItems: normalizeLineItems(candidate.line_items ?? candidate.lineItems),
     laborAssignments: Array.isArray(candidate.labor_assignments ?? candidate.laborAssignments)
@@ -1051,13 +1124,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               .eq("workspace_id", workspaceId)
               .order("updated_at", { ascending: false })
           : Promise.resolve({ data: [], error: null }),
-        manager
-          ? supabase
-              .from("property_photos")
-              .select("*")
-              .eq("workspace_id", workspaceId)
-              .order("created_at", { ascending: true })
-          : Promise.resolve({ data: [], error: null }),
+        supabase
+          .from("property_photos")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: true }),
         manager
           ? supabase
               .from("invoices")
@@ -1335,6 +1406,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function updateProfile(
     details: Pick<User, "name" | "company" | "phone" | "city" | "state">
   ): Promise<User> {
+    assertSafeValues([
+      { value: details.name, label: "Profile name" },
+      { value: details.company, label: "Business name" },
+    ]);
     const { data, error } = await supabase.rpc("update_my_profile", {
       requested_full_name: details.name.trim(),
       requested_phone: details.phone.trim(),
@@ -1372,6 +1447,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function createCompanyWorkspace(name: string) {
+    assertSafeValues([{ value: name, label: "Company name" }]);
     const { data, error } = await supabase.rpc("create_company_workspace", {
       requested_name: name.trim(),
     });
@@ -1390,6 +1466,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function createWorkgroupWorkspace(name: string) {
+    assertSafeValues([{ value: name, label: "Workgroup name" }]);
     const { data, error } = await supabase.rpc("create_workgroup_workspace", {
       requested_name: name.trim(),
     });
@@ -1636,6 +1713,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearAccount();
   }
 
+  function validateProjectContent(project: Project) {
+    assertSafeValues([
+      { value: project.name, label: "Estimate name" },
+      { value: project.client, label: "Client name" },
+      { value: project.projectType, label: "Job type" },
+      { value: project.scopeDescription, label: "Scope description" },
+      { value: project.clientNotes, label: "Client notes" },
+      { value: project.notes, label: "Internal notes" },
+      ...(project.jobSections ?? []).flatMap((job, index) => [
+        { value: job.title, label: `Job ${index + 1} title` },
+        { value: job.projectType, label: `Job ${index + 1} type` },
+        { value: job.scopeDescription, label: `Job ${index + 1} scope` },
+        { value: job.internalNotes, label: `Job ${index + 1} internal notes` },
+        ...job.lineItems.map((item) => ({
+          value: item.description,
+          label: `Job ${index + 1} material or service`,
+        })),
+      ]),
+    ]);
+  }
+
   function projectToDatabase(project: Project) {
     return {
       id: project.id,
@@ -1655,6 +1753,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       valid_until: project.validUntil || null,
       invoice_due_date: project.invoiceDueDate || null,
       project_type: project.projectType,
+      job_sections: project.jobSections,
       billing_method: project.billingMethod,
       square_footage: project.squareFootage,
       labor_rate: project.laborRate,
@@ -1700,9 +1799,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (deleteError) throw new Error(deleteError.message);
 
     const uniqueAssignments = new Map<string, LaborAssignment>();
-    for (const assignment of project.laborAssignments) {
+    const sourceAssignments = project.jobSections?.length
+      ? project.jobSections.flatMap((job) => job.laborAssignments ?? [])
+      : project.laborAssignments;
+    for (const assignment of sourceAssignments) {
       if (!assignment.userId) continue;
-      uniqueAssignments.set(assignment.userId, assignment);
+      const previous = uniqueAssignments.get(assignment.userId);
+      uniqueAssignments.set(assignment.userId, {
+        ...assignment,
+        hours: Number(previous?.hours ?? 0) + Number(assignment.hours || 0),
+      });
     }
     if (!uniqueAssignments.size) return;
 
@@ -1725,6 +1831,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function addProject(project: Project) {
     ensureManager();
+    validateProjectContent(project);
     const { data, error } = await supabase
       .from("projects")
       .insert(projectToDatabase(project))
@@ -1740,6 +1847,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function updateProject(project: Project) {
     ensureManager();
+    validateProjectContent(project);
     const workspaceId = currentWorkspaceOrThrow();
     const { data, error } = await supabase
       .from("projects")
@@ -1859,6 +1967,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function addContact(contact: Contact) {
     ensureManager();
+    assertSafeValues([
+      { value: contact.name, label: "Contact name" },
+      { value: contact.source, label: "Contact source" },
+      { value: contact.notes, label: "Contact notes" },
+    ]);
     const { data, error } = await supabase
       .from("contacts")
       .insert(contactToDatabase(contact))
@@ -1872,6 +1985,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function updateContact(contact: Contact) {
     ensureManager();
+    assertSafeValues([
+      { value: contact.name, label: "Contact name" },
+      { value: contact.source, label: "Contact source" },
+      { value: contact.notes, label: "Contact notes" },
+    ]);
     const { id: _id, user_id: _userId, workspace_id: _workspaceId, created_at: _createdAt, ...updates } =
       contactToDatabase(contact);
     const { data, error } = await supabase
@@ -1941,6 +2059,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function addProperty(property: Property) {
     ensureManager();
+    assertSafeValues([
+      { value: property.name, label: "Property name" },
+      { value: property.description, label: "Property description" },
+      { value: property.internalNotes, label: "Property internal notes" },
+      { value: property.clientNotes, label: "Property client notes" },
+    ]);
     const { data, error } = await supabase
       .from("properties")
       .insert(propertyToDatabase(property))
@@ -1954,6 +2078,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function updateProperty(property: Property) {
     ensureManager();
+    assertSafeValues([
+      { value: property.name, label: "Property name" },
+      { value: property.description, label: "Property description" },
+      { value: property.internalNotes, label: "Property internal notes" },
+      { value: property.clientNotes, label: "Property client notes" },
+    ]);
     const {
       id: _id,
       user_id: _userId,
@@ -2125,6 +2255,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function addInvoice(invoice: Invoice) {
     ensureManager();
+    assertSafeValues([
+      { value: invoice.invoiceNumber, label: "Invoice number" },
+      { value: invoice.notes, label: "Invoice notes" },
+    ]);
     const { data, error } = await supabase
       .from("invoices")
       .insert(invoiceToDatabase(invoice))
@@ -2139,6 +2273,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function updateInvoice(invoice: Invoice) {
     ensureManager();
+    assertSafeValues([
+      { value: invoice.invoiceNumber, label: "Invoice number" },
+      { value: invoice.notes, label: "Invoice notes" },
+    ]);
     const {
       id: _id,
       workspace_id: _workspaceId,
@@ -2262,6 +2400,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function addScheduleEvent(event: ScheduleEvent) {
+    assertSafeValues([
+      { value: event.title, label: "Schedule title" },
+      { value: event.description, label: "Schedule description" },
+    ]);
     const { data, error } = await supabase
       .from("schedule_events")
       .insert(scheduleToDatabase(event))
@@ -2274,6 +2416,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateScheduleEvent(event: ScheduleEvent) {
+    assertSafeValues([
+      { value: event.title, label: "Schedule title" },
+      { value: event.description, label: "Schedule description" },
+    ]);
     const {
       id: _id,
       workspace_id: _workspaceId,
@@ -2339,6 +2485,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function addFollowUp(followUp: FollowUp) {
+    assertSafeValues([
+      { value: followUp.title, label: "Follow-up title" },
+      { value: followUp.notes, label: "Follow-up notes" },
+    ]);
     const { data, error } = await supabase
       .from("follow_ups")
       .insert(followUpToDatabase(followUp))
@@ -2351,6 +2501,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateFollowUp(followUp: FollowUp) {
+    assertSafeValues([
+      { value: followUp.title, label: "Follow-up title" },
+      { value: followUp.notes, label: "Follow-up notes" },
+    ]);
     const {
       id: _id,
       workspace_id: _workspaceId,
@@ -2419,6 +2573,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function addJobRequest(request: JobRequest) {
+    assertSafeValues([
+      { value: request.title, label: "Proposal title" },
+      { value: request.client, label: "Client name" },
+      { value: request.projectType, label: "Job type" },
+      { value: request.scopeDescription, label: "Proposal scope" },
+    ]);
     const { data, error } = await supabase
       .from("job_requests")
       .insert(jobRequestToDatabase(request))
@@ -2431,6 +2591,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateJobRequest(request: JobRequest) {
+    assertSafeValues([
+      { value: request.title, label: "Proposal title" },
+      { value: request.client, label: "Client name" },
+      { value: request.projectType, label: "Job type" },
+      { value: request.scopeDescription, label: "Proposal scope" },
+      { value: request.managerNotes, label: "Manager notes" },
+    ]);
     const {
       id: _id,
       workspace_id: _workspaceId,

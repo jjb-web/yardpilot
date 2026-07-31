@@ -1,37 +1,32 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
   CalendarDays,
-  Eye,
+  ChevronDown,
+  ChevronUp,
+  Fuel,
   Image as ImageIcon,
   Loader2,
   Plus,
   Save,
-  Sparkles,
   Trash2,
   Users,
 } from "lucide-react";
+import FormErrorNotice from "../components/FormErrorNotice";
 import { useApp } from "../context/AppContext";
-import { generateEstimate } from "../services/ai";
 import type {
+  EstimateJob,
   EstimateStatus,
   LaborAssignment,
   LineItem,
+  LineItemType,
   Project,
   ProjectBillingMethod,
   ProjectStatus,
 } from "../data/types";
-import {
-  calculateEstimate,
-  formatMoney,
-  propertyAddress,
-} from "../lib/estimate";
+import { calculateEstimate, calculateJob, formatMoney } from "../lib/estimate";
+import { checkTextSafety } from "../lib/contentSafety";
 
 const PROJECT_TYPES = [
   "Lawn Mowing & Edging",
@@ -63,20 +58,23 @@ const PROJECT_TYPES = [
   "Pressure Washing",
 ];
 
-const CUSTOM_PROJECT_TYPE = "__custom__";
-
 const UNIT_OPTIONS = [
   "each",
   "sq ft",
   "linear ft",
+  "cubic yard",
   "yard",
   "ton",
+  "pound",
   "bag",
+  "gallon",
+  "load",
   "hour",
   "day",
   "flat",
 ];
 
+const CUSTOM_VALUE = "__custom__";
 const DEFAULT_TERMS =
   "Pricing is valid through the date shown above. Changes to the scope, concealed site conditions, permit costs, or customer-requested additions may change the final price. Scheduling begins after approval.";
 
@@ -87,11 +85,7 @@ type EstimateForm = {
   city: string;
   contactId: string;
   propertyId: string;
-  projectType: string;
   billingMethod: ProjectBillingMethod;
-  squareFootage: number;
-  laborRate: number;
-  laborHours: number;
   notes: string;
   status: ProjectStatus;
   estimateStatus: EstimateStatus;
@@ -99,29 +93,21 @@ type EstimateForm = {
   issueDate: string;
   validUntil: string;
   invoiceDueDate: string;
-  scopeDescription: string;
   clientNotes: string;
   terms: string;
   taxRate: number;
   discountAmount: number;
-  scheduledStart: string;
-  scheduledEnd: string;
   followUpAt: string;
 };
 
 type SavedDraft = {
   savedAt: string;
   form: EstimateForm;
-  lineItems: LineItem[];
-  generatedDescription: string | null;
-  laborAssignments: LaborAssignment[];
+  jobSections: EstimateJob[];
 };
 
 function uid() {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    Math.random().toString(36).slice(2, 11)
-  );
+  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
 }
 
 function addDays(date: Date, days: number) {
@@ -131,9 +117,7 @@ function addDays(date: Date, days: number) {
 }
 
 function newEstimateNumber() {
-  const year = new Date().getFullYear();
-  const random = Math.floor(1000 + Math.random() * 9000);
-  return `EST-${year}-${random}`;
+  return `EST-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
 function toDateTimeLocal(value: string | null) {
@@ -144,81 +128,8 @@ function toDateTimeLocal(value: string | null) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function toIso(value: string) {
+function toIso(value: string | null) {
   return value ? new Date(value).toISOString() : null;
-}
-
-function blankItem(): LineItem {
-  return {
-    id: uid(),
-    description: "",
-    qty: 1,
-    unit: "each",
-    unitCost: 0,
-  };
-}
-
-function blankForm(): EstimateForm {
-  const today = new Date();
-  return {
-    name: "",
-    client: "",
-    address: "",
-    city: "",
-    contactId: "",
-    propertyId: "",
-    projectType: PROJECT_TYPES[0],
-    billingMethod: "fixed",
-    squareFootage: 0,
-    laborRate: 0,
-    laborHours: 0,
-    notes: "",
-    status: "active",
-    estimateStatus: "draft",
-    estimateNumber: newEstimateNumber(),
-    issueDate: today.toISOString().slice(0, 10),
-    validUntil: addDays(today, 30),
-    invoiceDueDate: "",
-    scopeDescription: "",
-    clientNotes: "",
-    terms: DEFAULT_TERMS,
-    taxRate: 0,
-    discountAmount: 0,
-    scheduledStart: "",
-    scheduledEnd: "",
-    followUpAt: "",
-  };
-}
-
-function formFromProject(project: Project): EstimateForm {
-  return {
-    name: project.name,
-    client: project.client,
-    address: project.address,
-    city: project.city,
-    contactId: project.contactId ?? "",
-    propertyId: project.propertyId ?? "",
-    projectType: project.projectType,
-    billingMethod: project.billingMethod,
-    squareFootage: project.squareFootage,
-    laborRate: project.laborRate,
-    laborHours: project.laborHours,
-    notes: project.notes,
-    status: project.status,
-    estimateStatus: project.estimateStatus,
-    estimateNumber: project.estimateNumber,
-    issueDate: project.issueDate,
-    validUntil: project.validUntil ?? "",
-    invoiceDueDate: project.invoiceDueDate ?? "",
-    scopeDescription: project.scopeDescription,
-    clientNotes: project.clientNotes,
-    terms: project.terms,
-    taxRate: project.taxRate,
-    discountAmount: project.discountAmount,
-    scheduledStart: toDateTimeLocal(project.scheduledStart),
-    scheduledEnd: toDateTimeLocal(project.scheduledEnd),
-    followUpAt: toDateTimeLocal(project.followUpAt),
-  };
 }
 
 function numericText(value: number) {
@@ -232,8 +143,140 @@ function parseNumeric(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function blankItem(itemType: LineItemType = "material"): LineItem {
+  return {
+    id: uid(),
+    description: itemType === "fuel" ? "Fuel / gas" : "",
+    qty: 1,
+    unit: itemType === "fuel" ? "gallon" : "each",
+    itemType,
+    unitCost: 0,
+  };
+}
+
+function blankJob(index = 0): EstimateJob {
+  return {
+    id: uid(),
+    title: index === 0 ? "" : `Job ${index + 1}`,
+    projectType: PROJECT_TYPES[0],
+    scopeDescription: "",
+    internalNotes: "",
+    squareFootage: 0,
+    pricePerSquareFoot: 0,
+    scheduledStart: null,
+    scheduledEnd: null,
+    laborRate: 0,
+    laborHours: 0,
+    laborAssignments: [],
+    lineItems: [blankItem()],
+    photoIds: [],
+  };
+}
+
+function blankForm(): EstimateForm {
+  const today = new Date();
+  return {
+    name: "",
+    client: "",
+    address: "",
+    city: "",
+    contactId: "",
+    propertyId: "",
+    billingMethod: "fixed",
+    notes: "",
+    status: "active",
+    estimateStatus: "draft",
+    estimateNumber: newEstimateNumber(),
+    issueDate: today.toISOString().slice(0, 10),
+    validUntil: addDays(today, 30),
+    invoiceDueDate: "",
+    clientNotes: "",
+    terms: DEFAULT_TERMS,
+    taxRate: 0,
+    discountAmount: 0,
+    followUpAt: "",
+  };
+}
+
+function jobsFromProject(project: Project): EstimateJob[] {
+  if (project.jobSections?.length) {
+    return project.jobSections.map((job) => ({
+      ...job,
+      scheduledStart: job.scheduledStart ? toDateTimeLocal(job.scheduledStart) : null,
+      scheduledEnd: job.scheduledEnd ? toDateTimeLocal(job.scheduledEnd) : null,
+      lineItems: job.lineItems?.length ? job.lineItems : [blankItem()],
+    }));
+  }
+  return [
+    {
+      id: uid(),
+      title: project.name,
+      projectType: project.projectType,
+      scopeDescription: project.scopeDescription,
+      internalNotes: project.notes,
+      squareFootage: project.squareFootage,
+      pricePerSquareFoot: 0,
+      scheduledStart: project.scheduledStart ? toDateTimeLocal(project.scheduledStart) : null,
+      scheduledEnd: project.scheduledEnd ? toDateTimeLocal(project.scheduledEnd) : null,
+      laborRate: project.laborRate,
+      laborHours: project.laborHours,
+      laborAssignments: project.laborAssignments,
+      lineItems: project.lineItems.length ? project.lineItems : [blankItem()],
+      photoIds: [],
+    },
+  ];
+}
+
+function formFromProject(project: Project): EstimateForm {
+  return {
+    name: project.name,
+    client: project.client,
+    address: project.address,
+    city: project.city,
+    contactId: project.contactId ?? "",
+    propertyId: project.propertyId ?? "",
+    billingMethod: project.billingMethod,
+    notes: project.notes,
+    status: project.status,
+    estimateStatus: project.estimateStatus,
+    estimateNumber: project.estimateNumber,
+    issueDate: project.issueDate,
+    validUntil: project.validUntil ?? "",
+    invoiceDueDate: project.invoiceDueDate ?? "",
+    clientNotes: project.clientNotes,
+    terms: project.terms,
+    taxRate: project.taxRate,
+    discountAmount: project.discountAmount,
+    followUpAt: toDateTimeLocal(project.followUpAt),
+  };
+}
+
+function aggregateAssignments(jobs: EstimateJob[]) {
+  const assignments = new Map<string, LaborAssignment>();
+  for (const job of jobs) {
+    for (const assignment of job.laborAssignments) {
+      if (!assignment.userId) continue;
+      const previous = assignments.get(assignment.userId);
+      assignments.set(assignment.userId, {
+        ...assignment,
+        hours: Number(previous?.hours ?? 0) + Number(assignment.hours || 0),
+      });
+    }
+  }
+  return [...assignments.values()];
+}
+
+function Optional({ required = false }: { required?: boolean }) {
+  return (
+    <span className="ml-1 font-normal normal-case tracking-normal text-gray-400">
+      {required ? "· Required" : "· Optional"}
+    </span>
+  );
+}
+
 export default function EstimateBuilder() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const {
     authUserId,
     activeWorkspaceId,
@@ -246,30 +289,18 @@ export default function EstimateBuilder() {
     addProject,
     updateProject,
   } = useApp();
-  const navigate = useNavigate();
-  const draftReadyRef = useRef(false);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, [id]);
 
   const editing = Boolean(id) && id !== "new";
-  const existing = editing
-    ? projects.find((project) => project.id === id) ?? null
-    : null;
-
+  const existing = editing ? projects.find((project) => project.id === id) ?? null : null;
   const [form, setForm] = useState<EstimateForm>(blankForm);
-  const [lineItems, setLineItems] = useState<LineItem[]>([blankItem()]);
-  const [generatedDescription, setGeneratedDescription] = useState<
-    string | null
-  >(null);
-  const [laborAssignments, setLaborAssignments] = useState<
-    LaborAssignment[]
-  >([]);
-  const [generating, setGenerating] = useState(false);
+  const [jobSections, setJobSections] = useState<EstimateJob[]>([blankJob()]);
+  const [openJobs, setOpenJobs] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [draftMessage, setDraftMessage] = useState("");
+  const draftReadyRef = useRef(false);
+  const topErrorRef = useRef<HTMLDivElement | null>(null);
+  const nameRef = useRef<HTMLInputElement | null>(null);
 
   const draftKey = useMemo(
     () =>
@@ -280,33 +311,27 @@ export default function EstimateBuilder() {
   );
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [id]);
+
+  useEffect(() => {
     if (editing && projectsLoading) return;
     if (editing && !existing) return;
 
     const baseForm = existing ? formFromProject(existing) : blankForm();
-    const baseItems = existing?.lineItems.length
-      ? existing.lineItems
-      : [blankItem()];
-    const baseDescription = existing?.aiEstimate ?? null;
-    const baseLabor = existing?.laborAssignments ?? [];
-
+    const baseJobs = existing ? jobsFromProject(existing) : [blankJob()];
     let restored = false;
+
     if (draftKey) {
       try {
         const raw = localStorage.getItem(draftKey);
         if (raw) {
           const draft = JSON.parse(raw) as SavedDraft;
           const savedTime = new Date(draft.savedAt).getTime();
-          const projectTime = existing
-            ? new Date(existing.updatedAt).getTime()
-            : 0;
+          const projectTime = existing ? new Date(existing.updatedAt).getTime() : 0;
           if (!existing || savedTime > projectTime) {
             setForm(draft.form);
-            setLineItems(
-              draft.lineItems?.length ? draft.lineItems : [blankItem()]
-            );
-            setGeneratedDescription(draft.generatedDescription ?? null);
-            setLaborAssignments(draft.laborAssignments ?? []);
+            setJobSections(draft.jobSections?.length ? draft.jobSections : baseJobs);
             setDraftMessage("Unsaved draft restored.");
             restored = true;
           }
@@ -318,12 +343,10 @@ export default function EstimateBuilder() {
 
     if (!restored) {
       setForm(baseForm);
-      setLineItems(baseItems);
-      setGeneratedDescription(baseDescription);
-      setLaborAssignments(baseLabor);
+      setJobSections(baseJobs);
       setDraftMessage("");
     }
-
+    setOpenJobs(baseJobs.map((job) => job.id));
     setSaveError("");
     draftReadyRef.current = true;
   }, [draftKey, editing, existing?.id, existing?.updatedAt, projectsLoading]);
@@ -331,57 +354,119 @@ export default function EstimateBuilder() {
   useEffect(() => {
     if (!draftKey || !draftReadyRef.current) return;
     const timer = window.setTimeout(() => {
-      const draft: SavedDraft = {
-        savedAt: new Date().toISOString(),
-        form,
-        lineItems,
-        generatedDescription,
-        laborAssignments,
-      };
-      localStorage.setItem(draftKey, JSON.stringify(draft));
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({ savedAt: new Date().toISOString(), form, jobSections })
+      );
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [draftKey, form, lineItems, generatedDescription, laborAssignments]);
+  }, [draftKey, form, jobSections]);
 
-  const contactProperties = useMemo(
-    () =>
-      properties.filter((property) => property.contactId === form.contactId),
-    [properties, form.contactId]
+  const contactProperties = properties.filter(
+    (property) => property.contactId === form.contactId
   );
-  const selectedContact =
-    contacts.find((contact) => contact.id === form.contactId) ?? null;
-  const selectedProperty =
-    properties.find((property) => property.id === form.propertyId) ?? null;
   const selectedPhotos = propertyPhotos.filter(
     (photo) => photo.propertyId === form.propertyId
   );
-
+  const aggregateLabor = aggregateAssignments(jobSections);
+  const aggregateItems = jobSections.flatMap((job) => job.lineItems);
   const totals = calculateEstimate({
-    lineItems,
-    laborAssignments,
-    laborHours: form.laborHours,
-    laborRate: form.laborRate,
+    lineItems: aggregateItems,
+    laborAssignments: aggregateLabor,
+    laborHours: jobSections.reduce((sum, job) => sum + job.laborHours, 0),
+    laborRate: 0,
+    jobSections,
     taxRate: form.taxRate,
     discountAmount: form.discountAmount,
   });
-  const combinedLaborHours = laborAssignments.length
-    ? laborAssignments.reduce(
-        (sum, assignment) => sum + Number(assignment.hours || 0),
-        0
-      )
-    : form.laborHours;
-  const usesCustomProjectType = !PROJECT_TYPES.includes(form.projectType);
 
   const inputClass =
-    "w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 text-base sm:text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/30";
+    "w-full min-h-11 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/30 sm:text-sm";
   const labelClass =
-    "block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5";
+    "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500";
 
-  function setField<K extends keyof EstimateForm>(
-    key: K,
-    value: EstimateForm[K]
-  ) {
+  function setField<K extends keyof EstimateForm>(key: K, value: EstimateForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateJob(jobId: string, updates: Partial<EstimateJob>) {
+    setJobSections((jobs) =>
+      jobs.map((job) => (job.id === jobId ? { ...job, ...updates } : job))
+    );
+  }
+
+  function updateItem(jobId: string, itemId: string, updates: Partial<LineItem>) {
+    setJobSections((jobs) =>
+      jobs.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              lineItems: job.lineItems.map((item) =>
+                item.id === itemId ? { ...item, ...updates } : item
+              ),
+            }
+          : job
+      )
+    );
+  }
+
+  function removeItem(jobId: string, itemId: string) {
+    setJobSections((jobs) =>
+      jobs.map((job) => {
+        if (job.id !== jobId) return job;
+        const remaining = job.lineItems.filter((item) => item.id !== itemId);
+        return { ...job, lineItems: remaining.length ? remaining : [blankItem()] };
+      })
+    );
+  }
+
+  function toggleLaborMember(jobId: string, userId: string) {
+    const member = workspaceMembers.find((item) => item.userId === userId);
+    if (!member) return;
+    setJobSections((jobs) =>
+      jobs.map((job) => {
+        if (job.id !== jobId) return job;
+        const exists = job.laborAssignments.some(
+          (assignment) => assignment.userId === userId
+        );
+        return {
+          ...job,
+          laborAssignments: exists
+            ? job.laborAssignments.filter((assignment) => assignment.userId !== userId)
+            : [
+                ...job.laborAssignments,
+                {
+                  userId,
+                  name: member.name,
+                  hours: 0,
+                  hourlyRate: member.hourlyRate,
+                },
+              ],
+        };
+      })
+    );
+  }
+
+  function updateLabor(
+    jobId: string,
+    userId: string,
+    key: "hours" | "hourlyRate",
+    value: number
+  ) {
+    setJobSections((jobs) =>
+      jobs.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              laborAssignments: job.laborAssignments.map((assignment) =>
+                assignment.userId === userId
+                  ? { ...assignment, [key]: Math.max(0, value) }
+                  : assignment
+              ),
+            }
+          : job
+      )
+    );
   }
 
   function chooseContact(contactId: string) {
@@ -407,123 +492,104 @@ export default function EstimateBuilder() {
     }));
   }
 
-  function updateItem<K extends keyof LineItem>(
-    itemId: string,
-    key: K,
-    value: LineItem[K]
-  ) {
-    setLineItems((items) =>
-      items.map((item) =>
-        item.id === itemId ? { ...item, [key]: value } : item
-      )
-    );
-  }
-
-  function removeItem(itemId: string) {
-    setLineItems((items) => {
-      const remaining = items.filter((item) => item.id !== itemId);
-      return remaining.length ? remaining : [blankItem()];
+  function showError(message: string, focusName = false) {
+    setSaveError(message);
+    window.requestAnimationFrame(() => {
+      topErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (focusName) nameRef.current?.focus();
     });
   }
 
-  function toggleLaborMember(userId: string) {
-    const member = workspaceMembers.find((item) => item.userId === userId);
-    if (!member) return;
-    setLaborAssignments((current) => {
-      const exists = current.some((assignment) => assignment.userId === userId);
-      if (exists) {
-        return current.filter((assignment) => assignment.userId !== userId);
-      }
-      return [
-        ...current,
-        {
-          userId,
-          name: member.name,
-          hours: 0,
-          hourlyRate: member.hourlyRate,
-        },
-      ];
-    });
-  }
-
-  function updateLaborAssignment(
-    userId: string,
-    key: "hours" | "hourlyRate",
-    value: number
-  ) {
-    setLaborAssignments((current) =>
-      current.map((assignment) =>
-        assignment.userId === userId
-          ? { ...assignment, [key]: Math.max(0, value) }
-          : assignment
-      )
-    );
-  }
-
-  async function handleGenerateDescription() {
-    setGenerating(true);
-    setSaveError("");
-    try {
-      const totalHours = laborAssignments.reduce(
-        (sum, assignment) => sum + assignment.hours,
-        0
-      );
-      const result = await generateEstimate({
-        ...(existing ?? {}),
-        ...form,
-        contactId: form.contactId || null,
-        propertyId: form.propertyId || null,
-        validUntil: form.validUntil || null,
-        invoiceDueDate: form.invoiceDueDate || null,
-        scheduledStart: toIso(form.scheduledStart),
-        scheduledEnd: toIso(form.scheduledEnd),
-        followUpAt: toIso(form.followUpAt),
-        lineItems,
-        laborAssignments,
-        laborHours: laborAssignments.length ? totalHours : form.laborHours,
-        laborRate: form.laborRate,
-            totalEstimate: totals.total,
-      });
-      setGeneratedDescription(result);
-    } catch (error) {
-      setSaveError(
-        error instanceof Error
-          ? error.message
-          : "The description could not be generated."
-      );
-    } finally {
-      setGenerating(false);
+  function validate() {
+    if (!form.name.trim()) {
+      showError("Enter an estimate name before saving.", true);
+      return false;
     }
+    if (!form.estimateNumber.trim()) {
+      showError("Enter an estimate number.");
+      return false;
+    }
+    if (!jobSections.length) {
+      showError("Add at least one job to the estimate.");
+      return false;
+    }
+    for (let index = 0; index < jobSections.length; index += 1) {
+      const job = jobSections[index];
+      if (!job.title.trim()) {
+        showError(`Enter a title for Job ${index + 1}.`);
+        setOpenJobs((current) => [...new Set([...current, job.id])]);
+        return false;
+      }
+      const values = [
+        [job.title, `Job ${index + 1} title`],
+        [job.projectType, `Job ${index + 1} type`],
+        [job.scopeDescription, `Job ${index + 1} scope`],
+        [job.internalNotes, `Job ${index + 1} internal notes`],
+      ] as const;
+      for (const [value, label] of values) {
+        const result = checkTextSafety(value, label);
+        if (!result.safe) {
+          showError(result.message);
+          setOpenJobs((current) => [...new Set([...current, job.id])]);
+          return false;
+        }
+      }
+    }
+    const nameSafety = checkTextSafety(form.name, "Estimate name");
+    if (!nameSafety.safe) {
+      showError(nameSafety.message, true);
+      return false;
+    }
+    return true;
   }
 
   async function handleSave() {
     setSaveError("");
-    if (!form.name.trim()) {
-      setSaveError("Enter an estimate or project name before saving.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    if (!form.estimateNumber.trim()) {
-      setSaveError("Enter an estimate number.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
+    if (!validate()) return;
     if (!activeWorkspaceId || !authUserId) {
-      setSaveError("Your workspace is still loading.");
+      showError("Your workspace is still loading. Try again in a moment.");
       return;
     }
 
     setSaving(true);
     const now = new Date().toISOString();
-    const totalLaborHours = laborAssignments.length
-      ? laborAssignments.reduce(
-          (sum, assignment) => sum + Number(assignment.hours || 0),
-          0
-        )
-      : form.laborHours;
+    const normalizedJobs = jobSections.map((job) => ({
+      ...job,
+      title: job.title.trim(),
+      projectType: job.projectType.trim(),
+      scopeDescription: job.scopeDescription.trim(),
+      internalNotes: job.internalNotes.trim(),
+      scheduledStart: toIso(job.scheduledStart),
+      scheduledEnd: toIso(job.scheduledEnd),
+      lineItems: job.lineItems.filter(
+        (item) => item.description.trim() || item.qty || item.unitCost
+      ),
+    }));
+    const assignments = aggregateAssignments(normalizedJobs);
+    const allItems = normalizedJobs.flatMap((job) => job.lineItems);
+    const firstJob = normalizedJobs[0];
+    const firstStart = normalizedJobs
+      .map((job) => job.scheduledStart)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0] ?? null;
+    const lastEnd = normalizedJobs
+      .map((job) => job.scheduledEnd)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null;
+    const totalHours = normalizedJobs.reduce(
+      (sum, job) =>
+        sum +
+        (job.laborAssignments.length
+          ? job.laborAssignments.reduce(
+              (jobSum, assignment) => jobSum + Number(assignment.hours || 0),
+              0
+            )
+          : Number(job.laborHours || 0)),
+      0
+    );
 
     try {
-      let savedProject: Project;
       const common = {
         ...form,
         name: form.name.trim(),
@@ -534,96 +600,68 @@ export default function EstimateBuilder() {
         propertyId: form.propertyId || null,
         validUntil: form.validUntil || null,
         invoiceDueDate: form.invoiceDueDate || null,
-        lineItems,
-        laborAssignments,
-        laborHours: totalLaborHours,
-        laborRate: form.laborRate,
-        aiEstimate: generatedDescription,
-        totalEstimate: totals.total,
-        scheduledStart: toIso(form.scheduledStart),
-        scheduledEnd: toIso(form.scheduledEnd),
-        followUpAt: toIso(form.followUpAt),
-        assignedMemberIds: laborAssignments.map(
-          (assignment) => assignment.userId
+        projectType: firstJob.projectType,
+        jobSections: normalizedJobs,
+        squareFootage: normalizedJobs.reduce(
+          (sum, job) => sum + Number(job.squareFootage || 0),
+          0
         ),
+        laborRate: firstJob.laborRate,
+        laborHours: totalHours,
+        laborAssignments: assignments,
+        lineItems: allItems,
+        aiEstimate: null,
+        scopeDescription: normalizedJobs
+          .map((job) => `${job.title}: ${job.scopeDescription}`)
+          .join("\n\n"),
+        totalEstimate: totals.total,
+        scheduledStart: firstStart,
+        scheduledEnd: lastEnd,
+        followUpAt: toIso(form.followUpAt),
+        assignedMemberIds: assignments.map((assignment) => assignment.userId),
         updatedAt: now,
       };
 
-      if (existing) {
-        savedProject = await updateProject({ ...existing, ...common });
-      } else {
-        savedProject = await addProject({
-          id: uid(),
-          workspaceId: activeWorkspaceId,
-          createdBy: authUserId,
-          ...common,
-          shareToken: globalThis.crypto.randomUUID(),
-          shareEnabled: false,
-          sentAt: null,
-          viewedAt: null,
-          respondedAt: null,
-          acceptedAt: null,
-          declinedAt: null,
-          responseName: "",
-          responseMessage: "",
-          signatureData: "",
-          createdAt: now,
-        });
-      }
+      const saved = existing
+        ? await updateProject({ ...existing, ...common })
+        : await addProject({
+            id: uid(),
+            workspaceId: activeWorkspaceId,
+            createdBy: authUserId,
+            ...common,
+            shareToken: globalThis.crypto.randomUUID(),
+            shareEnabled: false,
+            sentAt: null,
+            viewedAt: null,
+            respondedAt: null,
+            acceptedAt: null,
+            declinedAt: null,
+            responseName: "",
+            responseMessage: "",
+            signatureData: "",
+            createdAt: now,
+          });
 
       if (draftKey) localStorage.removeItem(draftKey);
-      navigate(`/app/estimates/${savedProject.id}`);
+      navigate(`/app/estimates/${saved.id}`);
     } catch (error) {
-      setSaveError(
-        error instanceof Error
-          ? error.message
-          : "The estimate could not be saved."
-      );
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      showError(error instanceof Error ? error.message : "The estimate could not be saved.");
     } finally {
       setSaving(false);
     }
   }
 
-  const SaveActions = () => (
-    <div className="flex items-center justify-end">
-      <button
-        type="button"
-        onClick={() => void handleSave()}
-        disabled={saving}
-        className="inline-flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 cursor-pointer disabled:opacity-60"
-      >
-        {saving ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <Save size={16} />
-        )}
-        {editing ? "Update Estimate" : "Save Estimate"}
-      </button>
-    </div>
-  );
-
   if (projectsLoading && editing) {
-    return (
-      <div className="p-6 max-w-4xl mx-auto text-sm text-gray-500">
-        Loading estimate...
-      </div>
-    );
+    return <div className="p-6 text-sm text-gray-500">Loading estimate…</div>;
   }
 
   if (editing && !existing) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-          <h1 className="text-xl font-bold text-gray-900">
-            Estimate not found
-          </h1>
-          <button
-            type="button"
-            onClick={() => navigate("/app/estimates")}
-            className="mt-5 text-sm font-semibold text-green-700 cursor-pointer"
-          >
-            Return to estimates
+      <div className="p-6">
+        <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white p-10 text-center">
+          <h1 className="text-xl font-bold">Estimate not found</h1>
+          <button onClick={() => navigate(-1)} className="mt-4 text-sm font-semibold text-green-700">
+            Back
           </button>
         </div>
       </div>
@@ -631,729 +669,350 @@ export default function EstimateBuilder() {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
+    <div className="mx-auto max-w-7xl p-4 sm:p-6">
+      <FormErrorNotice message={saveError} position="floating" />
+
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 cursor-pointer mb-3"
+            className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900"
           >
             <ArrowLeft size={16} /> Back
           </button>
           <h1 className="text-2xl font-bold text-gray-900">
             {editing ? "Edit Estimate" : "Create Estimate"}
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Changes are saved as a browser draft until you save the estimate.
+          <p className="mt-1 text-sm text-gray-500">
+            Build one combined estimate with one or more separate jobs. Fields marked Optional can be left blank.
           </p>
         </div>
-        <div className="flex flex-col gap-2">
-          {editing && existing && (
-            <button
-              type="button"
-              onClick={() => navigate(`/app/estimates/${existing.id}`)}
-              className="inline-flex justify-center items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm font-semibold cursor-pointer"
-            >
-              <Eye size={16} /> View Estimate
-            </button>
-          )}
-          <SaveActions />
-        </div>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          {editing ? "Update Estimate" : "Create Estimate"}
+        </button>
       </div>
 
-      {saveError && (
-        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {saveError}
-        </div>
-      )}
+      <div ref={topErrorRef}>
+        <FormErrorNotice message={saveError} />
+      </div>
       {draftMessage && (
-        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           {draftMessage}
         </div>
       )}
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-          <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-            <h2 className="font-bold text-gray-900 mb-5">Estimate details</h2>
-            <div className="grid sm:grid-cols-2 gap-4">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+            <h2 className="mb-5 font-bold text-gray-900">Estimate details</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className={labelClass}>Estimate / Project Name</label>
-                <input
-                  value={form.name}
-                  onChange={(event) => setField("name", event.target.value)}
-                  className={inputClass}
-                />
+                <label className={labelClass}>Estimate name <Optional required /></label>
+                <input ref={nameRef} value={form.name} onChange={(event) => setField("name", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Contact</label>
-                <select
-                  value={form.contactId}
-                  onChange={(event) => chooseContact(event.target.value)}
-                  className={inputClass}
-                >
+                <label className={labelClass}>Contact <Optional /></label>
+                <select value={form.contactId} onChange={(event) => chooseContact(event.target.value)} className={inputClass}>
                   <option value="">No linked contact</option>
-                  {contacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {contact.name}
-                    </option>
-                  ))}
+                  {contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Property</label>
-                <select
-                  value={form.propertyId}
-                  onChange={(event) => chooseProperty(event.target.value)}
-                  disabled={!form.contactId}
-                  className={inputClass}
-                >
+                <label className={labelClass}>Property <Optional /></label>
+                <select value={form.propertyId} onChange={(event) => chooseProperty(event.target.value)} disabled={!form.contactId} className={inputClass}>
                   <option value="">No linked property</option>
-                  {contactProperties.map((property) => (
-                    <option key={property.id} value={property.id}>
-                      {property.name}
-                    </option>
-                  ))}
+                  {contactProperties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Client Name</label>
-                <input
-                  value={form.client}
-                  onChange={(event) => setField("client", event.target.value)}
-                  className={inputClass}
-                />
+                <label className={labelClass}>Client name <Optional /></label>
+                <input value={form.client} onChange={(event) => setField("client", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Street Address</label>
-                <input
-                  value={form.address}
-                  onChange={(event) => setField("address", event.target.value)}
-                  className={inputClass}
-                />
+                <label className={labelClass}>Estimate number <Optional required /></label>
+                <input value={form.estimateNumber} onChange={(event) => setField("estimateNumber", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>City</label>
-                <input
-                  value={form.city}
-                  onChange={(event) => setField("city", event.target.value)}
-                  placeholder="Salem"
-                  className={inputClass}
-                />
+                <label className={labelClass}>Street address <Optional /></label>
+                <input value={form.address} onChange={(event) => setField("address", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Estimate Number</label>
-                <input
-                  value={form.estimateNumber}
-                  onChange={(event) =>
-                    setField("estimateNumber", event.target.value)
-                  }
-                  className={inputClass}
-                />
+                <label className={labelClass}>City <Optional /></label>
+                <input value={form.city} onChange={(event) => setField("city", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Service / Job Type</label>
-                <select
-                  value={usesCustomProjectType ? CUSTOM_PROJECT_TYPE : form.projectType}
-                  onChange={(event) =>
-                    setField(
-                      "projectType",
-                      event.target.value === CUSTOM_PROJECT_TYPE
-                        ? ""
-                        : event.target.value
-                    )
-                  }
-                  className={inputClass}
-                >
-                  {PROJECT_TYPES.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                  <option value={CUSTOM_PROJECT_TYPE}>Other job type…</option>
+                <label className={labelClass}>Pricing method <Optional /></label>
+                <select value={form.billingMethod} onChange={(event) => setField("billingMethod", event.target.value as ProjectBillingMethod)} className={inputClass}>
+                  <option value="fixed">Fixed price</option>
+                  <option value="hourly">Time and materials</option>
                 </select>
-                {usesCustomProjectType && (
-                  <input
-                    value={form.projectType}
-                    onChange={(event) => setField("projectType", event.target.value)}
-                    placeholder="Enter another job or service type"
-                    className={`${inputClass} mt-2`}
-                  />
-                )}
               </div>
               <div>
-                <label className={labelClass}>Pricing Method</label>
-                <select
-                  value={form.billingMethod}
-                  onChange={(event) =>
-                    setField(
-                      "billingMethod",
-                      event.target.value as ProjectBillingMethod
-                    )
-                  }
-                  className={inputClass}
-                >
-                  <option value="fixed">Fixed price — due by job completion</option>
-                  <option value="hourly">Time & materials — based on total hours</option>
-                </select>
-                <p className="mt-1.5 text-xs text-gray-400">
-                  Hourly estimates are projections. The final invoice can use actual combined crew hours.
-                </p>
+                <label className={labelClass}>Issue date <Optional /></label>
+                <input type="date" value={form.issueDate} onChange={(event) => setField("issueDate", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Issue Date</label>
-                <input
-                  type="date"
-                  value={form.issueDate}
-                  onChange={(event) =>
-                    setField("issueDate", event.target.value)
-                  }
-                  className={inputClass}
-                />
+                <label className={labelClass}>Valid until <Optional /></label>
+                <input type="date" value={form.validUntil} onChange={(event) => setField("validUntil", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Valid Until</label>
-                <input
-                  type="date"
-                  value={form.validUntil}
-                  onChange={(event) =>
-                    setField("validUntil", event.target.value)
-                  }
-                  className={inputClass}
-                />
+                <label className={labelClass}>Invoice due date <Optional /></label>
+                <input type="date" value={form.invoiceDueDate} onChange={(event) => setField("invoiceDueDate", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Estimate Status</label>
-                <div className="flex min-h-11 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold capitalize text-gray-700">
-                  {form.estimateStatus}
-                </div>
-                <p className="mt-1.5 text-xs text-gray-400">
-                  Status changes automatically when the estimate is shared or the client responds.
-                </p>
-              </div>
-              <div>
-                <label className={labelClass}>Square Footage</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={numericText(form.squareFootage)}
-                  onChange={(event) =>
-                    setField("squareFootage", parseNumeric(event.target.value))
-                  }
-                  placeholder="0"
-                  className={inputClass}
-                />
+                <label className={labelClass}>Follow-up reminder <Optional /></label>
+                <input type="datetime-local" value={form.followUpAt} onChange={(event) => setField("followUpAt", event.target.value)} className={inputClass} />
               </div>
             </div>
           </section>
 
-          <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-5">
-              <CalendarDays size={17} className="text-green-700" />
-              <h2 className="font-bold text-gray-900">Schedule & follow-up</h2>
-            </div>
-            <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <label className={labelClass}>Scheduled Start</label>
-                <input
-                  type="datetime-local"
-                  value={form.scheduledStart}
-                  onChange={(event) =>
-                    setField("scheduledStart", event.target.value)
-                  }
-                  className={inputClass}
-                />
+                <h2 className="font-bold text-gray-900">Jobs included in this estimate</h2>
+                <p className="mt-1 text-sm text-gray-500">Keep lawn work, mulch installation, cleanup, or other work as separate employee-ready jobs.</p>
               </div>
-              <div>
-                <label className={labelClass}>Scheduled End</label>
-                <input
-                  type="datetime-local"
-                  value={form.scheduledEnd}
-                  onChange={(event) =>
-                    setField("scheduledEnd", event.target.value)
-                  }
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Follow-up Reminder</label>
-                <input
-                  type="datetime-local"
-                  value={form.followUpAt}
-                  onChange={(event) =>
-                    setField("followUpAt", event.target.value)
-                  }
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Future Invoice Due Date</label>
-                <input
-                  type="date"
-                  value={form.invoiceDueDate}
-                  onChange={(event) =>
-                    setField("invoiceDueDate", event.target.value)
-                  }
-                  className={inputClass}
-                />
-                <p className="mt-1.5 text-xs text-gray-400">
-                  Optional. Transfers to the invoice when this job is completed.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Users size={17} className="text-green-700" />
-              <h2 className="font-bold text-gray-900">Crew labor</h2>
-            </div>
-            <p className="text-sm text-gray-500 mb-5">
-              Select workers and enter their estimated hours. Each worker's
-              hourly rate is multiplied by their hours and added directly to the
-              estimate total.
-            </p>
-
-            <div className="grid sm:grid-cols-2 gap-3">
-              {workspaceMembers.map((member) => {
-                const assignment = laborAssignments.find(
-                  (item) => item.userId === member.userId
-                );
-                return (
-                  <div
-                    key={member.userId}
-                    className={`rounded-xl border p-4 ${
-                      assignment
-                        ? "border-green-300 bg-green-50"
-                        : "border-gray-200 bg-white"
-                    }`}
-                  >
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(assignment)}
-                        onChange={() => toggleLaborMember(member.userId)}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-gray-900 truncate">
-                          {member.name}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {member.positionTitle || member.role.replace("_", " ")}
-                          {member.hourlyRate > 0
-                            ? ` · ${formatMoney(member.hourlyRate)}/hr`
-                            : " · no rate set"}
-                        </p>
-                      </div>
-                    </label>
-
-                    {assignment && (
-                      <div className="grid grid-cols-2 gap-3 mt-4">
-                        <div>
-                          <label className={labelClass}>Hours</label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={numericText(assignment.hours)}
-                            onChange={(event) =>
-                              updateLaborAssignment(
-                                member.userId,
-                                "hours",
-                                parseNumeric(event.target.value)
-                              )
-                            }
-                            placeholder="0"
-                            className={inputClass}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Hourly Rate</label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={numericText(assignment.hourlyRate)}
-                            onChange={(event) =>
-                              updateLaborAssignment(
-                                member.userId,
-                                "hourlyRate",
-                                parseNumeric(event.target.value)
-                              )
-                            }
-                            placeholder="0"
-                            className={inputClass}
-                          />
-                        </div>
-                        <p className="col-span-2 text-sm font-semibold text-green-800">
-                          Labor total:{" "}
-                          {formatMoney(
-                            assignment.hours * assignment.hourlyRate
-                          )}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {laborAssignments.length === 0 ? (
-              <div className="mt-5 rounded-xl border border-dashed border-gray-300 p-4">
-                <p className="text-sm font-semibold text-gray-700">
-                  Unassigned labor
-                </p>
-                <p className="text-xs text-gray-400 mt-1 mb-4">
-                  Use these fields when the crew has not been selected yet.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelClass}>Labor Hours</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={numericText(form.laborHours)}
-                      onChange={(event) =>
-                        setField("laborHours", parseNumeric(event.target.value))
-                      }
-                      placeholder="0"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Hourly Rate</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={numericText(form.laborRate)}
-                      onChange={(event) =>
-                        setField("laborRate", parseNumeric(event.target.value))
-                      }
-                      placeholder="0"
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-5 rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
-                    Total crew hours
-                  </p>
-                  <p className="font-bold text-green-950">
-                    {combinedLaborHours.toLocaleString("en-US")}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
-                    Labor total
-                  </p>
-                  <p className="font-bold text-green-950">
-                    {formatMoney(totals.labor)}
-                  </p>
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-            <div className="mb-5">
-              <h2 className="font-bold text-gray-900">Description & notes</h2>
-              <p className="mt-1 text-sm text-gray-500">Write the scope yourself or use the local formatter for a clean client-ready paragraph.</p>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Scope Description</label>
-                <textarea
-                  value={form.scopeDescription}
-                  onChange={(event) =>
-                    setField("scopeDescription", event.target.value)
-                  }
-                  rows={4}
-                  className={inputClass}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-                  <label className={`${labelClass} mb-0`}>
-                    Optional Generated Description
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void handleGenerateDescription()}
-                    disabled={generating || saving}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer disabled:opacity-60"
-                  >
-                    {generating ? (
-                      <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                      <Sparkles size={15} />
-                    )}
-                    {generating ? "Generating…" : "Generate Description"}
-                  </button>
-                </div>
-                <textarea
-                  value={generatedDescription ?? ""}
-                  onChange={(event) =>
-                    setGeneratedDescription(event.target.value || null)
-                  }
-                  rows={5}
-                  placeholder="Generate a clean client-ready paragraph, or write your own."
-                  className={inputClass}
-                />
-                <p className="text-xs text-gray-400 mt-1.5">
-                  This formatter uses your estimate data and does not call an
-                  outside AI service.
-                </p>
-              </div>
-              <div>
-                <label className={labelClass}>Client Notes</label>
-                <textarea
-                  value={form.clientNotes}
-                  onChange={(event) =>
-                    setField("clientNotes", event.target.value)
-                  }
-                  rows={3}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Internal Notes — not shared</label>
-                <textarea
-                  value={form.notes}
-                  onChange={(event) => setField("notes", event.target.value)}
-                  rows={3}
-                  className={inputClass}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Terms</label>
-                <textarea
-                  value={form.terms}
-                  onChange={(event) => setField("terms", event.target.value)}
-                  rows={4}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-bold text-gray-900">
-                Materials and services
-              </h2>
               <button
                 type="button"
-                onClick={() =>
-                  setLineItems((items) => [...items, blankItem()])
-                }
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-green-700 cursor-pointer"
+                onClick={() => {
+                  const job = blankJob(jobSections.length);
+                  setJobSections((current) => [...current, job]);
+                  setOpenJobs((current) => [...current, job.id]);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-800"
               >
-                <Plus size={15} /> Add line
+                <Plus size={16} /> Add another job <span className="text-xs font-normal text-green-600">Optional</span>
               </button>
             </div>
 
-            <div className="space-y-3">
-              {lineItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-12 gap-2 items-end rounded-xl bg-gray-50 border border-gray-100 p-3"
-                >
-                  <div className="col-span-12 sm:col-span-5">
-                    <label className={labelClass}>Description</label>
-                    <input
-                      value={item.description}
-                      onChange={(event) =>
-                        updateItem(item.id, "description", event.target.value)
-                      }
-                      className={inputClass}
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <label className={labelClass}>Qty</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={numericText(item.qty)}
-                      onChange={(event) =>
-                        updateItem(
-                          item.id,
-                          "qty",
-                          parseNumeric(event.target.value)
-                        )
-                      }
-                      placeholder="0"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <label className={labelClass}>Unit</label>
-                    <select
-                      value={item.unit}
-                      onChange={(event) =>
-                        updateItem(item.id, "unit", event.target.value)
-                      }
-                      className={inputClass}
+            {jobSections.map((job, index) => {
+              const open = openJobs.includes(job.id);
+              const jobTotals = calculateJob(job);
+              const customType = !PROJECT_TYPES.includes(job.projectType);
+              return (
+                <article key={job.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                  <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
+                    <button
+                      type="button"
+                      onClick={() => setOpenJobs((current) => open ? current.filter((value) => value !== job.id) : [...current, job.id])}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     >
-                      {UNIT_OPTIONS.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-700">{index + 1}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-bold text-gray-900">{job.title || `Job ${index + 1}`}</span>
+                        <span className="block truncate text-xs text-gray-500">{job.projectType || "Select a job type"} · {formatMoney(jobTotals.subtotal)}</span>
+                      </span>
+                      {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                    {jobSections.length > 1 && (
+                      <button type="button" onClick={() => setJobSections((current) => current.filter((item) => item.id !== job.id))} className="rounded-lg p-2 text-red-500 hover:bg-red-50" aria-label={`Remove Job ${index + 1}`}>
+                        <Trash2 size={17} />
+                      </button>
+                    )}
                   </div>
-                  <div className="col-span-6 sm:col-span-2">
-                    <label className={labelClass}>Price / Unit</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={numericText(item.unitCost)}
-                      onChange={(event) =>
-                        updateItem(
-                          item.id,
-                          "unitCost",
-                          parseNumeric(event.target.value)
-                        )
-                      }
-                      placeholder="0"
-                      className={inputClass}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    className="col-span-12 sm:col-span-1 h-11 flex items-center justify-center text-gray-400 hover:text-red-600 cursor-pointer"
-                    aria-label="Remove line item"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
 
-            <div className="grid sm:grid-cols-2 gap-4 mt-5">
-              <div>
-                <label className={labelClass}>Tax Rate %</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={numericText(form.taxRate)}
-                  onChange={(event) =>
-                    setField("taxRate", parseNumeric(event.target.value))
-                  }
-                  placeholder="0"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Discount</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={numericText(form.discountAmount)}
-                  onChange={(event) =>
-                    setField("discountAmount", parseNumeric(event.target.value))
-                  }
-                  placeholder="0"
-                  className={inputClass}
-                />
-              </div>
+                  {open && (
+                    <div className="space-y-6 p-5 sm:p-6">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className={labelClass}>Job title <Optional required /></label>
+                          <input value={job.title} onChange={(event) => updateJob(job.id, { title: event.target.value })} placeholder="Example: Cut lawn" className={inputClass} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Job type <Optional required /></label>
+                          <select value={customType ? CUSTOM_VALUE : job.projectType} onChange={(event) => updateJob(job.id, { projectType: event.target.value === CUSTOM_VALUE ? "" : event.target.value })} className={inputClass}>
+                            {PROJECT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                            <option value={CUSTOM_VALUE}>Custom job type…</option>
+                          </select>
+                          {customType && <input value={job.projectType} onChange={(event) => updateJob(job.id, { projectType: event.target.value })} placeholder="Enter a custom job type" className={`${inputClass} mt-2`} />}
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className={labelClass}>Scope of work <Optional /></label>
+                          <textarea value={job.scopeDescription} onChange={(event) => updateJob(job.id, { scopeDescription: event.target.value })} rows={4} className={inputClass} />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className={labelClass}>Internal employee instructions <Optional /></label>
+                          <textarea value={job.internalNotes} onChange={(event) => updateJob(job.id, { internalNotes: event.target.value })} rows={3} className={inputClass} />
+                          <p className="mt-1.5 text-xs text-gray-400">Shown in Jobs and Past Jobs; not included in the customer estimate.</p>
+                        </div>
+                        <div>
+                          <label className={labelClass}>Scheduled start <Optional /></label>
+                          <input type="datetime-local" value={job.scheduledStart ?? ""} onChange={(event) => updateJob(job.id, { scheduledStart: event.target.value || null })} className={inputClass} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Scheduled end <Optional /></label>
+                          <input type="datetime-local" value={job.scheduledEnd ?? ""} onChange={(event) => updateJob(job.id, { scheduledEnd: event.target.value || null })} className={inputClass} />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-gray-200 p-4">
+                        <h3 className="font-semibold text-gray-900">Square-foot pricing <Optional /></h3>
+                        <p className="mt-1 text-xs text-gray-400">Use this for sod, mulch, turf, cleanup, or any work priced per square foot.</p>
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className={labelClass}>Square feet</label>
+                            <input inputMode="decimal" value={numericText(job.squareFootage)} onChange={(event) => updateJob(job.id, { squareFootage: parseNumeric(event.target.value) })} className={inputClass} />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Price per sq ft</label>
+                            <input inputMode="decimal" value={numericText(job.pricePerSquareFoot)} onChange={(event) => updateJob(job.id, { pricePerSquareFoot: parseNumeric(event.target.value) })} className={inputClass} />
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm font-semibold text-green-800">Square-foot total: {formatMoney(job.squareFootage * job.pricePerSquareFoot)}</p>
+                      </div>
+
+                      <div>
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <h3 className="font-semibold text-gray-900">Materials and services <Optional /></h3>
+                            <p className="mt-1 text-xs text-gray-400">Add custom descriptions, custom units, or fuel/gas as a separate line.</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => updateJob(job.id, { lineItems: [...job.lineItems, blankItem("fuel")] })} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"><Fuel size={14} /> Add fuel</button>
+                            <button type="button" onClick={() => updateJob(job.id, { lineItems: [...job.lineItems, blankItem()] })} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"><Plus size={14} /> Add line</button>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {job.lineItems.map((item) => {
+                            const customUnit = !UNIT_OPTIONS.includes(item.unit);
+                            return (
+                              <div key={item.id} className="grid grid-cols-12 items-end gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                <div className="col-span-12 sm:col-span-2">
+                                  <label className={labelClass}>Type</label>
+                                  <select value={item.itemType ?? "material"} onChange={(event) => updateItem(job.id, item.id, { itemType: event.target.value as LineItemType })} className={inputClass}>
+                                    <option value="material">Material</option>
+                                    <option value="service">Service</option>
+                                    <option value="fuel">Fuel / gas</option>
+                                  </select>
+                                </div>
+                                <div className="col-span-12 sm:col-span-4">
+                                  <label className={labelClass}>Description</label>
+                                  <input value={item.description} onChange={(event) => updateItem(job.id, item.id, { description: event.target.value })} placeholder="Custom material or service" className={inputClass} />
+                                </div>
+                                <div className="col-span-4 sm:col-span-1">
+                                  <label className={labelClass}>Qty</label>
+                                  <input inputMode="decimal" value={numericText(item.qty)} onChange={(event) => updateItem(job.id, item.id, { qty: parseNumeric(event.target.value) })} className={inputClass} />
+                                </div>
+                                <div className="col-span-8 sm:col-span-2">
+                                  <label className={labelClass}>Unit</label>
+                                  <select value={customUnit ? CUSTOM_VALUE : item.unit} onChange={(event) => updateItem(job.id, item.id, { unit: event.target.value === CUSTOM_VALUE ? "" : event.target.value })} className={inputClass}>
+                                    {UNIT_OPTIONS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                                    <option value={CUSTOM_VALUE}>Custom…</option>
+                                  </select>
+                                  {customUnit && <input value={item.unit} onChange={(event) => updateItem(job.id, item.id, { unit: event.target.value })} placeholder="Custom unit" className={`${inputClass} mt-2`} />}
+                                </div>
+                                <div className="col-span-8 sm:col-span-2">
+                                  <label className={labelClass}>Price / unit</label>
+                                  <input inputMode="decimal" value={numericText(item.unitCost)} onChange={(event) => updateItem(job.id, item.id, { unitCost: parseNumeric(event.target.value) })} className={inputClass} />
+                                </div>
+                                <button type="button" onClick={() => removeItem(job.id, item.id)} className="col-span-4 flex min-h-11 items-center justify-center rounded-lg border border-red-100 text-red-500 hover:bg-red-50 sm:col-span-1" aria-label="Remove line"><Trash2 size={16} /></button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-3 flex items-center gap-2"><Users size={17} className="text-green-700" /><h3 className="font-semibold text-gray-900">Workers and estimated hours <Optional /></h3></div>
+                        {workspaceMembers.length > 0 && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {workspaceMembers.map((member) => {
+                              const assignment = job.laborAssignments.find((item) => item.userId === member.userId);
+                              return (
+                                <div key={member.userId} className="rounded-xl border border-gray-200 p-4">
+                                  <label className="flex items-center gap-3 text-sm font-semibold text-gray-800">
+                                    <input type="checkbox" checked={Boolean(assignment)} onChange={() => toggleLaborMember(job.id, member.userId)} />
+                                    {member.name}
+                                  </label>
+                                  {assignment && (
+                                    <div className="mt-4 grid grid-cols-2 gap-3">
+                                      <div><label className={labelClass}>Hours</label><input inputMode="decimal" value={numericText(assignment.hours)} onChange={(event) => updateLabor(job.id, member.userId, "hours", parseNumeric(event.target.value))} className={inputClass} /></div>
+                                      <div><label className={labelClass}>Hourly rate</label><input inputMode="decimal" value={numericText(assignment.hourlyRate)} onChange={(event) => updateLabor(job.id, member.userId, "hourlyRate", parseNumeric(event.target.value))} className={inputClass} /></div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {job.laborAssignments.length === 0 && (
+                          <div className="mt-3 grid gap-4 rounded-xl border border-dashed border-gray-300 p-4 sm:grid-cols-2">
+                            <div><label className={labelClass}>Unassigned labor hours</label><input inputMode="decimal" value={numericText(job.laborHours)} onChange={(event) => updateJob(job.id, { laborHours: parseNumeric(event.target.value) })} className={inputClass} /></div>
+                            <div><label className={labelClass}>Hourly rate</label><input inputMode="decimal" value={numericText(job.laborRate)} onChange={(event) => updateJob(job.id, { laborRate: parseNumeric(event.target.value) })} className={inputClass} /></div>
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedPhotos.length > 0 && (
+                        <div>
+                          <div className="mb-3 flex items-center gap-2"><ImageIcon size={17} className="text-green-700" /><h3 className="font-semibold text-gray-900">Job photos <Optional /></h3></div>
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {selectedPhotos.map((photo) => (
+                              <label key={photo.id} className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                                <img src={photo.url} alt={photo.caption || "Property"} className="aspect-square w-full object-cover" />
+                                <span className="flex items-center gap-2 p-2 text-xs"><input type="checkbox" checked={job.photoIds.includes(photo.id)} onChange={() => updateJob(job.id, { photoIds: job.photoIds.includes(photo.id) ? job.photoIds.filter((value) => value !== photo.id) : [...job.photoIds, photo.id] })} /> Include</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+            <h2 className="mb-5 font-bold text-gray-900">Customer and internal notes</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label className={labelClass}>Client notes <Optional /></label><textarea value={form.clientNotes} onChange={(event) => setField("clientNotes", event.target.value)} rows={4} className={inputClass} /></div>
+              <div><label className={labelClass}>Estimate-level internal notes <Optional /></label><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} rows={4} className={inputClass} /></div>
+              <div className="sm:col-span-2"><label className={labelClass}>Terms <Optional /></label><textarea value={form.terms} onChange={(event) => setField("terms", event.target.value)} rows={4} className={inputClass} /></div>
             </div>
           </section>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
-            <SaveActions />
+          <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+            <h2 className="mb-5 font-bold text-gray-900">Final adjustments <Optional /></h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label className={labelClass}>Tax rate (%)</label><input inputMode="decimal" value={numericText(form.taxRate)} onChange={(event) => setField("taxRate", parseNumeric(event.target.value))} className={inputClass} /></div>
+              <div><label className={labelClass}>Discount amount</label><input inputMode="decimal" value={numericText(form.discountAmount)} onChange={(event) => setField("discountAmount", parseNumeric(event.target.value))} className={inputClass} /></div>
+            </div>
+          </section>
+
+          <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+            <FormErrorNotice message={saveError} />
+            <p className="text-xs text-gray-500">Required fields are checked before saving. Errors also appear at the top of the viewport so the button never seems unresponsive.</p>
+            <button type="button" onClick={() => void handleSave()} disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-800 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {editing ? "Update Estimate" : "Create Estimate"}
+            </button>
           </div>
         </div>
 
-        <aside className="space-y-5 lg:sticky lg:top-6 self-start">
-          <div className="bg-green-950 text-white rounded-2xl p-6">
-            <p className="text-xs uppercase tracking-wider font-bold text-green-300">
-              Estimate total
-            </p>
-            <p className="text-4xl font-extrabold mt-2">
-              {formatMoney(totals.total)}
-            </p>
-            <div className="mt-5 pt-5 border-t border-white/10 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-green-200">Materials & services</span>
-                <span>{formatMoney(totals.materials)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-green-200">Total combined labor hours</span>
-                <span>{combinedLaborHours.toLocaleString("en-US")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-green-200">Labor</span>
-                <span>{formatMoney(totals.labor)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-green-200">Tax</span>
-                <span>{formatMoney(totals.tax)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-green-200">Discount</span>
-                <span>-{formatMoney(totals.discount)}</span>
-              </div>
-            </div>
+        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Estimate total</p>
+            <p className="mt-1 text-3xl font-bold text-gray-900">{formatMoney(totals.total)}</p>
+            <dl className="mt-5 space-y-2 text-sm">
+              <div className="flex justify-between"><dt className="text-gray-500">Jobs</dt><dd className="font-semibold">{jobSections.length}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Materials/services</dt><dd>{formatMoney(totals.materials)}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Labor</dt><dd>{formatMoney(totals.labor)}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Tax</dt><dd>{formatMoney(totals.tax)}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Discount</dt><dd>-{formatMoney(totals.discount)}</dd></div>
+            </dl>
           </div>
-
-
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <ImageIcon size={16} className="text-green-700" />
-              <h3 className="font-bold text-gray-900">Linked property</h3>
-            </div>
-            {selectedProperty ? (
-              <div>
-                <p className="font-semibold text-gray-900">
-                  {selectedProperty.name}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {propertyAddress(selectedProperty)}
-                </p>
-                {selectedProperty.description && (
-                  <p className="text-sm text-gray-600 mt-3">
-                    {selectedProperty.description}
-                  </p>
-                )}
-                {selectedPhotos.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 mt-4">
-                    {selectedPhotos.slice(0, 6).map((photo) => (
-                      <img
-                        key={photo.id}
-                        src={photo.url}
-                        alt={photo.caption || "Property"}
-                        className="w-full aspect-square rounded-lg object-cover border border-gray-200"
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400">
-                Choose a contact and property. Properties are managed inside
-                Contacts.
-              </p>
-            )}
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            <CalendarDays size={17} className="mb-2" />
+            Each job can have its own schedule, crew, materials, instructions, and photos while the customer receives one combined estimate.
           </div>
-
-          {selectedContact && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 text-sm">
-              <p className="text-xs uppercase tracking-wider font-bold text-gray-400 mb-2">
-                Customer
-              </p>
-              <p className="font-bold text-gray-900">
-                {selectedContact.name}
-              </p>
-              {selectedContact.email && (
-                <p className="text-gray-500 mt-1">{selectedContact.email}</p>
-              )}
-              {selectedContact.phone && (
-                <p className="text-gray-500">{selectedContact.phone}</p>
-              )}
-            </div>
-          )}
         </aside>
       </div>
     </div>

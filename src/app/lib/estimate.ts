@@ -1,48 +1,64 @@
 import type {
+  EstimateJob,
   LaborAssignment,
   LineItem,
   Project,
   Property,
 } from "../data/types";
 
+export function assignmentHours(assignments: LaborAssignment[]) {
+  return assignments.reduce(
+    (sum, assignment) => sum + Number(assignment.hours || 0),
+    0
+  );
+}
+
+export function assignmentLabor(assignments: LaborAssignment[]) {
+  return assignments.reduce(
+    (sum, assignment) =>
+      sum +
+      Number(assignment.hours || 0) * Number(assignment.hourlyRate || 0),
+    0
+  );
+}
+
 export function combinedLaborHours(
-  project: Pick<Project, "laborHours" | "laborAssignments">
+  project: Pick<Project, "laborHours" | "laborAssignments" | "jobSections">
 ) {
+  if (project.jobSections?.length) {
+    return project.jobSections.reduce((sum, job) => {
+      const hours = job.laborAssignments?.length
+        ? assignmentHours(job.laborAssignments)
+        : Number(job.laborHours || 0);
+      return sum + hours;
+    }, 0);
+  }
+
   return project.laborAssignments?.length
-    ? project.laborAssignments.reduce(
-        (sum, assignment) => sum + Number(assignment.hours || 0),
-        0
-      )
+    ? assignmentHours(project.laborAssignments)
     : Number(project.laborHours || 0);
 }
 
-/**
- * Customer-facing labor total.
- *
- * When workers are assigned, each worker's hours are multiplied by that
- * worker's estimate rate. If no workers are assigned, the estimate falls back
- * to the manual labor hours and hourly rate fields.
- */
 export function laborTotal(
   project: Pick<
     Project,
-    "laborHours" | "laborRate" | "laborAssignments"
+    "laborHours" | "laborRate" | "laborAssignments" | "jobSections"
   >
 ) {
-  if (project.laborAssignments?.length) {
-    return project.laborAssignments.reduce(
-      (sum, assignment) =>
-        sum +
-        Number(assignment.hours || 0) *
-          Number(assignment.hourlyRate || 0),
-      0
-    );
+  if (project.jobSections?.length) {
+    return project.jobSections.reduce((sum, job) => {
+      if (job.laborAssignments?.length) {
+        return sum + assignmentLabor(job.laborAssignments);
+      }
+      return sum + Number(job.laborHours || 0) * Number(job.laborRate || 0);
+    }, 0);
   }
 
-  return (
-    Number(project.laborHours || 0) *
-    Number(project.laborRate || 0)
-  );
+  if (project.laborAssignments?.length) {
+    return assignmentLabor(project.laborAssignments);
+  }
+
+  return Number(project.laborHours || 0) * Number(project.laborRate || 0);
 }
 
 export function lineItemsTotal(lineItems: LineItem[]) {
@@ -53,6 +69,30 @@ export function lineItemsTotal(lineItems: LineItem[]) {
   );
 }
 
+export function jobMaterialsTotal(job: EstimateJob) {
+  return (
+    lineItemsTotal(job.lineItems ?? []) +
+    Number(job.squareFootage || 0) * Number(job.pricePerSquareFoot || 0)
+  );
+}
+
+export function calculateJob(job: EstimateJob) {
+  const materials = jobMaterialsTotal(job);
+  const hours = job.laborAssignments?.length
+    ? assignmentHours(job.laborAssignments)
+    : Number(job.laborHours || 0);
+  const labor = job.laborAssignments?.length
+    ? assignmentLabor(job.laborAssignments)
+    : Number(job.laborHours || 0) * Number(job.laborRate || 0);
+
+  return {
+    materials,
+    labor,
+    hours,
+    subtotal: materials + labor,
+  };
+}
+
 export function calculateEstimate(
   project: Pick<
     Project,
@@ -60,11 +100,18 @@ export function calculateEstimate(
     | "laborHours"
     | "laborRate"
     | "laborAssignments"
+    | "jobSections"
     | "taxRate"
     | "discountAmount"
   >
 ) {
-  const materials = lineItemsTotal(project.lineItems);
+  const hasJobs = Boolean(project.jobSections?.length);
+  const materials = hasJobs
+    ? project.jobSections.reduce(
+        (sum, job) => sum + jobMaterialsTotal(job),
+        0
+      )
+    : lineItemsTotal(project.lineItems);
   const hours = combinedLaborHours(project);
   const labor = laborTotal(project);
   const subtotal = materials + labor;
