@@ -35,72 +35,16 @@ type NavItem = {
 };
 
 const nav: NavItem[] = [
-  {
-    to: "/app/dashboard",
-    icon: LayoutDashboard,
-    label: "Dashboard",
-    roles: ["owner", "co_owner", "manager", "employee"],
-  },
-  {
-    to: "/app/contacts",
-    icon: Users,
-    label: "Contacts",
-    roles: ["owner", "co_owner", "manager"],
-  },
-  {
-    to: "/app/estimates",
-    icon: FileText,
-    label: "Estimates",
-    roles: ["owner", "co_owner", "manager"],
-  },
-  {
-    to: "/app/estimate/new",
-    icon: PlusCircle,
-    label: "New Estimate",
-    roles: ["owner", "co_owner", "manager"],
-  },
-  {
-    to: "/app/projects/current",
-    icon: FolderOpen,
-    label: "Jobs",
-    roles: ["owner", "co_owner", "manager", "employee"],
-  },
-  {
-    to: "/app/projects/past",
-    icon: Archive,
-    label: "Past Jobs",
-    roles: ["owner", "co_owner", "manager", "employee"],
-  },
-  {
-    to: "/app/invoices",
-    icon: ReceiptText,
-    label: "Invoices",
-    roles: ["owner", "co_owner", "manager"],
-  },
-  {
-    to: "/app/schedule",
-    icon: CalendarDays,
-    label: "Schedule",
-    roles: ["owner", "co_owner", "manager", "employee"],
-  },
-  {
-    to: "/app/follow-ups",
-    icon: BellRing,
-    label: "Follow-ups",
-    roles: ["owner", "co_owner", "manager", "employee"],
-  },
-  {
-    to: "/app/team",
-    icon: Users,
-    label: "Team",
-    roles: ["owner", "co_owner", "manager", "employee"],
-  },
-  {
-    to: "/app/account",
-    icon: User,
-    label: "Account",
-    roles: ["owner", "co_owner", "manager", "employee"],
-  },
+  { to: "/app/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/contacts", icon: Users, label: "Contacts", roles: ["owner", "co_owner", "manager"] },
+  { to: "/app/estimates", icon: FileText, label: "Estimates", roles: ["owner", "co_owner", "manager"] },
+  { to: "/app/projects/current", icon: FolderOpen, label: "Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/schedule", icon: CalendarDays, label: "Schedule", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/follow-ups", icon: BellRing, label: "Follow-ups", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/invoices", icon: ReceiptText, label: "Invoices", roles: ["owner", "co_owner", "manager"] },
+  { to: "/app/projects/past", icon: Archive, label: "Past Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/account", icon: User, label: "Account", roles: ["owner", "co_owner", "manager", "employee"] },
 ];
 
 function initialDarkMode() {

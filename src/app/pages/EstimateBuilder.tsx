@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   Fuel,
+  FileText,
   Image as ImageIcon,
   Loader2,
   Plus,
@@ -27,6 +28,7 @@ import type {
 } from "../data/types";
 import { calculateEstimate, calculateJob, formatMoney } from "../lib/estimate";
 import { checkTextSafety } from "../lib/contentSafety";
+import { generateEstimateDescription } from "../lib/descriptionGenerator";
 
 const PROJECT_TYPES = [
   "Lawn Mowing & Edging",
@@ -104,6 +106,7 @@ type SavedDraft = {
   savedAt: string;
   form: EstimateForm;
   jobSections: EstimateJob[];
+  generatedDescription: string;
 };
 
 function uid() {
@@ -266,10 +269,10 @@ function aggregateAssignments(jobs: EstimateJob[]) {
   return [...assignments.values()];
 }
 
-function Optional({ required = false }: { required?: boolean }) {
+function Required() {
   return (
-    <span className="ml-1 font-normal normal-case tracking-normal text-gray-400">
-      {required ? "· Required" : "· Optional"}
+    <span className="ml-1 font-normal normal-case tracking-normal text-red-500">
+      · Required
     </span>
   );
 }
@@ -294,6 +297,7 @@ export default function EstimateBuilder() {
   const existing = editing ? projects.find((project) => project.id === id) ?? null : null;
   const [form, setForm] = useState<EstimateForm>(blankForm);
   const [jobSections, setJobSections] = useState<EstimateJob[]>([blankJob()]);
+  const [generatedDescription, setGeneratedDescription] = useState("");
   const [openJobs, setOpenJobs] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -332,6 +336,7 @@ export default function EstimateBuilder() {
           if (!existing || savedTime > projectTime) {
             setForm(draft.form);
             setJobSections(draft.jobSections?.length ? draft.jobSections : baseJobs);
+            setGeneratedDescription(draft.generatedDescription ?? existing?.aiEstimate ?? "");
             setDraftMessage("Unsaved draft restored.");
             restored = true;
           }
@@ -344,6 +349,7 @@ export default function EstimateBuilder() {
     if (!restored) {
       setForm(baseForm);
       setJobSections(baseJobs);
+      setGeneratedDescription(existing?.aiEstimate ?? "");
       setDraftMessage("");
     }
     setOpenJobs(baseJobs.map((job) => job.id));
@@ -356,15 +362,16 @@ export default function EstimateBuilder() {
     const timer = window.setTimeout(() => {
       localStorage.setItem(
         draftKey,
-        JSON.stringify({ savedAt: new Date().toISOString(), form, jobSections })
+        JSON.stringify({ savedAt: new Date().toISOString(), form, jobSections, generatedDescription })
       );
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [draftKey, form, jobSections]);
+  }, [draftKey, form, jobSections, generatedDescription]);
 
   const contactProperties = properties.filter(
     (property) => property.contactId === form.contactId
   );
+  const selectableProperties = form.contactId ? contactProperties : properties;
   const selectedPhotos = propertyPhotos.filter(
     (photo) => photo.propertyId === form.propertyId
   );
@@ -471,25 +478,91 @@ export default function EstimateBuilder() {
 
   function chooseContact(contactId: string) {
     const contact = contacts.find((item) => item.id === contactId);
+    const linkedProperties = properties.filter((item) => item.contactId === contactId);
+    const onlyProperty = linkedProperties.length === 1 ? linkedProperties[0] : null;
+
     setForm((current) => ({
       ...current,
       contactId,
-      propertyId: "",
-      client: contact?.name ?? current.client,
-      address: contact?.address ?? current.address,
-      city: contact?.city ?? current.city,
+      propertyId: onlyProperty?.id ?? "",
+      client: contact?.name || current.client,
+      address: onlyProperty?.address || contact?.address || current.address,
+      city: onlyProperty?.city || contact?.city || current.city,
+      name: current.name || onlyProperty?.name || "",
+      notes: current.notes || contact?.notes || onlyProperty?.internalNotes || "",
+      clientNotes: current.clientNotes || onlyProperty?.clientNotes || "",
     }));
+
+    if (onlyProperty) {
+      const photoIds = propertyPhotos
+        .filter((photo) => photo.propertyId === onlyProperty.id)
+        .map((photo) => photo.id);
+      setJobSections((jobs) =>
+        jobs.map((job, index) =>
+          index === 0
+            ? {
+                ...job,
+                title: job.title || onlyProperty.name,
+                scopeDescription: job.scopeDescription || onlyProperty.description,
+                internalNotes: job.internalNotes || onlyProperty.internalNotes,
+                photoIds: job.photoIds.length ? job.photoIds : photoIds,
+              }
+            : job
+        )
+      );
+    }
   }
 
   function chooseProperty(propertyId: string) {
     const property = properties.find((item) => item.id === propertyId);
+    if (!property) {
+      setForm((current) => ({ ...current, propertyId: "" }));
+      return;
+    }
+    const contact = contacts.find((item) => item.id === property.contactId);
+    const photoIds = propertyPhotos
+      .filter((photo) => photo.propertyId === property.id)
+      .map((photo) => photo.id);
+
     setForm((current) => ({
       ...current,
+      contactId: property.contactId,
       propertyId,
-      address: property?.address || current.address,
-      city: property?.city || current.city,
-      name: current.name || property?.name || "",
+      client: contact?.name || current.client,
+      address: property.address || contact?.address || current.address,
+      city: property.city || contact?.city || current.city,
+      name: current.name || property.name || "",
+      notes: current.notes || [contact?.notes, property.internalNotes].filter(Boolean).join("\n\n"),
+      clientNotes: current.clientNotes || property.clientNotes || "",
     }));
+
+    setJobSections((jobs) =>
+      jobs.map((job, index) =>
+        index === 0
+          ? {
+              ...job,
+              title: job.title || property.name,
+              scopeDescription: job.scopeDescription || property.description,
+              internalNotes: job.internalNotes || property.internalNotes,
+              photoIds: job.photoIds.length ? job.photoIds : photoIds,
+            }
+          : job
+      )
+    );
+  }
+
+  function handleGenerateDescription() {
+    setSaveError("");
+    const description = generateEstimateDescription({
+      estimateName: form.name,
+      clientName: form.client,
+      address: form.address,
+      city: form.city,
+      billingMethod: form.billingMethod,
+      jobs: jobSections,
+      total: totals.total,
+    });
+    setGeneratedDescription(description);
   }
 
   function showError(message: string, focusName = false) {
@@ -534,6 +607,11 @@ export default function EstimateBuilder() {
           return false;
         }
       }
+    }
+    const descriptionSafety = checkTextSafety(generatedDescription, "Estimate description");
+    if (!descriptionSafety.safe) {
+      showError(descriptionSafety.message);
+      return false;
     }
     const nameSafety = checkTextSafety(form.name, "Estimate name");
     if (!nameSafety.safe) {
@@ -610,7 +688,7 @@ export default function EstimateBuilder() {
         laborHours: totalHours,
         laborAssignments: assignments,
         lineItems: allItems,
-        aiEstimate: null,
+        aiEstimate: generatedDescription.trim() || null,
         scopeDescription: normalizedJobs
           .map((job) => `${job.title}: ${job.scopeDescription}`)
           .join("\n\n"),
@@ -685,7 +763,7 @@ export default function EstimateBuilder() {
             {editing ? "Edit Estimate" : "Create Estimate"}
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Build one combined estimate with one or more separate jobs. Fields marked Optional can be left blank.
+            Build one combined estimate with one or more separate jobs. Only fields marked Required must be completed.
           </p>
         </div>
         <button
@@ -714,60 +792,60 @@ export default function EstimateBuilder() {
             <h2 className="mb-5 font-bold text-gray-900">Estimate details</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className={labelClass}>Estimate name <Optional required /></label>
+                <label className={labelClass}>Estimate name <Required /></label>
                 <input ref={nameRef} value={form.name} onChange={(event) => setField("name", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Contact <Optional /></label>
+                <label className={labelClass}>Contact</label>
                 <select value={form.contactId} onChange={(event) => chooseContact(event.target.value)} className={inputClass}>
                   <option value="">No linked contact</option>
                   {contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Property <Optional /></label>
-                <select value={form.propertyId} onChange={(event) => chooseProperty(event.target.value)} disabled={!form.contactId} className={inputClass}>
+                <label className={labelClass}>Property</label>
+                <select value={form.propertyId} onChange={(event) => chooseProperty(event.target.value)} className={inputClass}>
                   <option value="">No linked property</option>
-                  {contactProperties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+                  {selectableProperties.map((property) => <option key={property.id} value={property.id}>{property.name}{property.address ? ` · ${property.address}` : ""}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Client name <Optional /></label>
+                <label className={labelClass}>Client name</label>
                 <input value={form.client} onChange={(event) => setField("client", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Estimate number <Optional required /></label>
+                <label className={labelClass}>Estimate number <Required /></label>
                 <input value={form.estimateNumber} onChange={(event) => setField("estimateNumber", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Street address <Optional /></label>
+                <label className={labelClass}>Street address</label>
                 <input value={form.address} onChange={(event) => setField("address", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>City <Optional /></label>
+                <label className={labelClass}>City</label>
                 <input value={form.city} onChange={(event) => setField("city", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Pricing method <Optional /></label>
+                <label className={labelClass}>Pricing method</label>
                 <select value={form.billingMethod} onChange={(event) => setField("billingMethod", event.target.value as ProjectBillingMethod)} className={inputClass}>
                   <option value="fixed">Fixed price</option>
                   <option value="hourly">Time and materials</option>
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Issue date <Optional /></label>
+                <label className={labelClass}>Issue date</label>
                 <input type="date" value={form.issueDate} onChange={(event) => setField("issueDate", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Valid until <Optional /></label>
+                <label className={labelClass}>Valid until</label>
                 <input type="date" value={form.validUntil} onChange={(event) => setField("validUntil", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Invoice due date <Optional /></label>
+                <label className={labelClass}>Invoice due date</label>
                 <input type="date" value={form.invoiceDueDate} onChange={(event) => setField("invoiceDueDate", event.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Follow-up reminder <Optional /></label>
+                <label className={labelClass}>Follow-up reminder</label>
                 <input type="datetime-local" value={form.followUpAt} onChange={(event) => setField("followUpAt", event.target.value)} className={inputClass} />
               </div>
             </div>
@@ -788,7 +866,7 @@ export default function EstimateBuilder() {
                 }}
                 className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-800"
               >
-                <Plus size={16} /> Add another job <span className="text-xs font-normal text-green-600">Optional</span>
+                <Plus size={16} /> Add another job
               </button>
             </div>
 
@@ -822,11 +900,11 @@ export default function EstimateBuilder() {
                     <div className="space-y-6 p-5 sm:p-6">
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
-                          <label className={labelClass}>Job title <Optional required /></label>
+                          <label className={labelClass}>Job title <Required /></label>
                           <input value={job.title} onChange={(event) => updateJob(job.id, { title: event.target.value })} placeholder="Example: Cut lawn" className={inputClass} />
                         </div>
                         <div>
-                          <label className={labelClass}>Job type <Optional required /></label>
+                          <label className={labelClass}>Job type <Required /></label>
                           <select value={customType ? CUSTOM_VALUE : job.projectType} onChange={(event) => updateJob(job.id, { projectType: event.target.value === CUSTOM_VALUE ? "" : event.target.value })} className={inputClass}>
                             {PROJECT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                             <option value={CUSTOM_VALUE}>Custom job type…</option>
@@ -834,26 +912,26 @@ export default function EstimateBuilder() {
                           {customType && <input value={job.projectType} onChange={(event) => updateJob(job.id, { projectType: event.target.value })} placeholder="Enter a custom job type" className={`${inputClass} mt-2`} />}
                         </div>
                         <div className="sm:col-span-2">
-                          <label className={labelClass}>Scope of work <Optional /></label>
+                          <label className={labelClass}>Scope of work</label>
                           <textarea value={job.scopeDescription} onChange={(event) => updateJob(job.id, { scopeDescription: event.target.value })} rows={4} className={inputClass} />
                         </div>
                         <div className="sm:col-span-2">
-                          <label className={labelClass}>Internal employee instructions <Optional /></label>
+                          <label className={labelClass}>Internal employee instructions</label>
                           <textarea value={job.internalNotes} onChange={(event) => updateJob(job.id, { internalNotes: event.target.value })} rows={3} className={inputClass} />
                           <p className="mt-1.5 text-xs text-gray-400">Shown in Jobs and Past Jobs; not included in the customer estimate.</p>
                         </div>
                         <div>
-                          <label className={labelClass}>Scheduled start <Optional /></label>
+                          <label className={labelClass}>Scheduled start</label>
                           <input type="datetime-local" value={job.scheduledStart ?? ""} onChange={(event) => updateJob(job.id, { scheduledStart: event.target.value || null })} className={inputClass} />
                         </div>
                         <div>
-                          <label className={labelClass}>Scheduled end <Optional /></label>
+                          <label className={labelClass}>Scheduled end</label>
                           <input type="datetime-local" value={job.scheduledEnd ?? ""} onChange={(event) => updateJob(job.id, { scheduledEnd: event.target.value || null })} className={inputClass} />
                         </div>
                       </div>
 
                       <div className="rounded-xl border border-gray-200 p-4">
-                        <h3 className="font-semibold text-gray-900">Square-foot pricing <Optional /></h3>
+                        <h3 className="font-semibold text-gray-900">Square-foot pricing</h3>
                         <p className="mt-1 text-xs text-gray-400">Use this for sod, mulch, turf, cleanup, or any work priced per square foot.</p>
                         <div className="mt-4 grid gap-4 sm:grid-cols-2">
                           <div>
@@ -871,7 +949,7 @@ export default function EstimateBuilder() {
                       <div>
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <div>
-                            <h3 className="font-semibold text-gray-900">Materials and services <Optional /></h3>
+                            <h3 className="font-semibold text-gray-900">Materials and services</h3>
                             <p className="mt-1 text-xs text-gray-400">Add custom descriptions, custom units, or fuel/gas as a separate line.</p>
                           </div>
                           <div className="flex gap-2">
@@ -920,7 +998,7 @@ export default function EstimateBuilder() {
                       </div>
 
                       <div>
-                        <div className="mb-3 flex items-center gap-2"><Users size={17} className="text-green-700" /><h3 className="font-semibold text-gray-900">Workers and estimated hours <Optional /></h3></div>
+                        <div className="mb-3 flex items-center gap-2"><Users size={17} className="text-green-700" /><h3 className="font-semibold text-gray-900">Workers and estimated hours</h3></div>
                         {workspaceMembers.length > 0 && (
                           <div className="grid gap-3 sm:grid-cols-2">
                             {workspaceMembers.map((member) => {
@@ -952,7 +1030,7 @@ export default function EstimateBuilder() {
 
                       {selectedPhotos.length > 0 && (
                         <div>
-                          <div className="mb-3 flex items-center gap-2"><ImageIcon size={17} className="text-green-700" /><h3 className="font-semibold text-gray-900">Job photos <Optional /></h3></div>
+                          <div className="mb-3 flex items-center gap-2"><ImageIcon size={17} className="text-green-700" /><h3 className="font-semibold text-gray-900">Job photos</h3></div>
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                             {selectedPhotos.map((photo) => (
                               <label key={photo.id} className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
@@ -971,16 +1049,36 @@ export default function EstimateBuilder() {
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-gray-900">Estimate description</h2>
+                <p className="mt-1 text-sm text-gray-500">Generate editable customer-facing wording from the jobs, quantities, pricing range, and combined labor.</p>
+              </div>
+              <button type="button" onClick={handleGenerateDescription} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <FileText size={16} /> {generatedDescription ? "Regenerate description" : "Generate description"}
+              </button>
+            </div>
+            <textarea
+              value={generatedDescription}
+              onChange={(event) => setGeneratedDescription(event.target.value)}
+              rows={8}
+              placeholder="Add a customer-facing overview, or generate one from the estimate details."
+              className={inputClass}
+            />
+            <p className="mt-2 text-xs text-gray-400">The generated wording is local, editable, and changes each time based on the estimate details.</p>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
             <h2 className="mb-5 font-bold text-gray-900">Customer and internal notes</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div><label className={labelClass}>Client notes <Optional /></label><textarea value={form.clientNotes} onChange={(event) => setField("clientNotes", event.target.value)} rows={4} className={inputClass} /></div>
-              <div><label className={labelClass}>Estimate-level internal notes <Optional /></label><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} rows={4} className={inputClass} /></div>
-              <div className="sm:col-span-2"><label className={labelClass}>Terms <Optional /></label><textarea value={form.terms} onChange={(event) => setField("terms", event.target.value)} rows={4} className={inputClass} /></div>
+              <div><label className={labelClass}>Client notes</label><textarea value={form.clientNotes} onChange={(event) => setField("clientNotes", event.target.value)} rows={4} className={inputClass} /></div>
+              <div><label className={labelClass}>Estimate-level internal notes</label><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} rows={4} className={inputClass} /></div>
+              <div className="sm:col-span-2"><label className={labelClass}>Terms</label><textarea value={form.terms} onChange={(event) => setField("terms", event.target.value)} rows={4} className={inputClass} /></div>
             </div>
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
-            <h2 className="mb-5 font-bold text-gray-900">Final adjustments <Optional /></h2>
+            <h2 className="mb-5 font-bold text-gray-900">Final adjustments</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div><label className={labelClass}>Tax rate (%)</label><input inputMode="decimal" value={numericText(form.taxRate)} onChange={(event) => setField("taxRate", parseNumeric(event.target.value))} className={inputClass} /></div>
               <div><label className={labelClass}>Discount amount</label><input inputMode="decimal" value={numericText(form.discountAmount)} onChange={(event) => setField("discountAmount", parseNumeric(event.target.value))} className={inputClass} /></div>
@@ -989,7 +1087,7 @@ export default function EstimateBuilder() {
 
           <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
             <FormErrorNotice message={saveError} />
-            <p className="text-xs text-gray-500">Required fields are checked before saving. Errors also appear at the top of the viewport so the button never seems unresponsive.</p>
+            <p className="text-xs text-gray-500">Fields marked Required are checked before saving. Errors also appear at the top of the viewport so the button never seems unresponsive.</p>
             <button type="button" onClick={() => void handleSave()} disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-800 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               {editing ? "Update Estimate" : "Create Estimate"}
@@ -1004,7 +1102,7 @@ export default function EstimateBuilder() {
             <dl className="mt-5 space-y-2 text-sm">
               <div className="flex justify-between"><dt className="text-gray-500">Jobs</dt><dd className="font-semibold">{jobSections.length}</dd></div>
               <div className="flex justify-between"><dt className="text-gray-500">Materials/services</dt><dd>{formatMoney(totals.materials)}</dd></div>
-              <div className="flex justify-between"><dt className="text-gray-500">Labor</dt><dd>{formatMoney(totals.labor)}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Combined labor</dt><dd>{formatMoney(totals.labor)}</dd></div>
               <div className="flex justify-between"><dt className="text-gray-500">Tax</dt><dd>{formatMoney(totals.tax)}</dd></div>
               <div className="flex justify-between"><dt className="text-gray-500">Discount</dt><dd>-{formatMoney(totals.discount)}</dd></div>
             </dl>

@@ -33,6 +33,8 @@ import type {
   LaborAssignment,
   LineItem,
   Project,
+  ProjectContactDetails,
+  ProjectPropertyDetails,
   ProjectBillingMethod,
   ProjectStatus,
   Property,
@@ -118,6 +120,7 @@ type AppContextType = {
   leaveWorkspace: (workspaceId: string) => Promise<void>;
   startStripeOnboarding: () => Promise<string>;
   refreshStripeConnection: () => Promise<StripeConnectionStatus>;
+  disconnectStripe: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   updateMyWorkspaceRate: (
     positionTitle: string,
@@ -284,6 +287,8 @@ type ProjectRow = {
   scheduled_end: string | null;
   follow_up_at: string | null;
   assigned_member_ids?: string[] | null;
+  contact_details?: unknown;
+  property_details?: unknown;
   created_at: string;
   updated_at: string;
 };
@@ -647,6 +652,64 @@ function rowToWorkspaceInvite(row: WorkspaceInviteRow): WorkspaceInvite {
   };
 }
 
+function normalizeContactDetails(value: unknown): ProjectContactDetails | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const id = String(row.id ?? "");
+  if (!id) return null;
+  return {
+    id,
+    name: String(row.name ?? ""),
+    email: String(row.email ?? ""),
+    phone: String(row.phone ?? ""),
+    address: String(row.address ?? ""),
+    city: String(row.city ?? ""),
+    state: String(row.state ?? ""),
+    zip: String(row.zip ?? ""),
+    notes: String(row.notes ?? ""),
+  };
+}
+
+function normalizePropertyDetails(value: unknown): ProjectPropertyDetails | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const id = String(row.id ?? "");
+  if (!id) return null;
+  return {
+    id,
+    name: String(row.name ?? ""),
+    address: String(row.address ?? ""),
+    city: String(row.city ?? ""),
+    state: String(row.state ?? ""),
+    zip: String(row.zip ?? ""),
+    description: String(row.description ?? ""),
+    internalNotes: String(row.internalNotes ?? row.internal_notes ?? ""),
+    clientNotes: String(row.clientNotes ?? row.client_notes ?? ""),
+  };
+}
+
+function contactDetailsFromContact(contact: Contact | undefined): ProjectContactDetails | null {
+  return contact
+    ? { id: contact.id, name: contact.name, email: contact.email, phone: contact.phone, address: contact.address, city: contact.city, state: contact.state, zip: contact.zip, notes: contact.notes }
+    : null;
+}
+
+function propertyDetailsFromProperty(property: Property | undefined): ProjectPropertyDetails | null {
+  return property
+    ? { id: property.id, name: property.name, address: property.address, city: property.city, state: property.state, zip: property.zip, description: property.description, internalNotes: property.internalNotes, clientNotes: property.clientNotes }
+    : null;
+}
+
+function enrichProjectOperationalDetails(project: Project, contacts: Contact[], properties: Property[]): Project {
+  return {
+    ...project,
+    contactDetails:
+      project.contactDetails ?? contactDetailsFromContact(contacts.find((item) => item.id === project.contactId)),
+    propertyDetails:
+      project.propertyDetails ?? propertyDetailsFromProperty(properties.find((item) => item.id === project.propertyId)),
+  };
+}
+
 function rowToProject(
   row: ProjectRow,
   laborAssignments: LaborAssignment[] = (row.assigned_member_ids ?? []).map(
@@ -663,6 +726,8 @@ function rowToProject(
     city: row.city ?? "",
     contactId: row.contact_id,
     propertyId: row.property_id,
+    contactDetails: normalizeContactDetails(row.contact_details),
+    propertyDetails: normalizePropertyDetails(row.property_details),
     status: row.status,
     estimateStatus: row.estimate_status ?? "draft",
     estimateNumber: row.estimate_number ?? `EST-${row.id.slice(0, 8)}`,
@@ -1094,9 +1159,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
               requested_workspace_id: workspaceId,
             }),
           ])
-        : supabase.rpc("get_employee_projects", {
-            requested_workspace_id: workspaceId,
-          });
+        : Promise.all([
+            supabase.rpc("get_employee_projects", {
+              requested_workspace_id: workspaceId,
+            }),
+            supabase.rpc("get_employee_project_operational_details", {
+              requested_workspace_id: workspaceId,
+            }),
+          ]);
 
       const [
         projectResult,
@@ -1162,6 +1232,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (requestId !== workspaceRequestRef.current) return;
 
+      const loadedContacts = contactResult.error
+        ? []
+        : ((contactResult.data ?? []) as ContactRow[]).map(rowToContact);
+      const loadedProperties = propertyResult.error
+        ? []
+        : ((propertyResult.data ?? []) as PropertyRow[]).map(rowToProperty);
+
       if (manager) {
         const [projectsQuery, assignmentsQuery] = projectResult as [
           { data: unknown[] | null; error: { message: string } | null },
@@ -1185,23 +1262,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         setProjects(
           ((projectsQuery.data ?? []) as ProjectRow[]).map((row) =>
-            rowToProject(row, assignmentMap.get(row.id) ?? [])
+            enrichProjectOperationalDetails(
+              rowToProject(row, assignmentMap.get(row.id) ?? []),
+              loadedContacts,
+              loadedProperties
+            )
           )
         );
       } else {
-        const employeeResult = projectResult as {
-          data: unknown[] | null;
-          error: { message: string } | null;
-        };
+        const [employeeResult, operationalResult] = projectResult as [
+          { data: unknown[] | null; error: { message: string } | null },
+          { data: unknown[] | null; error: { message: string } | null }
+        ];
         if (employeeResult.error) throw new Error(employeeResult.error.message);
-        setProjects(((employeeResult.data ?? []) as ProjectRow[]).map((row) => rowToProject(row)));
+        if (operationalResult.error) throw new Error(operationalResult.error.message);
+        const operationalMap = new Map(
+          ((operationalResult.data ?? []) as Array<Record<string, unknown>>).map(
+            (row) => [String(row.project_id ?? ""), row] as const
+          )
+        );
+        setProjects(
+          ((employeeResult.data ?? []) as ProjectRow[]).map((row) => {
+            const details = operationalMap.get(row.id);
+            return rowToProject({
+              ...row,
+              contact_details: details?.contact_details,
+              property_details: details?.property_details,
+            });
+          })
+        );
       }
 
       if (contactResult.error) setContactsError(contactResult.error.message);
-      else setContacts(((contactResult.data ?? []) as ContactRow[]).map(rowToContact));
+      else setContacts(loadedContacts);
 
       if (propertyResult.error) setPropertiesError(propertyResult.error.message);
-      else setProperties(((propertyResult.data ?? []) as PropertyRow[]).map(rowToProperty));
+      else setProperties(loadedProperties);
 
       if (photoResult.error) {
         setPropertiesError(photoResult.error.message);
@@ -1705,6 +1801,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return status;
   }
 
+  async function disconnectStripe() {
+    ensureAdmin();
+    const { data, error } = await supabase.functions.invoke(
+      "stripe-connect-account",
+      { body: { workspaceId: currentWorkspaceOrThrow(), action: "disconnect" } }
+    );
+    if (error) throw new Error(await edgeFunctionErrorMessage(error));
+    if (typeof data?.error === "string" && data.error.trim()) throw new Error(data.error);
+    await refreshWorkspaces();
+  }
+
   async function deleteAccount() {
     const { error } = await supabase.functions.invoke("delete-account", {
       body: { confirmation: "DELETE" },
@@ -1839,7 +1946,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) throw new Error(error.message);
     await syncProjectAssignments(project);
-    const saved = rowToProject(data as ProjectRow, project.laborAssignments);
+    const saved = enrichProjectOperationalDetails(
+      rowToProject(data as ProjectRow, project.laborAssignments),
+      contacts,
+      properties
+    );
     setProjects((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
     await Promise.all([refreshSchedule(), refreshFollowUps()]);
     return saved;
@@ -1858,7 +1969,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) throw new Error(error.message);
     await syncProjectAssignments(project);
-    const saved = rowToProject(data as ProjectRow, project.laborAssignments);
+    const saved = enrichProjectOperationalDetails(
+      rowToProject(data as ProjectRow, project.laborAssignments),
+      contacts,
+      properties
+    );
     setProjects((previous) =>
       previous.map((item) => (item.id === saved.id ? saved : item))
     );
@@ -1889,7 +2004,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) throw new Error(error.message);
     const existing = projects.find((project) => project.id === id);
-    const saved = rowToProject(data as ProjectRow, existing?.laborAssignments ?? []);
+    const saved = enrichProjectOperationalDetails(
+      rowToProject(data as ProjectRow, existing?.laborAssignments ?? []),
+      contacts,
+      properties
+    );
     setProjects((previous) =>
       previous.map((project) => (project.id === id ? saved : project))
     );
@@ -2718,6 +2837,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         leaveWorkspace,
         startStripeOnboarding,
         refreshStripeConnection,
+        disconnectStripe,
         deleteAccount,
         updateMyWorkspaceRate,
         refreshProjects,

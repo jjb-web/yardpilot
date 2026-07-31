@@ -151,7 +151,7 @@ export default function EstimateDocument({
                       ))}
                       {laborHours > 0 && (
                         <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-t border-gray-100 px-4 py-3 text-sm">
-                          <span>Labor</span>
+                          <span>Combined labor</span>
                           <span className="text-gray-500">{laborHours.toLocaleString()} combined hours</span>
                           <span className="font-semibold">{formatMoney(jobTotals.labor)}</span>
                         </div>
@@ -177,7 +177,7 @@ export default function EstimateDocument({
 
         <section className="ml-auto max-w-md space-y-2 border-t border-gray-200 pt-5 text-sm">
           <div className="flex justify-between"><span className="text-gray-500">Materials and services</span><span>{formatMoney(totals.materials)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Labor</span><span>{formatMoney(totals.labor)}</span></div>
+          <div className="flex justify-between"><span className="text-gray-500">Combined labor</span><span>{formatMoney(totals.labor)}</span></div>
           {totals.tax > 0 && <div className="flex justify-between"><span className="text-gray-500">Tax</span><span>{formatMoney(totals.tax)}</span></div>}
           {totals.discount > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount</span><span>-{formatMoney(totals.discount)}</span></div>}
           <div className="mt-3 flex items-end justify-between border-t border-gray-200 pt-4">

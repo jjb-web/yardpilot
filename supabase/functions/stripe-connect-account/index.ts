@@ -209,6 +209,36 @@ async function persistAccountStatus(
   return status;
 }
 
+async function clearWorkspaceStripeStatus(
+  admin: ReturnType<typeof createClient>,
+  workspaceId: string,
+) {
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("workspaces")
+    .update({
+      stripe_account_id: null,
+      stripe_onboarding_complete: false,
+      stripe_charges_enabled: false,
+      stripe_payouts_enabled: false,
+      stripe_currently_due: [],
+      stripe_eventually_due: [],
+      stripe_past_due: [],
+      stripe_pending_verification: [],
+      stripe_disabled_reason: null,
+      stripe_requirement_errors: [],
+      stripe_future_currently_due: [],
+      stripe_future_eventually_due: [],
+      stripe_future_past_due: [],
+      stripe_future_pending_verification: [],
+      stripe_future_disabled_reason: null,
+      stripe_status_synced_at: now,
+      updated_at: now,
+    })
+    .eq("id", workspaceId);
+  if (error) throw new Error(`Could not disconnect Stripe: ${error.message}`);
+}
+
 Deno.serve(async (request) => {
   const origins = allowedOrigins();
 
@@ -254,7 +284,10 @@ Deno.serve(async (request) => {
     const body = (await request.json().catch(() => ({}))) as RequestBody;
     const workspaceId =
       typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
-    const action = body.action === "status" ? "status" : "onboard";
+    const action =
+      body.action === "status" || body.action === "disconnect"
+        ? body.action
+        : "onboard";
 
     if (!workspaceId) {
       return json(request, origins, { error: "Choose a workspace first." }, 400);
@@ -324,21 +357,29 @@ Deno.serve(async (request) => {
       );
     }
 
-    if (workspace.kind === "personal") {
-      return json(
-        request,
-        origins,
-        {
-          error:
-            "Create or switch to a Company or Workgroup before accepting customer payments.",
-        },
-        400,
-      );
-    }
-
     const stripe = new Stripe(stripeKey, {
       httpClient: Stripe.createFetchHttpClient(),
     });
+
+    if (action === "disconnect") {
+      const previousAccountId = workspace.stripe_account_id;
+      if (previousAccountId) {
+        try {
+          await stripe.accounts.update(previousAccountId, {
+            metadata: { yardpilot_workspace_id: "" },
+          });
+        } catch (error) {
+          console.warn("Could not remove YardPilot metadata during disconnect", error);
+        }
+      }
+      await clearWorkspaceStripeStatus(admin, workspaceId);
+      return json(request, origins, {
+        disconnected: true,
+        previousAccountId,
+        message:
+          "Stripe was disconnected from this YardPilot workspace. The external Stripe account was not closed or deleted.",
+      });
+    }
 
     let account: Stripe.Account | null = null;
     let accountId = workspace.stripe_account_id;
@@ -354,32 +395,7 @@ Deno.serve(async (request) => {
           accountId,
         });
 
-        const { error: clearError } = await admin
-          .from("workspaces")
-          .update({
-            stripe_account_id: null,
-            stripe_onboarding_complete: false,
-            stripe_charges_enabled: false,
-            stripe_payouts_enabled: false,
-            stripe_currently_due: [],
-            stripe_eventually_due: [],
-            stripe_past_due: [],
-            stripe_pending_verification: [],
-            stripe_disabled_reason: null,
-            stripe_requirement_errors: [],
-            stripe_future_currently_due: [],
-            stripe_future_eventually_due: [],
-            stripe_future_past_due: [],
-            stripe_future_pending_verification: [],
-            stripe_future_disabled_reason: null,
-            stripe_status_synced_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", workspaceId);
-
-        if (clearError) {
-          throw new Error(`Could not clear the stale Stripe account: ${clearError.message}`);
-        }
+        await clearWorkspaceStripeStatus(admin, workspaceId);
 
         accountId = null;
       }

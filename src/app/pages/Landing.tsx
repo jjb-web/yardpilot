@@ -11,7 +11,7 @@ const problems = [
 ];
 
 const features = [
-  { icon: Zap, title: "Flexible Estimate Builder", desc: "Create clear estimates with multiple jobs, labor, materials, and custom units." },
+  { icon: Zap, title: "Flexible Estimate Builder", desc: "Create clear estimates with multiple jobs, combined labor, materials, and custom units." },
   { icon: Camera, title: "Property Photos", desc: "Keep property and job photos with the customer record and work instructions." },
   { icon: Users, title: "Customer CRM", desc: "Track every lead, estimate, and relationship in one place." },
   { icon: FileText, title: "Proposal Builder", desc: "Send professional PDF proposals directly from the app." },
@@ -44,7 +44,7 @@ function DashboardMockup() {
           <p className="text-sm font-semibold text-gray-800">Hartwell Backyard Redesign</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {[["Sq Footage", "2,400 ft²"], ["Labor Rate", "$65/hr"], ["Labor Hours", "28 hrs"], ["Materials", "$1,800"]].map(([k, v]) => (
+          {[["Sq Footage", "2,400 ft²"], ["Labor Rate", "$65/hr"], ["Combined Hours", "28 hrs"], ["Materials", "$1,800"]].map(([k, v]) => (
             <div key={k} className="bg-white rounded-lg p-3 border border-gray-100">
               <p className="text-xs text-gray-400">{k}</p>
               <p className="text-sm font-bold text-gray-800">{v}</p>
@@ -53,7 +53,7 @@ function DashboardMockup() {
         </div>
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
           <p className="text-xs text-green-700 font-medium mb-1">Estimate total</p>
-          <p className="text-sm text-gray-700 leading-snug">Materials, labor, and multiple job sections combine into one professional estimate: <strong>$4,480</strong>.</p>
+          <p className="text-sm text-gray-700 leading-snug">Materials, combined labor, and multiple job sections combine into one professional estimate: <strong>$4,480</strong>.</p>
         </div>
         <div className="bg-green-700 text-white text-center text-xs font-semibold py-2.5 rounded-lg">
           Create Estimate →
@@ -259,7 +259,7 @@ export default function Landing() {
         <div className="max-w-2xl mx-auto">
           <div className="border border-green-100 rounded-2xl p-8 bg-green-50/30">
             <div className="w-12 h-12 bg-green-700 rounded-full flex items-center justify-center mb-5 text-white font-bold text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              W
+              J
             </div>
             <p className="text-gray-700 leading-relaxed text-lg mb-4">
               Hi — I'm building YardPilotUSA after spending time with landscaping crews and seeing firsthand how much time goes into creating estimates and chasing down customers.
@@ -364,7 +364,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="bg-gray-950 border-t border-white/5 py-6 px-6 text-center">
         <p className="text-gray-600 text-xs">
-          © 2026 YardPilotUSA · Built for landscapers · All rights reserved
+          © 2025 YardPilotUSA · Built for landscapers · All rights reserved
         </p>
       </footer>
     </div>

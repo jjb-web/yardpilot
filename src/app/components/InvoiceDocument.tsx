@@ -74,7 +74,7 @@ export default function InvoiceDocument({ invoice, company, contact, property }:
               <div className="divide-y divide-gray-100">
                 {job.squareFootage > 0 && <div className="flex justify-between gap-4 px-5 py-3 text-sm"><span>Square-foot work · {job.squareFootage.toLocaleString()} sq ft × {formatMoney(job.pricePerSquareFoot)}</span><span className="font-semibold">{formatMoney(job.squareFootage * job.pricePerSquareFoot)}</span></div>}
                 {job.lineItems.map((item) => <div key={item.id} className="flex justify-between gap-4 px-5 py-3 text-sm"><span>{item.description || "Material or service"} · {item.qty} {item.unit}</span><span className="font-semibold">{formatMoney(item.qty * item.unitCost)}</span></div>)}
-                {hours > 0 && <div className="flex justify-between gap-4 px-5 py-3 text-sm"><span>Labor · {hours.toLocaleString()} combined crew hours</span><span className="font-semibold">{formatMoney(totals.labor)}</span></div>}
+                {hours > 0 && <div className="flex justify-between gap-4 px-5 py-3 text-sm"><span>Combined labor · {hours.toLocaleString()} crew hours</span><span className="font-semibold">{formatMoney(totals.labor)}</span></div>}
               </div>
             </section>
           );

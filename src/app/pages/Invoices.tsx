@@ -125,6 +125,10 @@ function snapshotFromProject(
   };
 }
 
+function paymentMethodLabel(value: string) {
+  return value.replace(/^other:/, "").replaceAll("_", " ");
+}
+
 export default function Invoices() {
   const {
     authUserId,
@@ -159,6 +163,7 @@ export default function Invoices() {
   const [busyId, setBusyId] = useState("");
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [customPaymentMethod, setCustomPaymentMethod] = useState("");
   const [confirmAction, setConfirmAction] = useState<{
     type: "complete" | "void" | "delete";
     invoice: Invoice;
@@ -394,7 +399,7 @@ export default function Invoices() {
     try {
       await markInvoicePaid(invoice.id, method);
       setActionMessage(
-        `${invoice.invoiceNumber} was marked paid in person (${method.replaceAll("_", " ")}), completed, and archived.`
+        `${invoice.invoiceNumber} was marked paid in person (${paymentMethodLabel(method)}), completed, and archived.`
       );
     } catch (error) {
       setActionMessage(
@@ -587,7 +592,7 @@ export default function Invoices() {
                       </span>
                       {invoice.paymentMethod && status === "paid" && (
                         <span className="text-xs text-gray-400 capitalize">
-                          via {invoice.paymentMethod}
+                          via {paymentMethodLabel(invoice.paymentMethod)}
                         </span>
                       )}
                     </div>
@@ -616,16 +621,16 @@ export default function Invoices() {
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 lg:max-w-[520px] lg:justify-end">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:max-w-[620px] lg:grid-cols-4">
                     <Link
                       to={`/app/invoices/${invoice.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                     >
                       <Eye size={14} /> View
                     </Link>
                     <Link
                       to={`/app/invoices/${invoice.id}?print=1`}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                     >
                       <Download size={14} /> PDF
                     </Link>
@@ -633,7 +638,7 @@ export default function Invoices() {
                       type="button"
                       onClick={() => void shareInvoice(invoice, false)}
                       disabled={isBusy || status === "void"}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
                       <Share2 size={14} /> Share invoice copy
                     </button>
@@ -642,7 +647,7 @@ export default function Invoices() {
                       onClick={() => void shareInvoice(invoice, true)}
                       disabled={isBusy || status === "void" || !stripeReady}
                       title={stripeReady ? "Send a public invoice link with online Stripe payment" : "Connect Stripe in Account first"}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                     >
                       <CreditCard size={14} /> Send online payment link
                     </button>
@@ -650,7 +655,7 @@ export default function Invoices() {
                       type="button"
                       onClick={() => openInvoice(invoice)}
                       disabled={isBusy || status === "paid" || status === "void"}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
                       <Edit3 size={14} /> Edit
                     </button>
@@ -677,9 +682,9 @@ export default function Invoices() {
                     {status !== "paid" && status !== "void" && (
                       <button
                         type="button"
-                        onClick={() => { setPaymentInvoice(invoice); setPaymentMethod("cash"); }}
+                        onClick={() => { setPaymentInvoice(invoice); setPaymentMethod("cash"); setCustomPaymentMethod(""); }}
                         disabled={isBusy}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                       >
                         <CheckCircle2 size={14} /> Paid in person
                       </button>
@@ -691,7 +696,7 @@ export default function Invoices() {
                           setConfirmAction({ type: "void", invoice })
                         }
                         disabled={isBusy}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
                       >
                         <Ban size={14} /> Void
                       </button>
@@ -702,7 +707,7 @@ export default function Invoices() {
                         setConfirmAction({ type: "complete", invoice })
                       }
                       disabled={isBusy}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
                       <PackageCheck size={14} /> Complete
                     </button>
@@ -712,7 +717,7 @@ export default function Invoices() {
                         setConfirmAction({ type: "delete", invoice })
                       }
                       disabled={isBusy}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
                     >
                       <Trash2 size={14} /> Delete
                     </button>
@@ -936,9 +941,15 @@ export default function Invoices() {
               <option value="venmo">Venmo</option>
               <option value="other">Other</option>
             </select>
+            {paymentMethod === "other" && (
+              <div className="mt-4">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Describe payment method</label>
+                <input value={customPaymentMethod} onChange={(event) => setCustomPaymentMethod(event.target.value)} maxLength={80} placeholder="Example: Zelle, money order, barter" className={`${inputClass} mt-2`} />
+              </div>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setPaymentInvoice(null)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700">Cancel</button>
-              <button type="button" disabled={Boolean(busyId)} onClick={() => { const invoice = paymentInvoice; setPaymentInvoice(null); void markPaid(invoice, paymentMethod); }} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">Mark paid</button>
+              <button type="button" disabled={Boolean(busyId) || (paymentMethod === "other" && !customPaymentMethod.trim())} onClick={() => { const invoice = paymentInvoice; const method = paymentMethod === "other" ? `other:${customPaymentMethod.trim()}` : paymentMethod; setPaymentInvoice(null); void markPaid(invoice, method); }} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">Mark paid</button>
             </div>
           </div>
         </div>

@@ -353,7 +353,7 @@ export default function PublicInvoice() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center text-sm text-gray-500">
+      <div className="public-document-page min-h-[100dvh] overflow-x-hidden bg-gray-100 flex items-center justify-center text-sm text-gray-500">
         Loading invoice…
       </div>
     );
@@ -361,7 +361,7 @@ export default function PublicInvoice() {
 
   if (error || !invoice || !company) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+      <div className="public-document-page min-h-[100dvh] overflow-x-hidden bg-gray-100 flex items-center justify-center p-6">
         <div className="max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
           <h1 className="text-xl font-bold text-gray-900">Invoice unavailable</h1>
           <p className="mt-2 text-sm text-gray-500">{error}</p>
@@ -379,7 +379,7 @@ export default function PublicInvoice() {
     new Date(`${invoice.dueDate}T23:59:59`).getTime() < Date.now();
 
   return (
-    <main className="min-h-screen bg-gray-100 px-3 py-6 sm:px-6 sm:py-10">
+    <main className="public-document-page min-h-[100dvh] overflow-x-hidden bg-gray-100 px-3 py-6 sm:px-6 sm:py-10">
       <div className="no-print mx-auto mb-4 flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           {isPaid ? (

@@ -282,7 +282,7 @@ export default function Estimates() {
                         </span>
                       </div>
                       <div className="flex justify-between gap-4">
-                        <span className="text-gray-500">Combined labor cost</span>
+                        <span className="text-gray-500">Combined labor</span>
                         <span className="font-semibold text-gray-900">{formatMoney(totals.labor)}</span>
                       </div>
                       {project.taxRate > 0 && (

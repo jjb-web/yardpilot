@@ -566,6 +566,7 @@ export default function Contacts() {
         }
       }
 
+      setSearch("");
       setModalOpen(false);
       resetContactModal();
     } catch (error) {
@@ -998,6 +999,12 @@ export default function Contacts() {
             className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
           />
           <input
+            name="yardpilot-contact-search"
+            type="search"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search name, email, phone, or address…"
@@ -1172,6 +1179,8 @@ export default function Contacts() {
                     <label className={labelClass}>Email</label>
                     <input
                       type="email"
+                      name="yardpilot-contact-email"
+                      autoComplete="email"
                       value={draft.email}
                       onChange={(event) =>
                         setContactField("email", event.target.value)

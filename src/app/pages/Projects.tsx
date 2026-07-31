@@ -5,7 +5,11 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Eye,
   FileText,
+  Mail,
+  MapPin,
+  Phone,
   PlusCircle,
   ReceiptText,
   Trash2,
@@ -230,6 +234,14 @@ export default function Projects({ status }: { status: ProjectStatus }) {
             const assignedNames = project.laborAssignments
               .map((assignment) => assignment.name)
               .filter(Boolean);
+            const contact = project.contactDetails;
+            const property = project.propertyDetails;
+            const serviceAddress = [
+              property?.address || contact?.address || project.address,
+              property?.city || contact?.city || project.city,
+              property?.state || contact?.state,
+              property?.zip || contact?.zip,
+            ].filter(Boolean).join(", ");
 
             return (
               <article
@@ -274,14 +286,24 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500">
-                      {project.client || "No client"} ·{" "}
-                      {project.address || "No address"}
-                      {project.city ? `, ${project.city}` : ""}
-                    </p>
+                    <div className="mt-1 space-y-1 text-sm text-gray-500">
+                      <p className="font-medium text-gray-700">{contact?.name || project.client || "No client"}</p>
+                      <p className="inline-flex items-start gap-1.5"><MapPin size={14} className="mt-0.5 shrink-0" /> {property?.name ? `${property.name} · ` : ""}{serviceAddress || "No address"}</p>
+                      {(contact?.phone || contact?.email) && (
+                        <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                          {contact.phone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {contact.phone}</span>}
+                          {contact.email && <span className="inline-flex items-center gap-1"><Mail size={12} /> {contact.email}</span>}
+                        </p>
+                      )}
+                    </div>
                     {project.jobSections?.length > 0 && (
                       <p className="mt-2 text-sm font-medium text-gray-700">
                         {project.jobSections.map((job) => job.title).join(" · ")}
+                      </p>
+                    )}
+                    {(property?.internalNotes || contact?.notes) && (
+                      <p className="mt-2 line-clamp-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        {property?.internalNotes || contact?.notes}
                       </p>
                     )}
 
@@ -385,8 +407,11 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                       </Link>
                     )}
 
-                    <Link to={jobHref} aria-label={`Open ${project.name}`}>
-                      <ChevronRight size={18} className="text-gray-400" />
+                    <Link
+                      to={jobHref}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <Eye size={15} /> View Job <ChevronRight size={14} />
                     </Link>
                   </div>
                 </div>

@@ -143,6 +143,7 @@ export default function Account() {
     updateMyWorkspaceRate,
     startStripeOnboarding,
     refreshStripeConnection,
+    disconnectStripe,
     deleteAccount,
   } = useApp();
 
@@ -413,6 +414,31 @@ export default function Account() {
         statusError instanceof Error
           ? statusError.message
           : "Stripe status could not be refreshed."
+      );
+    } finally {
+      setStripeLoading(false);
+    }
+  }
+
+  async function disconnectStripeFromWorkspace() {
+    if (!activeWorkspace?.stripeAccountId) return;
+    const confirmed = window.confirm(
+      "Disconnect Stripe from this YardPilot workspace? Online invoice payment links will stop working. This does not close or delete the external Stripe account."
+    );
+    if (!confirmed) return;
+    setStripeError("");
+    setStripeMessage("Disconnecting Stripe…");
+    setStripeLoading(true);
+    try {
+      await disconnectStripe();
+      setLiveStripeStatus(null);
+      setStripeMessage("Stripe was disconnected from this workspace. The external Stripe account remains open.");
+    } catch (disconnectError) {
+      setStripeMessage("");
+      setStripeError(
+        disconnectError instanceof Error
+          ? disconnectError.message
+          : "Stripe could not be disconnected."
       );
     } finally {
       setStripeLoading(false);
@@ -712,7 +738,7 @@ export default function Account() {
                   <button
                     type="button"
                     onClick={() => void connectStripe()}
-                    disabled={stripeLoading || activeWorkspace?.isPersonal}
+                    disabled={stripeLoading}
                     className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
                   >
                     <ExternalLink size={15} />
@@ -738,12 +764,20 @@ export default function Account() {
                     Refresh status
                   </button>
                 )}
+
+                {activeWorkspace?.stripeAccountId && (
+                  <button
+                    type="button"
+                    onClick={() => void disconnectStripeFromWorkspace()}
+                    disabled={stripeLoading}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Disconnect Stripe
+                  </button>
+                )}
               </div>
             )}
           </div>
-          {activeWorkspace?.isPersonal && (
-            <p className="mt-3 text-xs text-amber-700">Create or switch to a company/workgroup before enabling payments.</p>
-          )}
           {stripeError && (
             <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {stripeError}

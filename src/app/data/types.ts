@@ -71,6 +71,31 @@ export type EstimateJob = {
   photoIds: string[];
 };
 
+
+export type ProjectContactDetails = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  notes: string;
+};
+
+export type ProjectPropertyDetails = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  description: string;
+  internalNotes: string;
+  clientNotes: string;
+};
+
 export type LaborAssignment = {
   userId: string;
   name: string;
@@ -88,6 +113,8 @@ export type Project = {
   city: string;
   contactId: string | null;
   propertyId: string | null;
+  contactDetails?: ProjectContactDetails | null;
+  propertyDetails?: ProjectPropertyDetails | null;
   status: ProjectStatus;
   estimateStatus: EstimateStatus;
   estimateNumber: string;

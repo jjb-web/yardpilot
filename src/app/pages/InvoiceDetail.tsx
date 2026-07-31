@@ -33,6 +33,10 @@ function displayStatus(invoice: Invoice): InvoiceStatus {
   return invoice.status;
 }
 
+function paymentMethodLabel(value: string) {
+  return value.replace(/^other:/, "").replaceAll("_", " ");
+}
+
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -55,6 +59,7 @@ export default function InvoiceDetail() {
   const [busy, setBusy] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [customPaymentMethod, setCustomPaymentMethod] = useState("");
   const [confirmAction, setConfirmAction] = useState<
     "complete" | "void" | "delete" | null
   >(null);
@@ -161,9 +166,15 @@ export default function InvoiceDetail() {
     setBusy(true);
     setMessage("");
     try {
-      await markInvoicePaid(invoice.id, paymentMethod);
+      const method = paymentMethod === "other" ? `other:${customPaymentMethod.trim()}` : paymentMethod;
+      if (paymentMethod === "other" && !customPaymentMethod.trim()) {
+        setMessage("Describe the other payment method before saving.");
+        setBusy(false);
+        return;
+      }
+      await markInvoicePaid(invoice.id, method);
       setMessage(
-        `Invoice marked paid in person (${paymentMethod.replaceAll("_", " ")}), completed, and archived.`
+        `Invoice marked paid in person (${paymentMethodLabel(method)}), completed, and archived.`
       );
       setPaymentModalOpen(false);
       navigate(-1);
@@ -212,11 +223,11 @@ export default function InvoiceDetail() {
           <ArrowLeft size={16} /> Back
         </button>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-3 lg:grid-cols-4">
           {!invoice.archivedAt && status !== "paid" && status !== "void" && (
             <Link
               to={`/app/invoices?edit=${invoice.id}`}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
               <Edit3 size={15} /> Edit
             </Link>
@@ -224,7 +235,7 @@ export default function InvoiceDetail() {
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
           >
             <Download size={15} /> Download PDF
           </button>
@@ -234,7 +245,7 @@ export default function InvoiceDetail() {
                 type="button"
                 onClick={() => void shareInvoice(false)}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
               >
                 <Share2 size={15} /> Share invoice copy
               </button>
@@ -251,7 +262,7 @@ export default function InvoiceDetail() {
                     ? "Send the invoice with online Stripe payment"
                     : "Connect Stripe in Account first"
                 }
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
               >
                 <CreditCard size={15} /> Send online payment link
               </button>
@@ -260,9 +271,9 @@ export default function InvoiceDetail() {
           {!invoice.archivedAt && status !== "paid" && status !== "void" && (
             <button
               type="button"
-              onClick={() => { setPaymentMethod("cash"); setPaymentModalOpen(true); }}
+              onClick={() => { setPaymentMethod("cash"); setCustomPaymentMethod(""); setPaymentModalOpen(true); }}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
             >
               <CheckCircle2 size={15} /> Paid in person
             </button>
@@ -272,7 +283,7 @@ export default function InvoiceDetail() {
               type="button"
               onClick={() => setConfirmAction("void")}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
             >
               <Ban size={15} /> Void
             </button>
@@ -282,7 +293,7 @@ export default function InvoiceDetail() {
               type="button"
               onClick={() => setConfirmAction("complete")}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
               <PackageCheck size={15} /> Complete
             </button>
@@ -291,7 +302,7 @@ export default function InvoiceDetail() {
             type="button"
             onClick={() => setConfirmAction("delete")}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
           >
             <Trash2 size={15} /> Delete
           </button>
@@ -322,7 +333,7 @@ export default function InvoiceDetail() {
           <>
             <span className="text-gray-300">•</span>
             <span className="capitalize text-gray-500">
-              Payment: {invoice.paymentMethod}
+              Payment: {paymentMethodLabel(invoice.paymentMethod)}
             </span>
           </>
         )}
@@ -354,7 +365,7 @@ export default function InvoiceDetail() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
         >
           <ArrowLeft size={15} /> Back
         </button>
@@ -375,9 +386,15 @@ export default function InvoiceDetail() {
               <option value="venmo">Venmo</option>
               <option value="other">Other</option>
             </select>
+            {paymentMethod === "other" && (
+              <div className="mt-4">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Describe payment method</label>
+                <input value={customPaymentMethod} onChange={(event) => setCustomPaymentMethod(event.target.value)} maxLength={80} placeholder="Example: Zelle, money order, barter" className="mt-2 min-h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm" />
+              </div>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setPaymentModalOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700">Cancel</button>
-              <button type="button" onClick={() => void markPaidInPerson()} disabled={busy} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">Mark paid</button>
+              <button type="button" onClick={() => void markPaidInPerson()} disabled={busy || (paymentMethod === "other" && !customPaymentMethod.trim())} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">Mark paid</button>
             </div>
           </div>
         </div>

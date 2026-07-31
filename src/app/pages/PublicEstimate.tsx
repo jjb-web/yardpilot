@@ -220,47 +220,66 @@ function mapProperty(row: Record<string, unknown> | null): Property | null {
 }
 
 function SignaturePad({
+  value,
   onChange,
 }: {
+  value: string;
   onChange: (value: string) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
-  const inkRef = useRef(false);
-  const [hasInk, setHasInk] = useState(false);
+  const inkRef = useRef(Boolean(value));
+  const [hasInk, setHasInk] = useState(Boolean(value));
+  const valueRef = useRef(value);
+
+  useEffect(() => {
+    valueRef.current = value;
+    inkRef.current = Boolean(value);
+    setHasInk(Boolean(value));
+  }, [value]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    let lastWidth = 0;
 
-    function resizeCanvas() {
-      if (!canvas) return;
+    function configureAndRestore() {
       const bounds = canvas.getBoundingClientRect();
+      const nextWidth = Math.max(1, Math.round(bounds.width));
+      if (nextWidth === lastWidth && canvas.width > 1) return;
+      lastWidth = nextWidth;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const saved = valueRef.current || (inkRef.current ? canvas.toDataURL("image/png") : "");
       canvas.width = Math.max(1, Math.floor(bounds.width * ratio));
       canvas.height = Math.max(1, Math.floor(bounds.height * ratio));
       const context = canvas.getContext("2d");
       if (!context) return;
-      context.scale(ratio, ratio);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.lineCap = "round";
       context.lineJoin = "round";
       context.lineWidth = 2.25;
       context.strokeStyle = "#111827";
+      if (saved) {
+        const image = new Image();
+        image.onload = () => {
+          context.clearRect(0, 0, bounds.width, bounds.height);
+          context.drawImage(image, 0, 0, bounds.width, bounds.height);
+        };
+        image.src = saved;
+      }
     }
 
-    resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
-    return () => window.removeEventListener("resize", resizeCanvas);
+    configureAndRestore();
+    const observer = new ResizeObserver(configureAndRestore);
+    observer.observe(canvas);
+    return () => observer.disconnect();
   }, []);
 
   function point(event: ReactPointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const bounds = canvas.getBoundingClientRect();
-    return {
-      x: event.clientX - bounds.left,
-      y: event.clientY - bounds.top,
-    };
+    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
   }
 
   function begin(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -292,47 +311,31 @@ function SignaturePad({
     const canvas = canvasRef.current;
     if (!canvas || !drawingRef.current) return;
     drawingRef.current = false;
-    if (canvas.hasPointerCapture(event.pointerId)) {
-      canvas.releasePointerCapture(event.pointerId);
-    }
-    onChange(inkRef.current ? canvas.toDataURL("image/png") : "");
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    const next = inkRef.current ? canvas.toDataURL("image/png") : "";
+    valueRef.current = next;
+    onChange(next);
   }
 
   function clear() {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
-    context.clearRect(0, 0, canvas.width, canvas.height);
+    const bounds = canvas.getBoundingClientRect();
+    context.clearRect(0, 0, bounds.width, bounds.height);
     inkRef.current = false;
+    valueRef.current = "";
     setHasInk(false);
     onChange("");
   }
 
   return (
     <div>
-      <div className="relative rounded-xl border border-gray-300 bg-white overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="block w-full h-40 touch-none cursor-crosshair"
-          onPointerDown={begin}
-          onPointerMove={draw}
-          onPointerUp={finish}
-          onPointerCancel={finish}
-          aria-label="Signature pad"
-        />
-        {!hasInk && (
-          <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-300">
-            Sign here with your finger or mouse
-          </p>
-        )}
+      <div className="relative overflow-hidden rounded-xl border border-gray-300 bg-white">
+        <canvas ref={canvasRef} className="block h-40 w-full touch-none cursor-crosshair" onPointerDown={begin} onPointerMove={draw} onPointerUp={finish} onPointerCancel={finish} aria-label="Signature pad" />
+        {!hasInk && <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-300">Sign here with your finger or mouse</p>}
       </div>
-      <button
-        type="button"
-        onClick={clear}
-        className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-800 cursor-pointer"
-      >
-        <RotateCcw size={14} /> Clear signature
-      </button>
+      <button type="button" onClick={clear} className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-800 cursor-pointer"><RotateCcw size={14} /> Clear signature</button>
     </div>
   );
 }
@@ -478,7 +481,7 @@ export default function PublicEstimate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center text-sm text-gray-500">
+      <div className="public-document-page min-h-[100dvh] overflow-x-hidden bg-gray-100 flex items-center justify-center text-sm text-gray-500">
         Loading estimate...
       </div>
     );
@@ -486,7 +489,7 @@ export default function PublicEstimate() {
 
   if (error || !project || !company) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+      <div className="public-document-page min-h-[100dvh] overflow-x-hidden bg-gray-100 flex items-center justify-center p-6">
         <div className="max-w-md bg-white rounded-xl border border-gray-200 p-8 text-center">
           <h1 className="text-xl font-bold text-gray-900">
             Estimate unavailable
@@ -503,7 +506,7 @@ export default function PublicEstimate() {
 
   return (
     <div
-      className="min-h-screen bg-gray-100 p-3 sm:p-8"
+      className="public-document-page min-h-[100dvh] overflow-x-hidden bg-gray-100 p-3 sm:p-8"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
       <div className="no-print max-w-[850px] mx-auto mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -589,7 +592,7 @@ export default function PublicEstimate() {
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Optional message
+                  Message
                 </label>
                 <textarea
                   rows={3}
@@ -603,7 +606,7 @@ export default function PublicEstimate() {
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                   Signature required to accept
                 </label>
-                <SignaturePad onChange={setSignature} />
+                <SignaturePad value={signature} onChange={setSignature} />
               </div>
             </div>
 
