@@ -259,7 +259,7 @@ export default function Landing() {
         <div className="max-w-2xl mx-auto">
           <div className="border border-green-100 rounded-2xl p-8 bg-green-50/30">
             <div className="w-12 h-12 bg-green-700 rounded-full flex items-center justify-center mb-5 text-white font-bold text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              J
+              W
             </div>
             <p className="text-gray-700 leading-relaxed text-lg mb-4">
               Hi — I'm building YardPilotUSA after spending time with landscaping crews and seeing firsthand how much time goes into creating estimates and chasing down customers.
@@ -364,7 +364,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="bg-gray-950 border-t border-white/5 py-6 px-6 text-center">
         <p className="text-gray-600 text-xs">
-          © 2025 YardPilotUSA · Built for landscapers · All rights reserved
+          © 2026 YardPilotUSA · Built for landscapers · All rights reserved
         </p>
       </footer>
     </div>
