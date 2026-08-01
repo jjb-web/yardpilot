@@ -11,8 +11,6 @@ import {
 } from "react-router";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import { checkTextSafety } from "../lib/contentSafety";
-import { passwordError, passwordRequirements } from "../lib/password";
 
 type FormData = {
   name: string;
@@ -21,9 +19,11 @@ type FormData = {
   phone: string;
   password: string;
   inviteCode: string;
+  accountType: "landscaper" | "client";
 };
 
 const PENDING_INVITE_KEY = "yardpilot-pending-invite";
+const PENDING_ACCOUNT_TYPE_KEY = "yardpilot-pending-account-type";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -51,6 +51,7 @@ export default function Login() {
     password: "",
     inviteCode:
       inviteFromUrl || localStorage.getItem(PENDING_INVITE_KEY) || "",
+    accountType: "landscaper",
   });
 
   useEffect(() => {
@@ -84,6 +85,23 @@ export default function Login() {
         inviteFromUrl ||
         localStorage.getItem(PENDING_INVITE_KEY)?.trim() ||
         inviteCodeRef.current.trim();
+      const pendingAccountType = pendingInvite
+        ? "landscaper"
+        : localStorage.getItem(PENDING_ACCOUNT_TYPE_KEY);
+
+      if (pendingAccountType === "client" || pendingAccountType === "landscaper") {
+        const { error: accountTypeError } = await supabase.rpc(
+          "set_my_account_type",
+          { requested_account_type: pendingAccountType }
+        );
+        if (accountTypeError) {
+          setLoading(false);
+          setError(accountTypeError.message);
+          processingSessionRef.current = false;
+          return;
+        }
+        localStorage.removeItem(PENDING_ACCOUNT_TYPE_KEY);
+      }
 
       if (pendingInvite) {
         const { data, error: inviteError } = await supabase.rpc(
@@ -109,7 +127,18 @@ export default function Login() {
         }
       }
 
-      navigate("/app/dashboard", { replace: true });
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("account_type")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      navigate(
+        profile?.account_type === "client" && !pendingInvite
+          ? "/client/market"
+          : "/app/dashboard",
+        { replace: true }
+      );
     }
 
     async function restoreSession() {
@@ -163,6 +192,7 @@ export default function Login() {
     if (nextMode === "register") {
       setSearchParams(invite ? { mode: "register", invite } : { mode: "register" });
     } else {
+      localStorage.removeItem(PENDING_ACCOUNT_TYPE_KEY);
       setSearchParams(invite ? { invite } : {});
     }
   }
@@ -173,12 +203,20 @@ export default function Login() {
     else localStorage.removeItem(PENDING_INVITE_KEY);
   }
 
+  function rememberRegistrationAccountType() {
+    localStorage.setItem(
+      PENDING_ACCOUNT_TYPE_KEY,
+      form.inviteCode.trim() ? "landscaper" : form.accountType
+    );
+  }
+
   async function handleLogin(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setMessage("");
     setLoading(true);
     rememberInvite();
+    if (!form.inviteCode.trim()) localStorage.removeItem(PENDING_ACCOUNT_TYPE_KEY);
 
     const { data, error: loginError } =
       await supabase.auth.signInWithPassword({
@@ -204,15 +242,7 @@ export default function Login() {
     setMessage("");
     setLoading(true);
     rememberInvite();
-
-    const unsafeName = checkTextSafety(form.name, "Full name").message;
-    const unsafeCompany = checkTextSafety(form.company, "Business name").message;
-    const strongPasswordError = passwordError(form.password);
-    if (unsafeName || unsafeCompany || strongPasswordError) {
-      setLoading(false);
-      setError(unsafeName || unsafeCompany || strongPasswordError || "Check the highlighted information.");
-      return;
-    }
+    rememberRegistrationAccountType();
 
     const inviteQuery = form.inviteCode.trim()
       ? `?confirmed=true&invite=${encodeURIComponent(form.inviteCode.trim())}`
@@ -227,6 +257,7 @@ export default function Login() {
           full_name: form.name.trim(),
           company: form.company.trim(),
           phone: form.phone.trim(),
+          account_type: form.inviteCode.trim() ? "landscaper" : form.accountType,
         },
       },
     });
@@ -271,6 +302,7 @@ export default function Login() {
     setMessage("");
     setLoading(true);
     rememberInvite();
+    if (mode === "register") rememberRegistrationAccountType();
 
     const invite = form.inviteCode.trim();
     const returnUrl = invite
@@ -368,6 +400,38 @@ export default function Login() {
           >
             {mode === "register" && (
               <>
+                {!form.inviteCode.trim() && (
+                  <div>
+                    <label className={labelClass}>What are you using YardPilot for?</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => set("accountType", "landscaper")}
+                        className={`rounded-lg border px-3 py-3 text-left text-sm transition ${
+                          form.accountType === "landscaper"
+                            ? "border-green-600 bg-green-50 text-green-900"
+                            : "border-gray-200 bg-white text-gray-600"
+                        }`}
+                      >
+                        <span className="block font-semibold">Landscaping business</span>
+                        <span className="mt-1 block text-xs">Run a company, workgroup, or join a team.</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => set("accountType", "client")}
+                        className={`rounded-lg border px-3 py-3 text-left text-sm transition ${
+                          form.accountType === "client"
+                            ? "border-green-600 bg-green-50 text-green-900"
+                            : "border-gray-200 bg-white text-gray-600"
+                        }`}
+                      >
+                        <span className="block font-semibold">Client</span>
+                        <span className="mt-1 block text-xs">Find landscapers and post work for bids.</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className={labelClass}>Full Name</label>
                   <input
@@ -381,23 +445,25 @@ export default function Login() {
                   />
                 </div>
 
-                <div>
-                  <label className={labelClass}>
-                    Business Name <span className="text-gray-400">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    autoComplete="organization"
-                    placeholder="Leave blank if solo or joining a team"
-                    value={form.company}
-                    onChange={(event) => set("company", event.target.value)}
-                    className={inputClass}
-                  />
-                  <p className="text-xs text-gray-400 mt-1.5">
-                    This does not claim a company. Create a company workspace
-                    later from Team, or join one with an invite.
-                  </p>
-                </div>
+                {(form.accountType === "landscaper" || form.inviteCode.trim()) && (
+                  <div>
+                    <label className={labelClass}>
+                      Business Name <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      autoComplete="organization"
+                      placeholder="Leave blank if solo or joining a team"
+                      value={form.company}
+                      onChange={(event) => set("company", event.target.value)}
+                      className={inputClass}
+                    />
+                    <p className="text-xs text-gray-400 mt-1.5">
+                      This does not claim a company. Create a company workspace
+                      later from Team, or join one with an invite.
+                    </p>
+                  </div>
+                )}
               </>
             )}
 
@@ -434,7 +500,7 @@ export default function Login() {
               <label className={labelClass}>Password</label>
               <input
                 required
-                minLength={mode === "register" ? 10 : 6}
+                minLength={6}
                 type="password"
                 autoComplete={
                   mode === "login" ? "current-password" : "new-password"
@@ -444,18 +510,6 @@ export default function Login() {
                 onChange={(event) => set("password", event.target.value)}
                 className={inputClass}
               />
-              {mode === "register" && (
-                <ul className="mt-2 grid gap-1 text-[11px] text-gray-500 sm:grid-cols-2">
-                  {passwordRequirements(form.password).map((requirement) => (
-                    <li
-                      key={requirement.label}
-                      className={requirement.met ? "text-green-700" : "text-gray-400"}
-                    >
-                      {requirement.met ? "✓" : "○"} {requirement.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
 
             {mode === "login" && (

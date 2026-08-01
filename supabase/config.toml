@@ -43,3 +43,8 @@ verify_jwt = false
 [functions.redeem-access-code]
 enabled = true
 verify_jwt = true
+
+# Signed-in YardPilot platform administrators can create one-use gift codes.
+[functions.generate-gift-code]
+enabled = true
+verify_jwt = true

@@ -15,6 +15,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { assertSafeValues } from "../lib/contentSafety";
 import type {
+  AccountType,
   Contact,
   ContactActivity,
   ContactType,
@@ -180,6 +181,7 @@ type AppContextType = {
 };
 
 type ProfileRow = {
+  account_type: AccountType | null;
   email: string | null;
   phone: string | null;
   full_name: string | null;
@@ -473,6 +475,7 @@ function userFromAuth(authUser: SupabaseAuthUser): User {
   const metadata = authUser.user_metadata ?? {};
   return {
     id: authUser.id,
+    accountType: metadata.account_type === "client" ? "client" : "landscaper",
     name:
       metadata.full_name ??
       metadata.name ??
@@ -493,6 +496,7 @@ function userFromProfile(
   const fallback = userFromAuth(authUser);
   return {
     id: authUser.id,
+    accountType: profile.account_type === "client" ? "client" : "landscaper",
     name: profile.full_name || fallback.name,
     email: profile.email || fallback.email,
     company: profile.company || fallback.company,
@@ -1098,7 +1102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function loadProfile(authUser: SupabaseAuthUser) {
     const { data, error } = await supabase
       .from("profiles")
-      .select("email, phone, full_name, company, city, state")
+      .select("email, phone, full_name, company, city, state, account_type")
       .eq("id", authUser.id)
       .maybeSingle();
 
@@ -1493,6 +1497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           full_name: newUser.name,
           company: newUser.company,
           phone: newUser.phone,
+          account_type: newUser.accountType,
         },
       },
     });
@@ -1516,6 +1521,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
     const row = (data ?? {}) as Record<string, unknown>;
     const updated: User = {
+      accountType: user?.accountType ?? "landscaper",
       id: authUserIdRef.current ?? user?.id,
       name: String(row.full_name ?? details.name.trim()),
       email: user?.email ?? "",
@@ -1532,6 +1538,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         phone: updated.phone,
         city: updated.city,
         state: updated.state,
+        account_type: updated.accountType,
       },
     });
     return updated;

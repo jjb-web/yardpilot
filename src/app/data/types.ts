@@ -8,6 +8,8 @@ export type EstimateStatus =
 
 export type ProjectBillingMethod = "fixed" | "hourly";
 
+export type AccountType = "landscaper" | "client";
+
 export type WorkspaceRole =
   | "owner"
   | "co_owner"
@@ -388,6 +390,7 @@ export type JobRequest = {
 };
 
 export type User = {
+  accountType: AccountType;
   id?: string;
   name: string;
   email: string;

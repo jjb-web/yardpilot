@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   CalendarDays,
@@ -30,6 +30,7 @@ import { calculateEstimate, calculateJob, formatMoney } from "../lib/estimate";
 import { checkTextSafety } from "../lib/contentSafety";
 import { generateEstimateDescription } from "../lib/descriptionGenerator";
 import { useSubscription } from "../hooks/useSubscription";
+import { supabase } from "../lib/supabase";
 
 const PROJECT_TYPES = [
   "Lawn Mowing & Edging",
@@ -281,6 +282,7 @@ function Required() {
 export default function EstimateBuilder() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     authUserId,
     activeWorkspaceId,
@@ -295,6 +297,9 @@ export default function EstimateBuilder() {
   } = useApp();
 
   const editing = Boolean(id) && id !== "new";
+  const marketplaceRequestId = editing
+    ? ""
+    : searchParams.get("marketplaceRequest")?.trim() ?? "";
   const existing = editing ? projects.find((project) => project.id === id) ?? null : null;
   const [form, setForm] = useState<EstimateForm>(blankForm);
   const [jobSections, setJobSections] = useState<EstimateJob[]>([blankJob()]);
@@ -306,15 +311,18 @@ export default function EstimateBuilder() {
   const [saveError, setSaveError] = useState("");
   const [draftMessage, setDraftMessage] = useState("");
   const draftReadyRef = useRef(false);
+  const marketplacePrefillRef = useRef("");
   const topErrorRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   const draftKey = useMemo(
     () =>
       activeWorkspaceId
-        ? `yardpilot-estimate-draft:${activeWorkspaceId}:${editing ? id : "new"}`
+        ? `yardpilot-estimate-draft:${activeWorkspaceId}:${
+            editing ? id : marketplaceRequestId ? `marketplace-${marketplaceRequestId}` : "new"
+          }`
         : "",
-    [activeWorkspaceId, editing, id]
+    [activeWorkspaceId, editing, id, marketplaceRequestId]
   );
 
   useEffect(() => {
@@ -359,6 +367,126 @@ export default function EstimateBuilder() {
     setSaveError("");
     draftReadyRef.current = true;
   }, [draftKey, editing, existing?.id, existing?.updatedAt, projectsLoading]);
+
+  useEffect(() => {
+    if (
+      editing ||
+      !marketplaceRequestId ||
+      !activeWorkspaceId ||
+      !draftReadyRef.current ||
+      marketplacePrefillRef.current === marketplaceRequestId
+    ) {
+      return;
+    }
+
+    marketplacePrefillRef.current = marketplaceRequestId;
+    let cancelled = false;
+
+    async function loadMarketplaceRequest() {
+      const { data, error } = await supabase.rpc(
+        "get_marketplace_request_for_estimate",
+        { requested_request_id: marketplaceRequestId },
+      );
+
+      if (cancelled) return;
+      if (error) {
+        marketplacePrefillRef.current = "";
+        showError(`The accepted marketplace request could not be loaded: ${error.message}`);
+        return;
+      }
+
+      const request = (data ?? {}) as {
+        workspaceId?: string;
+        title?: string;
+        description?: string;
+        serviceType?: string;
+        city?: string;
+        state?: string;
+        postalCode?: string;
+        clientName?: string;
+        desiredStart?: string | null;
+        proposedStart?: string | null;
+        acceptedBidAmount?: number | null;
+        acceptedBidMessage?: string;
+        projectId?: string | null;
+      };
+
+      if (request.workspaceId && request.workspaceId !== activeWorkspaceId) {
+        marketplacePrefillRef.current = "";
+        showError("Switch to the workspace that won this bid before creating its estimate.");
+        return;
+      }
+
+      if (request.projectId) {
+        showError("This marketplace request is already linked to an estimate.");
+        return;
+      }
+
+      const title = String(request.title ?? "").trim();
+      const description = String(request.description ?? "").trim();
+      const serviceType = String(request.serviceType ?? "").trim();
+      const clientName = String(request.clientName ?? "").trim();
+      const location = [request.city, request.state, request.postalCode]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+        .join(", ");
+      const proposedStart = request.proposedStart || request.desiredStart || null;
+      const acceptedBidNote = String(request.acceptedBidMessage ?? "").trim();
+
+      const safetyInputs = [
+        [title, "Marketplace request title"],
+        [description, "Marketplace request description"],
+        [serviceType, "Marketplace service type"],
+        [clientName, "Marketplace client name"],
+        [acceptedBidNote, "Accepted bid message"],
+      ] as const;
+
+      for (const [value, label] of safetyInputs) {
+        const safety = checkTextSafety(value, label);
+        if (!safety.safe) {
+          showError(`The accepted marketplace request could not be loaded. ${safety.message}`);
+          return;
+        }
+      }
+
+      setForm((current) => ({
+        ...current,
+        name: current.name.trim() ? current.name : title,
+        client: current.client.trim() ? current.client : clientName,
+        city: current.city.trim() ? current.city : location,
+      }));
+
+      setJobSections((current) => {
+        const base = current.length ? current : [blankJob()];
+        return base.map((job, index) =>
+          index === 0
+            ? {
+                ...job,
+                title: job.title.trim() ? job.title : title,
+                projectType: serviceType || job.projectType,
+                scopeDescription: job.scopeDescription.trim()
+                  ? job.scopeDescription
+                  : [description, acceptedBidNote ? `Accepted proposal: ${acceptedBidNote}` : ""]
+                      .filter(Boolean)
+                      .join("\n\n"),
+                scheduledStart: job.scheduledStart || (proposedStart ? toDateTimeLocal(proposedStart) : null),
+              }
+            : job,
+        );
+      });
+
+      setDraftMessage(
+        request.acceptedBidAmount != null
+          ? `Accepted marketplace request loaded. Winning offer: ${formatMoney(Number(request.acceptedBidAmount))}.`
+          : "Accepted marketplace request loaded into this estimate.",
+      );
+    }
+
+    void loadMarketplaceRequest();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, editing, marketplaceRequestId]);
 
   useEffect(() => {
     if (!draftKey || !draftReadyRef.current) return;
@@ -556,6 +684,41 @@ export default function EstimateBuilder() {
 
   function handleGenerateDescription() {
     setSaveError("");
+
+    const estimateInputs = [
+      [form.name, "Estimate name"],
+      [form.client, "Client name"],
+      [form.address, "Property address"],
+      [form.city, "Property city"],
+    ] as const;
+
+    for (const [value, label] of estimateInputs) {
+      const safety = checkTextSafety(value, label);
+      if (!safety.safe) {
+        showError(`Description was not generated. ${safety.message}`, label === "Estimate name");
+        return;
+      }
+    }
+
+    for (let index = 0; index < jobSections.length; index += 1) {
+      const job = jobSections[index];
+      const jobInputs = [
+        [job.title, `Job ${index + 1} title`],
+        [job.projectType, `Job ${index + 1} type`],
+        [job.scopeDescription, `Job ${index + 1} scope`],
+        [job.internalNotes, `Job ${index + 1} internal notes`],
+      ] as const;
+
+      for (const [value, label] of jobInputs) {
+        const safety = checkTextSafety(value, label);
+        if (!safety.safe) {
+          setOpenJobs((current) => [...new Set([...current, job.id])]);
+          showError(`Description was not generated. ${safety.message}`);
+          return;
+        }
+      }
+    }
+
     const description = generateEstimateDescription({
       estimateName: form.name,
       clientName: form.client,
@@ -565,6 +728,13 @@ export default function EstimateBuilder() {
       jobs: jobSections,
       total: totals.total,
     });
+
+    const generatedSafety = checkTextSafety(description, "Generated estimate description");
+    if (!generatedSafety.safe) {
+      showError(`Description was not generated. ${generatedSafety.message}`);
+      return;
+    }
+
     setGeneratedDescription(description);
   }
 
@@ -722,6 +892,23 @@ export default function EstimateBuilder() {
             signatureData: "",
             createdAt: now,
           });
+
+      if (marketplaceRequestId) {
+        const { error: linkError } = await supabase.rpc(
+          "link_marketplace_request_project",
+          {
+            requested_request_id: marketplaceRequestId,
+            requested_project_id: saved.id,
+          },
+        );
+
+        if (linkError) {
+          showError(
+            `The estimate was saved, but YardPilot could not link it to the marketplace request: ${linkError.message}`,
+          );
+          return;
+        }
+      }
 
       if (draftKey) localStorage.removeItem(draftKey);
       navigate(`/app/estimates/${saved.id}`);

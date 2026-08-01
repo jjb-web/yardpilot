@@ -28,21 +28,42 @@ import Billing from "./pages/Billing";
 import RedeemAccess from "./pages/RedeemAccess";
 import Reports from "./pages/Reports";
 import FeatureGate from "./components/FeatureGate";
+import ClientLayout from "./components/ClientLayout";
+import ClientMarketplace from "./pages/ClientMarketplace";
+import ClientRequests from "./pages/ClientRequests";
+import ClientAccount from "./pages/ClientAccount";
+import MarketplaceBusinessDetail from "./pages/MarketplaceBusinessDetail";
+import Marketplace from "./pages/Marketplace";
+import Feedback from "./pages/Feedback";
+import EmployeePayments from "./pages/EmployeePayments";
+import ClientPayments from "./pages/ClientPayments";
 import { useApp } from "./context/AppContext";
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <p className="text-sm text-gray-500">Loading YardPilot...</p>
+    </div>
+  );
+}
 
 function ProtectedApp() {
   const { user, authLoading, workspaceLoading } = useApp();
 
-  if (authLoading || workspaceLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-gray-500">Loading YardPilot...</p>
-      </div>
-    );
-  }
-
+  if (authLoading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.accountType === "client") return <Navigate to="/client/market" replace />;
+  if (workspaceLoading) return <LoadingScreen />;
   return <AppLayout />;
+}
+
+function ProtectedClient() {
+  const { user, authLoading } = useApp();
+
+  if (authLoading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.accountType !== "client") return <Navigate to="/app/dashboard" replace />;
+  return <ClientLayout />;
 }
 
 function ManagerOnly({ children }: { children: ReactNode }) {
@@ -113,6 +134,7 @@ export const router = createBrowserRouter([
       },
       { path: "jobs/:id", Component: JobDetail },
       { path: "projects/current", element: <Projects status="active" /> },
+      { path: "marketplace", Component: Marketplace },
       {
         path: "projects/past",
         element: (
@@ -140,9 +162,24 @@ export const router = createBrowserRouter([
       { path: "schedule", element: <FeatureGate feature="schedule"><Schedule /></FeatureGate> },
       { path: "follow-ups", element: <FeatureGate feature="followups"><FollowUps /></FeatureGate> },
       { path: "team", element: <FeatureGate feature="team"><Team /></FeatureGate> },
+      { path: "team-payments", element: <FeatureGate feature="team"><EmployeePayments /></FeatureGate> },
+      { path: "feedback", Component: Feedback },
       { path: "account", Component: Account },
       { path: "billing", Component: Billing },
       { path: "reports", element: <FeatureGate feature="advanced_reports"><Reports /></FeatureGate> },
+    ],
+  },
+  {
+    path: "/client",
+    Component: ProtectedClient,
+    children: [
+      { index: true, element: <Navigate to="/client/market" replace /> },
+      { path: "market", Component: ClientMarketplace },
+      { path: "market/:workspaceId", Component: MarketplaceBusinessDetail },
+      { path: "requests", Component: ClientRequests },
+      { path: "payments", Component: ClientPayments },
+      { path: "feedback", Component: Feedback },
+      { path: "account", Component: ClientAccount },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },

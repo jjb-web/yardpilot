@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, CreditCard, Gift, Loader2 } from "lucide-react";
+import { Check, Copy, CreditCard, Gift, KeyRound, Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../context/AppContext";
 import { useSubscription } from "../hooks/useSubscription";
@@ -10,13 +10,23 @@ async function functionError(error: unknown) {
   return "The billing request failed.";
 }
 
+type GeneratedGift = {
+  code: string;
+  redeemUrl: string;
+  accessDays: number;
+  expiresAt: string;
+};
+
 export default function Billing() {
-  const { activeWorkspaceId, role } = useApp();
+  const { activeWorkspaceId, authUserId, role } = useApp();
   const { status, loading, error, refresh } = useSubscription();
   const [busy, setBusy] = useState("");
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [platformAdmin, setPlatformAdmin] = useState(false);
+  const [giftLabel, setGiftLabel] = useState("");
+  const [generatedGift, setGeneratedGift] = useState<GeneratedGift | null>(null);
   const canManage = role === "owner" || role === "co_owner";
 
   useEffect(() => {
@@ -28,6 +38,21 @@ export default function Billing() {
       window.history.replaceState({}, "", "/app/billing#redeem");
     }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function checkAdmin() {
+      if (!authUserId) return;
+      const { data } = await supabase
+        .from("platform_admins")
+        .select("user_id")
+        .eq("user_id", authUserId)
+        .maybeSingle();
+      if (active) setPlatformAdmin(Boolean(data));
+    }
+    void checkAdmin();
+    return () => { active = false; };
+  }, [authUserId]);
 
   async function invoke(name: string, body: Record<string, unknown>) {
     const { data, error: fnError } = await supabase.functions.invoke(name, { body });
@@ -82,6 +107,32 @@ export default function Billing() {
     } finally {
       setBusy("");
     }
+  }
+
+  async function generateGiftCode() {
+    setBusy("gift");
+    setActionError("");
+    setMessage("");
+    setGeneratedGift(null);
+    try {
+      const data = await invoke("generate-gift-code", {
+        label: giftLabel.trim() || "Individual client",
+        accessDays: 30,
+        redeemWithinDays: 30,
+      });
+      setGeneratedGift(data as GeneratedGift);
+      setGiftLabel("");
+      setMessage("Unique one-use gift code generated. Copy it now; the complete code is not stored in plaintext.");
+    } catch (requestError) {
+      setActionError(await functionError(requestError));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function copyGift(value: string) {
+    await navigator.clipboard.writeText(value);
+    setMessage("Copied to clipboard.");
   }
 
   if (loading) return <div className="p-8 text-sm text-gray-500">Loading billing…</div>;
@@ -143,6 +194,33 @@ export default function Billing() {
         </div>
         {!canManage && <p className="mt-2 text-xs text-amber-700">Only an owner or co-owner can change workspace billing.</p>}
       </section>
+
+      {platformAdmin && (
+        <section className="rounded-2xl border border-violet-200 bg-violet-50/40 p-6">
+          <div className="flex items-center gap-3"><KeyRound size={20}/><h2 className="text-lg font-bold">Platform gift-code tools</h2></div>
+          <p className="mt-2 text-sm text-gray-600">Generate a unique, one-use code that grants 30 days of Pro. The code must be redeemed within 30 days of creation.</p>
+          <div className="mt-4 flex max-w-2xl flex-col gap-3 sm:flex-row">
+            <input value={giftLabel} onChange={(event) => setGiftLabel(event.target.value)} placeholder="Client name or campaign note" className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm" />
+            <button type="button" onClick={() => void generateGiftCode()} disabled={Boolean(busy)} className="rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+              {busy === "gift" ? "Generating…" : "Generate unique 30-day code"}
+            </button>
+          </div>
+          {generatedGift && (
+            <div className="mt-5 rounded-xl border border-violet-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Copy this now</p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <code className="flex-1 rounded-lg bg-slate-950 px-3 py-2.5 text-sm font-bold text-white">{generatedGift.code}</code>
+                <button type="button" onClick={() => void copyGift(generatedGift.code)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold"><Copy size={15}/>Copy code</button>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input readOnly value={generatedGift.redeemUrl} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+                <button type="button" onClick={() => void copyGift(generatedGift.redeemUrl)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold"><Copy size={15}/>Copy link</button>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">Grants {generatedGift.accessDays} days of Pro. Redemption expires {new Date(generatedGift.expiresAt).toLocaleDateString()}.</p>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-gray-600">
         <h2 className="font-bold text-gray-900">Current access</h2>

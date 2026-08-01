@@ -25,6 +25,9 @@ import {
   Users,
   CreditCard,
   LockKeyhole,
+  Store,
+  MessageSquareText,
+  WalletCards,
   X,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
@@ -45,12 +48,15 @@ const nav: NavItem[] = [
   { to: "/app/contacts", icon: Users, label: "Contacts", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/estimates", icon: FileText, label: "Estimates", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/projects/current", icon: FolderOpen, label: "Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/marketplace", icon: Store, label: "Marketplace", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/schedule", icon: CalendarDays, label: "Schedule", roles: ["owner", "co_owner", "manager", "employee"], feature: "schedule" },
   { to: "/app/follow-ups", icon: BellRing, label: "Follow-ups", roles: ["owner", "co_owner", "manager", "employee"], feature: "followups" },
   { to: "/app/invoices", icon: ReceiptText, label: "Invoices", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/reports", icon: BarChart3, label: "Reports", roles: ["owner", "co_owner", "manager"], feature: "advanced_reports" },
   { to: "/app/projects/past", icon: Archive, label: "Past Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
+  { to: "/app/team-payments", icon: WalletCards, label: "Employee payments", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
+  { to: "/app/feedback", icon: MessageSquareText, label: "Feedback & review", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/account", icon: User, label: "Account", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/billing", icon: CreditCard, label: "Plans & billing", roles: ["owner", "co_owner", "manager", "employee"] },
 ];
@@ -312,11 +318,11 @@ export default function AppLayout() {
             </p>
           </div>
           <Link
-            to={role === "employee" ? "/app/team" : "/app/estimate/new"}
+            to={role === "employee" ? "/app/marketplace" : "/app/estimate/new"}
             className="flex items-center gap-1.5 px-4 py-2 bg-[#71877a] text-white text-sm font-semibold rounded-lg hover:bg-[#607568]"
           >
             <PlusCircle size={15} />
-            {role === "employee" ? "Propose Estimate" : "New Estimate"}
+            {role === "employee" ? "Find work" : "New Estimate"}
           </Link>
         </header>
 
