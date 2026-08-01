@@ -21,6 +21,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import CopyToast from "../components/CopyToast";
 import { useApp } from "../context/AppContext";
 import { useCopyFeedback } from "../hooks/useCopyFeedback";
+import { useSubscription } from "../hooks/useSubscription";
 import type {
   Invoice,
   InvoiceSnapshot,
@@ -130,6 +131,8 @@ function paymentMethodLabel(value: string) {
 }
 
 export default function Invoices() {
+  const { hasFeature } = useSubscription();
+  const onlinePaymentsUnlocked = hasFeature("online_payments");
   const {
     authUserId,
     activeWorkspaceId,
@@ -645,8 +648,8 @@ export default function Invoices() {
                     <button
                       type="button"
                       onClick={() => void shareInvoice(invoice, true)}
-                      disabled={isBusy || status === "void" || !stripeReady}
-                      title={stripeReady ? "Send a public invoice link with online Stripe payment" : "Connect Stripe in Account first"}
+                      disabled={isBusy || status === "void" || !stripeReady || !onlinePaymentsUnlocked}
+                      title={!onlinePaymentsUnlocked ? "Online invoice payments require YardPilot Pro" : stripeReady ? "Send a public invoice link with online Stripe payment" : "Connect Stripe in Account first"}
                       className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                     >
                       <CreditCard size={14} /> Send online payment link

@@ -24,6 +24,10 @@ import InvoiceDetail from "./pages/InvoiceDetail";
 import PublicInvoice from "./pages/PublicInvoice";
 import Team from "./pages/Team";
 import JobDetail from "./pages/JobDetail";
+import Billing from "./pages/Billing";
+import RedeemAccess from "./pages/RedeemAccess";
+import Reports from "./pages/Reports";
+import FeatureGate from "./components/FeatureGate";
 import { useApp } from "./context/AppContext";
 
 function ProtectedApp() {
@@ -60,6 +64,7 @@ export const router = createBrowserRouter([
   { path: "/contact", Component: ContactSupport },
   { path: "/estimate/share/:token", Component: PublicEstimate },
   { path: "/invoice/share/:token", Component: PublicInvoice },
+  { path: "/redeem/:code", Component: RedeemAccess },
   {
     path: "/app",
     Component: ProtectedApp,
@@ -108,7 +113,14 @@ export const router = createBrowserRouter([
       },
       { path: "jobs/:id", Component: JobDetail },
       { path: "projects/current", element: <Projects status="active" /> },
-      { path: "projects/past", element: <Projects status="completed" /> },
+      {
+        path: "projects/past",
+        element: (
+          <ManagerOnly>
+            <Projects status="completed" />
+          </ManagerOnly>
+        ),
+      },
       {
         path: "invoices",
         element: (
@@ -125,10 +137,12 @@ export const router = createBrowserRouter([
           </ManagerOnly>
         ),
       },
-      { path: "schedule", Component: Schedule },
-      { path: "follow-ups", Component: FollowUps },
-      { path: "team", Component: Team },
+      { path: "schedule", element: <FeatureGate feature="schedule"><Schedule /></FeatureGate> },
+      { path: "follow-ups", element: <FeatureGate feature="followups"><FollowUps /></FeatureGate> },
+      { path: "team", element: <FeatureGate feature="team"><Team /></FeatureGate> },
       { path: "account", Component: Account },
+      { path: "billing", Component: Billing },
+      { path: "reports", element: <FeatureGate feature="advanced_reports"><Reports /></FeatureGate> },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },

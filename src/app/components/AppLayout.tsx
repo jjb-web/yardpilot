@@ -19,19 +19,25 @@ import {
   Moon,
   PlusCircle,
   ReceiptText,
+  BarChart3,
   Sun,
   User,
   Users,
+  CreditCard,
+  LockKeyhole,
   X,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import type { WorkspaceRole } from "../data/types";
+import { useSubscription } from "../hooks/useSubscription";
+import type { FeatureKey } from "../lib/subscription";
 
 type NavItem = {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
   roles: WorkspaceRole[];
+  feature?: FeatureKey;
 };
 
 const nav: NavItem[] = [
@@ -39,12 +45,14 @@ const nav: NavItem[] = [
   { to: "/app/contacts", icon: Users, label: "Contacts", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/estimates", icon: FileText, label: "Estimates", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/projects/current", icon: FolderOpen, label: "Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
-  { to: "/app/schedule", icon: CalendarDays, label: "Schedule", roles: ["owner", "co_owner", "manager", "employee"] },
-  { to: "/app/follow-ups", icon: BellRing, label: "Follow-ups", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/schedule", icon: CalendarDays, label: "Schedule", roles: ["owner", "co_owner", "manager", "employee"], feature: "schedule" },
+  { to: "/app/follow-ups", icon: BellRing, label: "Follow-ups", roles: ["owner", "co_owner", "manager", "employee"], feature: "followups" },
   { to: "/app/invoices", icon: ReceiptText, label: "Invoices", roles: ["owner", "co_owner", "manager"] },
+  { to: "/app/reports", icon: BarChart3, label: "Reports", roles: ["owner", "co_owner", "manager"], feature: "advanced_reports" },
   { to: "/app/projects/past", icon: Archive, label: "Past Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
-  { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
   { to: "/app/account", icon: User, label: "Account", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/billing", icon: CreditCard, label: "Plans & billing", roles: ["owner", "co_owner", "manager", "employee"] },
 ];
 
 function initialDarkMode() {
@@ -73,6 +81,7 @@ export default function AppLayout() {
   } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
+  const { hasFeature, loading: subscriptionLoading } = useSubscription();
 
   useEffect(() => {
     const routeLabel = nav.find((item) => location.pathname.startsWith(item.to))?.label;
@@ -102,6 +111,19 @@ export default function AppLayout() {
   }, [location.pathname]);
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (!subscriptionLoading && (role === "manager" || role === "employee") && !hasFeature("team")) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+        <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm">
+          <LockKeyhole className="mx-auto" size={28} />
+          <h1 className="mt-4 text-2xl font-bold">Workspace team access is paused</h1>
+          <p className="mt-2 text-sm leading-6 text-gray-600">The workspace owner must restore YardPilot Pro before managers and employees can use this workspace. Existing records remain saved.</p>
+          <button type="button" onClick={() => void handleLogout()} className="mt-6 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">Sign out</button>
+        </div>
+      </div>
+    );
+  }
 
   async function handleLogout() {
     try {
@@ -163,11 +185,12 @@ export default function AppLayout() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {visibleNav.map(({ to, icon: Icon, label }) => {
+        {visibleNav.map(({ to, icon: Icon, label, feature }) => {
           const active =
             location.pathname === to ||
             (to !== "/app/dashboard" && location.pathname.startsWith(to));
 
+          const locked = Boolean(feature && !hasFeature(feature));
           return (
             <Link
               key={to}
@@ -184,7 +207,8 @@ export default function AppLayout() {
                 className={active ? "text-[#b9c9bf]" : "text-[#829087]"}
               />
               {label}
-              {active && (
+              {locked && <LockKeyhole size={13} className="ml-auto text-[#98a79e]" />}
+              {active && !locked && (
                 <ChevronRight size={14} className="ml-auto text-[#b9c9bf]" />
               )}
             </Link>

@@ -15,6 +15,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import CopyToast from "../components/CopyToast";
 import InvoiceDocument from "../components/InvoiceDocument";
 import { useApp } from "../context/AppContext";
+import { useSubscription } from "../hooks/useSubscription";
 import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type { Invoice, InvoiceStatus } from "../data/types";
 import { formatMoney, invoiceShareUrl } from "../lib/estimate";
@@ -38,6 +39,8 @@ function paymentMethodLabel(value: string) {
 }
 
 export default function InvoiceDetail() {
+  const { hasFeature } = useSubscription();
+  const onlinePaymentsUnlocked = hasFeature("online_payments");
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

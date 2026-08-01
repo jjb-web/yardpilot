@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
   CalendarDays,
@@ -29,6 +29,7 @@ import type {
 import { calculateEstimate, calculateJob, formatMoney } from "../lib/estimate";
 import { checkTextSafety } from "../lib/contentSafety";
 import { generateEstimateDescription } from "../lib/descriptionGenerator";
+import { useSubscription } from "../hooks/useSubscription";
 
 const PROJECT_TYPES = [
   "Lawn Mowing & Edging",
@@ -297,6 +298,8 @@ export default function EstimateBuilder() {
   const existing = editing ? projects.find((project) => project.id === id) ?? null : null;
   const [form, setForm] = useState<EstimateForm>(blankForm);
   const [jobSections, setJobSections] = useState<EstimateJob[]>([blankJob()]);
+  const { hasFeature } = useSubscription();
+  const canAddMultipleJobs = hasFeature("multi_job_estimates");
   const [generatedDescription, setGeneratedDescription] = useState("");
   const [openJobs, setOpenJobs] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -860,14 +863,20 @@ export default function EstimateBuilder() {
               <button
                 type="button"
                 onClick={() => {
+                  if (!canAddMultipleJobs && jobSections.length >= 1) return;
                   const job = blankJob(jobSections.length);
                   setJobSections((current) => [...current, job]);
                   setOpenJobs((current) => [...current, job.id]);
                 }}
-                className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-800"
+                disabled={!canAddMultipleJobs && jobSections.length >= 1}
+                title={canAddMultipleJobs ? "Add another job" : "Multiple jobs per estimate requires YardPilot Pro"}
+                className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={16} /> Add another job
               </button>
+              {!canAddMultipleJobs && jobSections.length >= 1 && (
+                <Link to="/app/billing" className="text-xs font-semibold text-slate-600 underline">Unlock multiple jobs with Pro</Link>
+              )}
             </div>
 
             {jobSections.map((job, index) => {
