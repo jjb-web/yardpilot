@@ -19,7 +19,7 @@ values (
 on conflict (code_hash) do nothing;
 
 -- A limited founder campaign: one free year, 50 redemptions.
-insert into public.access_codes (
+insert into public.access_codes
   code_hash, code_hint, campaign, plan_key, duration_days,
   max_redemptions, expires_at, active
 )
