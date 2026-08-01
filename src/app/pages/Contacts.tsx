@@ -1118,8 +1118,8 @@ export default function Contacts() {
 
       {modalOpen && (
         <div className="app-modal-overlay fixed inset-0 z-[80] flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-4">
-          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-5xl sm:rounded-2xl">
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-4 sm:px-6">
+          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white text-slate-900 shadow-2xl dark:bg-slate-950 dark:text-slate-100 sm:h-auto sm:max-h-[92vh] sm:max-w-5xl sm:rounded-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-4 dark:border-slate-800 sm:px-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
                   {selected ? selected.name : "Add Contact"}
@@ -1137,7 +1137,7 @@ export default function Contacts() {
               </button>
             </div>
 
-            <div className="shrink-0 border-b border-gray-100 px-4 sm:px-6">
+            <div className="shrink-0 border-b border-gray-100 px-4 dark:border-slate-800 sm:px-6">
               <div className="flex gap-1 overflow-x-auto">
                 {tabs.map(([value, label]) => (
                   <button
@@ -1146,8 +1146,8 @@ export default function Contacts() {
                     onClick={() => setActiveTab(value)}
                     className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold ${
                       activeTab === value
-                        ? "border-slate-700 text-slate-900 dark:border-slate-200 dark:text-white"
-                        : "border-transparent text-gray-500"
+                        ? "border-slate-700 bg-slate-100 text-slate-950 dark:border-emerald-400 dark:bg-slate-800 dark:text-white"
+                        : "border-transparent text-gray-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                     }`}
                   >
                     {label}

@@ -113,6 +113,14 @@ export default function AppLayout() {
   }, []);
 
   useEffect(() => {
+    setSidebarOpen(false);
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement.tagName)
+    ) {
+      activeElement.blur();
+    }
     mainScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [location.pathname]);
 
@@ -326,7 +334,7 @@ export default function AppLayout() {
           </Link>
         </header>
 
-        <main ref={mainScrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <main ref={mainScrollRef} className="app-page-scroll flex-1 min-h-0">
           <Outlet />
         </main>
       </div>

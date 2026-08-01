@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BriefcaseBusiness,
   FileBadge,
@@ -6,6 +6,8 @@ import {
   LogOut,
   Menu,
   MessageSquareText,
+  Moon,
+  Sun,
   User,
   X,
 } from "lucide-react";
@@ -20,15 +22,46 @@ const nav = [
   { to: "/client/account", label: "Account", icon: User },
 ];
 
+function initialDarkMode() {
+  const saved = localStorage.getItem("yardpilot-theme");
+  if (saved === "dark") return true;
+  if (saved === "light") return false;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
 export default function ClientLayout() {
   const { user, logout } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(initialDarkMode);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const item = nav.find((entry) => location.pathname.startsWith(entry.to));
     document.title = item ? `${item.label} · YardPilotUSA` : "YardPilotUSA";
+  }, [location.pathname]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("yardpilot-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  useEffect(() => {
+    document.body.classList.add("yardpilot-app-open");
+    return () => document.body.classList.remove("yardpilot-app-open");
+  }, []);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement.tagName)
+    ) {
+      activeElement.blur();
+    }
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [location.pathname]);
 
   if (!user) return <Navigate to="/login" replace />;
@@ -52,7 +85,7 @@ export default function ClientLayout() {
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-4">
         {nav.map(({ to, label, icon: Icon }) => {
           const active = location.pathname === to || location.pathname.startsWith(`${to}/`);
           return (
@@ -74,6 +107,15 @@ export default function ClientLayout() {
       </nav>
 
       <div className="border-t border-white/10 px-3 py-4">
+        <button
+          type="button"
+          onClick={() => setDarkMode((current) => !current)}
+          className="mb-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#c4cec8] hover:bg-white/5 hover:text-white"
+        >
+          {darkMode ? <Sun size={15} /> : <Moon size={15} />}
+          {darkMode ? "Light mode" : "Dark mode"}
+        </button>
+
         <div className="mb-2 flex items-center gap-3 px-3 py-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#71877a] text-xs font-bold text-white">
             {user.name.charAt(0).toUpperCase()}
@@ -95,21 +137,21 @@ export default function ClientLayout() {
   );
 
   return (
-    <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-[#e8ebe9]">
+    <div className="client-shell flex h-[100dvh] min-h-0 overflow-hidden bg-[#e8ebe9] dark:bg-slate-950">
       <aside className="hidden w-60 shrink-0 flex-col bg-[#2b312e] md:flex">
         <Sidebar />
       </aside>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="flex w-72 flex-col bg-[#2b312e]">
+          <div className="flex min-h-0 w-72 flex-col bg-[#2b312e]">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <span className="font-bold text-white">Menu</span>
-              <button type="button" onClick={() => setSidebarOpen(false)} className="text-white/70">
+              <button type="button" onClick={() => setSidebarOpen(false)} className="text-white/70" aria-label="Close menu">
                 <X size={20} />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto"><Sidebar /></div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain"><Sidebar /></div>
           </div>
           <button type="button" aria-label="Close menu" className="flex-1 bg-black/40" onClick={() => setSidebarOpen(false)} />
         </div>
@@ -117,7 +159,7 @@ export default function ClientLayout() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex shrink-0 items-center justify-between border-b border-[#414844] bg-[#303633] px-5 py-3.5 sm:px-6">
-          <button type="button" onClick={() => setSidebarOpen(true)} className="text-gray-300 md:hidden">
+          <button type="button" onClick={() => setSidebarOpen(true)} className="text-gray-300 md:hidden" aria-label="Open menu">
             <Menu size={20} />
           </button>
           <p className="hidden truncate text-sm text-gray-300 md:block">
@@ -127,7 +169,7 @@ export default function ClientLayout() {
             Post a project
           </Link>
         </header>
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <main ref={mainScrollRef} className="app-page-scroll min-h-0 flex-1">
           <Outlet />
         </main>
       </div>
