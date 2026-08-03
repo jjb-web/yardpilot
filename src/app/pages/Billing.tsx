@@ -146,9 +146,16 @@ export default function Billing() {
 
       {(error || actionError) && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error || actionError}</div>}
       {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
+      {status?.billingIssueMessage && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-bold">Billing action may be required</p>
+          <p className="mt-1">{status.billingIssueMessage}</p>
+          {canManage && status.stripeCustomerId && <button type="button" onClick={() => void openPortal()} className="mt-3 font-semibold underline">Open billing portal</button>}
+        </div>
+      )}
 
       <div className="grid gap-5 md:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
           <p className="text-sm font-semibold text-slate-500">Free</p>
           <p className="mt-2 text-3xl font-bold">$0</p>
           <ul className="mt-5 space-y-2 text-sm text-slate-600">
@@ -159,7 +166,7 @@ export default function Billing() {
           </ul>
         </section>
 
-        <section className="rounded-2xl border-2 border-slate-900 bg-white p-6">
+        <section className="rounded-2xl border-2 border-slate-900 bg-white p-6 dark:border-emerald-600 dark:bg-slate-900">
           <p className="text-sm font-semibold text-slate-500">Pro</p>
           <p className="mt-2 text-3xl font-bold">Monthly or annual</p>
           <ul className="mt-5 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
@@ -183,7 +190,7 @@ export default function Billing() {
         </section>
       </div>
 
-      <section id="redeem" className="rounded-2xl border border-slate-200 bg-white p-6">
+      <section id="redeem" className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center gap-3"><Gift size={20}/><h2 className="text-lg font-bold">Redeem promotional access</h2></div>
         <p className="mt-2 text-sm text-gray-500">Use a code from a YardPilot business card, QR campaign, event, or partner.</p>
         <div className="mt-4 flex max-w-xl flex-col gap-3 sm:flex-row">
@@ -222,7 +229,7 @@ export default function Billing() {
         </section>
       )}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-gray-600">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900 text-sm text-gray-600">
         <h2 className="font-bold text-gray-900">Current access</h2>
         <p className="mt-2">Plan: <strong>{status?.planKey === "pro" ? "Pro" : "Free"}</strong></p>
         <p>Status: <strong>{status?.subscriptionStatus ?? "free"}</strong></p>

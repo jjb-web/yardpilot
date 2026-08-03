@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, BriefcaseBusiness, Globe2, Mail, MapPin, Phone, Users } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Globe2, Mail, MapPin, Phone, ShieldCheck, Users } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { supabase } from "../lib/supabase";
 import type { MarketplaceBusiness, MarketplaceOpening } from "../data/marketplace";
@@ -57,18 +57,22 @@ export default function MarketplaceBusinessDetail() {
 
       {business && (
         <>
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
               <div>
                 <div className="flex items-center gap-3">
                   <BriefcaseBusiness size={24} className="text-slate-600" />
-                  <h1 className="text-2xl font-bold text-slate-900">{business.display_name}</h1>
+                  <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{business.display_name}</h1>
+                  {business.verification_status === "verified_active_registration" && <span title="Public business registration verified" className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800"><ShieldCheck size={13} /> Registration verified</span>}
                 </div>
                 {business.headline && <p className="mt-2 text-base text-slate-600">{business.headline}</p>}
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
                   {business.accepting_client_work && <span className="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-800">Accepting projects</span>}
                   {business.hiring && <span className="rounded-full bg-blue-100 px-3 py-1 font-semibold text-blue-800">Hiring</span>}
                 </div>
+                {business.verification_status === "verified_active_registration" && (
+                  <p className="mt-3 text-xs text-slate-500">Verified against the stated public registration record{business.legal_business_name ? ` for ${business.legal_business_name}` : ""}{business.formation_state ? ` in ${business.formation_state}` : ""}. This does not verify work quality, insurance, licensing, tax compliance, or suitability.</p>
+                )}
               </div>
               {business.accepting_client_work && (
                 <Link to="/client/requests" className="rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white">
@@ -97,7 +101,7 @@ export default function MarketplaceBusinessDetail() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center gap-3">
               <Users size={20} />
               <h2 className="text-lg font-bold text-slate-900">Open positions</h2>

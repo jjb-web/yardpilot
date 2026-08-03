@@ -1,11 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, Download, Edit3, Share2, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  Edit3,
+  RotateCcw,
+  Send,
+  Share2,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
 import CopyToast from "../components/CopyToast";
 import EstimateDocument from "../components/EstimateDocument";
 import { useApp } from "../context/AppContext";
 import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import { estimateShareUrl } from "../lib/estimate";
+
+function approvalLabel(status: string) {
+  if (status === "pending") return "Awaiting internal approval";
+  if (status === "approved") return "Internally approved";
+  if (status === "changes_requested") return "Changes requested";
+  return "Internal draft";
+}
+
+function approvalClass(status: string) {
+  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-900";
+  if (status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  if (status === "changes_requested") return "border-red-200 bg-red-50 text-red-900";
+  return "border-slate-200 bg-slate-50 text-slate-800";
+}
 
 export default function EstimateDetail() {
   const { id } = useParams<{ id: string }>();
@@ -13,6 +37,8 @@ export default function EstimateDetail() {
   const navigate = useNavigate();
   const {
     user,
+    authUserId,
+    role,
     projects,
     projectsLoading,
     contacts,
@@ -20,14 +46,41 @@ export default function EstimateDetail() {
     propertyPhotos,
     setProjectSharing,
     deleteProject,
+    submitEstimateForApproval,
+    reviewEstimateApproval,
   } = useApp();
   const [message, setMessage] = useState("");
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [busy, setBusy] = useState(false);
   const { copyText, copiedMessage } = useCopyFeedback();
 
   const project = projects.find((item) => item.id === id) ?? null;
   const contact = contacts.find((item) => item.id === project?.contactId) ?? null;
   const property = properties.find((item) => item.id === project?.propertyId) ?? null;
   const photos = propertyPhotos.filter((item) => item.propertyId === property?.id);
+
+  const isManager = role === "owner" || role === "co_owner" || role === "manager";
+  const isEmployeeOwner = role === "employee" && project?.createdBy === authUserId;
+  const canEdit = Boolean(
+    isManager ||
+      (isEmployeeOwner &&
+        project?.estimateStatus === "draft" &&
+        ["draft", "changes_requested"].includes(project.internalApprovalStatus))
+  );
+  const canSubmit = Boolean(
+    project?.estimateStatus === "draft" &&
+      ["draft", "changes_requested"].includes(project.internalApprovalStatus) &&
+      (isManager || isEmployeeOwner)
+  );
+  const originMarketplace = searchParams.get("origin") === "marketplace";
+  const backLabel = originMarketplace ? "Go to Estimates" : "Back";
+  const backAction = () =>
+    originMarketplace ? navigate("/app/estimates", { replace: true }) : navigate(-1);
+
+  const approvalByName = useMemo(() => {
+    if (!project?.approvedBy) return "";
+    return project.approvedBy === authUserId ? "you" : "a manager";
+  }, [project?.approvedBy, authUserId]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -42,6 +95,11 @@ export default function EstimateDetail() {
   async function shareEstimate() {
     if (!project) return;
     setMessage("");
+
+    if (project.internalApprovalStatus !== "approved") {
+      setMessage("Approve this estimate internally before sharing it with the client.");
+      return;
+    }
 
     try {
       const sharedProject =
@@ -73,6 +131,39 @@ export default function EstimateDetail() {
     }
   }
 
+  async function submitForApproval() {
+    if (!project) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await submitEstimateForApproval(project.id);
+      setMessage("Estimate submitted for internal approval.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not submit estimate.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function review(decision: "approve" | "changes_requested") {
+    if (!project) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await reviewEstimateApproval(project.id, decision, reviewNotes);
+      setMessage(
+        decision === "approve"
+          ? "Estimate approved. It can now be sent to the client."
+          : "Estimate returned for changes."
+      );
+      setReviewNotes("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not review estimate.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeEstimate() {
     if (!project) return;
     const confirmed = window.confirm(
@@ -100,12 +191,8 @@ export default function EstimateDetail() {
       <div className="p-6 max-w-3xl mx-auto">
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
           <h1 className="text-xl font-bold text-gray-900">Estimate not found</h1>
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="mt-4 text-green-700 font-semibold text-sm cursor-pointer"
-          >
-            Back
+          <button type="button" onClick={backAction} className="mt-4 text-green-700 font-semibold text-sm">
+            {backLabel}
           </button>
         </div>
       </div>
@@ -113,49 +200,123 @@ export default function EstimateDetail() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="no-print flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={backAction}
           className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
         >
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> {backLabel}
         </button>
 
         <div className="flex flex-wrap gap-2">
-          <Link
-            to={`/app/estimate/${project.id}`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50"
-          >
-            <Edit3 size={15} /> Edit
-          </Link>
+          {canEdit && (
+            <Link
+              to={`/app/estimate/${project.id}`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50"
+            >
+              <Edit3 size={15} /> Edit
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50"
           >
             <Download size={15} /> Download PDF
           </button>
-          <button
-            type="button"
-            onClick={() => void shareEstimate()}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 cursor-pointer"
-          >
-            <Share2 size={15} /> Share
-          </button>
-          <button
-            type="button"
-            onClick={() => void removeEstimate()}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50 cursor-pointer"
-          >
-            <Trash2 size={15} /> Delete
-          </button>
+          {isManager && (
+            <button
+              type="button"
+              onClick={() => void shareEstimate()}
+              disabled={project.internalApprovalStatus !== "approved"}
+              title={project.internalApprovalStatus !== "approved" ? "Internal approval required" : undefined}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Share2 size={15} /> Share
+            </button>
+          )}
+          {isManager && (
+            <button
+              type="button"
+              onClick={() => void removeEstimate()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-semibold hover:bg-red-50"
+            >
+              <Trash2 size={15} /> Delete
+            </button>
+          )}
         </div>
       </div>
 
+      <section className={`no-print mb-5 rounded-xl border p-4 ${approvalClass(project.internalApprovalStatus)}`}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 font-bold">
+              <ShieldCheck size={18} /> {approvalLabel(project.internalApprovalStatus)}
+            </div>
+            <p className="mt-1 text-sm opacity-80">
+              Internal approval is separate from the customer accepting the estimate.
+            </p>
+            {project.approvedAt && (
+              <p className="mt-2 text-xs opacity-70">
+                Approved {new Date(project.approvedAt).toLocaleString()}{approvalByName ? ` by ${approvalByName}` : ""}.
+              </p>
+            )}
+            {project.approvalNotes && (
+              <p className="mt-3 whitespace-pre-line rounded-lg bg-white/60 px-3 py-2 text-sm">
+                {project.approvalNotes}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 lg:w-[360px]">
+            {canSubmit && (
+              <button
+                type="button"
+                onClick={() => void submitForApproval()}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                <Send size={15} /> Submit for approval
+              </button>
+            )}
+
+            {isManager && project.internalApprovalStatus !== "approved" && (
+              <>
+                <textarea
+                  value={reviewNotes}
+                  onChange={(event) => setReviewNotes(event.target.value)}
+                  rows={3}
+                  placeholder="Approval note or requested changes"
+                  className="w-full rounded-lg border border-current/20 bg-white px-3 py-2 text-sm text-slate-900"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void review("approve")}
+                    disabled={busy}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={15} /> Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void review("changes_requested")}
+                    disabled={busy}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 disabled:opacity-50"
+                  >
+                    <RotateCcw size={15} /> Request changes
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
       {message && (
-        <div className="no-print mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="no-print mb-5 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
           {message}
         </div>
       )}
@@ -171,10 +332,10 @@ export default function EstimateDetail() {
       <div className="no-print mt-6 flex justify-center">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={backAction}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
         >
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> {backLabel}
         </button>
       </div>
       <CopyToast message={copiedMessage} />

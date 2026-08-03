@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BriefcaseBusiness, Loader2, MapPin, Search, Users } from "lucide-react";
+import { BriefcaseBusiness, Loader2, MapPin, Search, ShieldCheck, Users } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../context/AppContext";
@@ -58,13 +58,13 @@ export default function ClientMarketplace() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-7">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Landscaper Market</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Landscaper Market</h1>
         <p className="mt-1 text-sm text-slate-500">
           Search published companies and workgroups near your project. Results are loaded in small pages instead of downloading every company on YardPilot.
         </p>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5 shadow-sm">
         <div className="grid gap-3 md:grid-cols-4">
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-semibold text-slate-600">Company, service, or keyword</label>
@@ -109,18 +109,22 @@ export default function ClientMarketplace() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {results.map((business) => (
-          <article key={business.workspace_id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <article key={business.workspace_id} className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">{business.display_name}</h2>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">{business.display_name}</h2>
                 {business.headline && <p className="mt-1 text-sm text-slate-600">{business.headline}</p>}
               </div>
-              <BriefcaseBusiness size={20} className="shrink-0 text-slate-500" />
+              <div className="flex shrink-0 items-center gap-2">
+                {business.verification_status === "verified_active_registration" && <ShieldCheck size={20} className="text-emerald-600" aria-label="Business registration verified" />}
+                <BriefcaseBusiness size={20} className="text-slate-500" />
+              </div>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               {business.accepting_client_work && <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-semibold text-emerald-800">Accepting projects</span>}
               {business.hiring && <span className="rounded-full bg-blue-100 px-2.5 py-1 font-semibold text-blue-800"><Users size={12} className="mr-1 inline" />Hiring</span>}
+              {business.verification_status === "verified_active_registration" && <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-semibold text-emerald-800">Registration verified</span>}
             </div>
 
             {(business.city || business.state) && (

@@ -13,7 +13,6 @@ import {
   PlusCircle,
   ReceiptText,
   Trash2,
-  UserPlus,
   Users,
 } from "lucide-react";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -45,12 +44,10 @@ export default function Projects({ status }: { status: ProjectStatus }) {
     invoices,
     projectsLoading,
     projectsError,
-    assignSelfToProject,
     completeProject,
     bulkDeleteProjects,
   } = useApp();
   const navigate = useNavigate();
-  const [claimingId, setClaimingId] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("recent");
@@ -68,7 +65,7 @@ export default function Projects({ status }: { status: ProjectStatus }) {
             ? project.status === "completed" || project.status === "archived"
             : project.status === "active" && project.estimateStatus === "accepted";
           if (!statusMatches) return false;
-          if (isEmployee && isPast && !project.assignedMemberIds.includes(authUserId ?? "")) {
+          if (isEmployee && !project.assignedMemberIds.includes(authUserId ?? "")) {
             return false;
           }
           return !isPast || withinTimeFilter(project.updatedAt, timeFilter);
@@ -78,26 +75,12 @@ export default function Projects({ status }: { status: ProjectStatus }) {
             new Date(second.updatedAt).getTime() -
             new Date(first.updatedAt).getTime()
         ),
-    [projects, isPast, timeFilter]
+    [projects, isPast, timeFilter, isEmployee, authUserId]
   );
 
   const title = isPast ? "Past Jobs" : isEmployee ? "Jobs" : "Current Jobs";
   const allVisibleSelected =
     filtered.length > 0 && filtered.every((project) => selectedIds.includes(project.id));
-
-  async function claim(projectId: string) {
-    setActionError("");
-    setClaimingId(projectId);
-    try {
-      await assignSelfToProject(projectId);
-    } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : "The job could not be claimed."
-      );
-    } finally {
-      setClaimingId("");
-    }
-  }
 
   async function runConfirmedAction() {
     if (!confirmState) return;
@@ -148,7 +131,7 @@ export default function Projects({ status }: { status: ProjectStatus }) {
           <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
           <p className="mt-1 text-sm text-gray-500">
             {filtered.length} {filtered.length === 1 ? "job" : "jobs"}
-            {isEmployee && !isPast ? " available or assigned to you" : ""}
+            {isEmployee && !isPast ? " assigned to you" : ""}
           </p>
         </div>
         {!isPast && !isEmployee && (
@@ -219,7 +202,9 @@ export default function Projects({ status }: { status: ProjectStatus }) {
         <div className="rounded-xl border border-gray-200 bg-white p-16 text-center text-sm text-gray-400">
           {isPast
             ? "No completed jobs match this time period."
-            : "No accepted estimates have become jobs yet."}
+            : isEmployee
+              ? "No jobs are currently assigned to you."
+              : "No accepted estimates have become jobs yet."}
         </div>
       ) : (
         <div className="space-y-3">
@@ -227,7 +212,6 @@ export default function Projects({ status }: { status: ProjectStatus }) {
             const assignedToMe = project.assignedMemberIds.includes(
               authUserId ?? ""
             );
-            const unassigned = project.assignedMemberIds.length === 0;
             const jobHref = `/app/jobs/${project.id}`;
             const invoice = invoices.find((item) => item.projectId === project.id);
             const totalHours = combinedLaborHours(project);
@@ -274,15 +258,9 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                           Completed
                         </span>
                       )}
-                      {isEmployee && !isPast && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            assignedToMe
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-blue-100 text-blue-700"
-                          }`}
-                        >
-                          {assignedToMe ? "Assigned to me" : "Open job"}
+                      {isEmployee && !isPast && assignedToMe && (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          Assigned to me
                         </span>
                       )}
                     </div>
@@ -348,17 +326,6 @@ export default function Projects({ status }: { status: ProjectStatus }) {
                   )}
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {isEmployee && !isPast && unassigned && (
-                      <button
-                        type="button"
-                        onClick={() => void claim(project.id)}
-                        disabled={Boolean(claimingId)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60 cursor-pointer"
-                      >
-                        <UserPlus size={15} />
-                        {claimingId === project.id ? "Claiming…" : "Assign to me"}
-                      </button>
-                    )}
 
                     {!isEmployee && !isPast && (
                       <Link

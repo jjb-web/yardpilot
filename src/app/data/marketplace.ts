@@ -14,6 +14,12 @@ export type MarketplaceBusiness = {
   website_url: string;
   public_email: string;
   public_phone: string;
+  entity_type?: string;
+  legal_business_name?: string;
+  formation_state?: string;
+  registry_number?: string;
+  verification_status?: string;
+  verified_at?: string | null;
   updated_at: string;
   total_count?: number;
 };

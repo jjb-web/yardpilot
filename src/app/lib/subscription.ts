@@ -19,6 +19,8 @@ export type BillingStatus = {
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   promotionalAccessUntil: string | null;
+  billingIssueCode: string;
+  billingIssueMessage: string;
   features: Record<FeatureKey, boolean>;
   limits: {
     estimatesPerMonth: number | null;

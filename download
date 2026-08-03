@@ -1,0 +1,25 @@
+# Dependencies and builds
+node_modules/
+dist/
+.vite/
+*.log
+
+# Local secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Platform and tool state
+.vercel/
+.supabase/
+coverage/
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.vscode/launch.json
+
+# Temporary exports and local database files
+*.sqlite
+*.sqlite3
+*.bak
+*.tmp

@@ -11,6 +11,9 @@ import {
 } from "react-router";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { passwordError, passwordRequirements } from "../lib/password";
+import { YARDPILOT_PRIVACY_VERSION, YARDPILOT_TERMS_VERSION } from "../lib/legal";
+import { useFeatureFlags } from "../hooks/useFeatureFlags";
 
 type FormData = {
   name: string;
@@ -24,6 +27,7 @@ type FormData = {
 
 const PENDING_INVITE_KEY = "yardpilot-pending-invite";
 const PENDING_ACCOUNT_TYPE_KEY = "yardpilot-pending-account-type";
+const PENDING_LEGAL_ACCEPTANCE_KEY = "yardpilot-pending-legal-acceptance";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -42,6 +46,9 @@ export default function Login() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const { flags } = useFeatureFlags(["public_registration"]);
+  const publicRegistrationEnabled = flags.public_registration;
 
   const [form, setForm] = useState<FormData>({
     name: "",
@@ -91,8 +98,8 @@ export default function Login() {
 
       if (pendingAccountType === "client" || pendingAccountType === "landscaper") {
         const { error: accountTypeError } = await supabase.rpc(
-          "set_my_account_type",
-          { requested_account_type: pendingAccountType }
+          "set_active_profile_mode",
+          { requested_mode: pendingAccountType }
         );
         if (accountTypeError) {
           setLoading(false);
@@ -125,6 +132,24 @@ export default function Login() {
         if (data) {
           localStorage.setItem("yardpilot-workspace", String(data));
         }
+      }
+
+      if (localStorage.getItem(PENDING_LEGAL_ACCEPTANCE_KEY) === "yes") {
+        const { error: legalError } = await supabase.rpc(
+          "accept_current_legal_documents",
+          {
+            requested_terms_version: YARDPILOT_TERMS_VERSION,
+            requested_privacy_version: YARDPILOT_PRIVACY_VERSION,
+            requested_source: "registration",
+          }
+        );
+        if (legalError) {
+          setLoading(false);
+          setError(`Your account was created, but legal acceptance could not be recorded: ${legalError.message}`);
+          processingSessionRef.current = false;
+          return;
+        }
+        localStorage.removeItem(PENDING_LEGAL_ACCEPTANCE_KEY);
       }
 
       const { data: profile } = await supabase
@@ -185,6 +210,10 @@ export default function Login() {
   }
 
   function changeMode(nextMode: "login" | "register") {
+    if (nextMode === "register" && !publicRegistrationEnabled && !form.inviteCode.trim()) {
+      setError("Public registration is temporarily closed. Join the waitlist or use a valid team invitation.");
+      return;
+    }
     setMode(nextMode);
     setError("");
     setMessage("");
@@ -239,7 +268,21 @@ export default function Login() {
   async function handleRegister(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    if (!publicRegistrationEnabled && !form.inviteCode.trim()) {
+      setError("Public registration is temporarily closed. Join the waitlist or use a valid team invitation.");
+      return;
+    }
     setMessage("");
+    const passwordValidation = passwordError(form.password);
+    if (passwordValidation) {
+      setError(passwordValidation);
+      return;
+    }
+    if (!acceptedTerms) {
+      setError("Accept the Terms, Privacy Policy, and marketplace rules before creating an account.");
+      return;
+    }
+    localStorage.setItem(PENDING_LEGAL_ACCEPTANCE_KEY, "yes");
     setLoading(true);
     rememberInvite();
     rememberRegistrationAccountType();
@@ -258,6 +301,9 @@ export default function Login() {
           company: form.company.trim(),
           phone: form.phone.trim(),
           account_type: form.inviteCode.trim() ? "landscaper" : form.accountType,
+          accepted_terms_version: YARDPILOT_TERMS_VERSION,
+          accepted_privacy_version: YARDPILOT_PRIVACY_VERSION,
+          accepted_legal_at: new Date().toISOString(),
         },
       },
     });
@@ -300,6 +346,11 @@ export default function Login() {
   async function handleGoogleLogin() {
     setError("");
     setMessage("");
+    if (mode === "register" && !acceptedTerms) {
+      setError("Accept the Terms, Privacy Policy, and marketplace rules before creating an account.");
+      return;
+    }
+    if (mode === "register") localStorage.setItem(PENDING_LEGAL_ACCEPTANCE_KEY, "yes");
     setLoading(true);
     rememberInvite();
     if (mode === "register") rememberRegistrationAccountType();
@@ -337,7 +388,7 @@ export default function Login() {
           <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden">
             <img
               src="/yardpilot-logo.png"
-              alt="YardPilotUSA"
+              alt="YardPilot"
               className="w-full h-full object-contain"
             />
           </div>
@@ -345,7 +396,7 @@ export default function Login() {
             className="font-bold text-gray-900 text-lg"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            YardPilotUSA
+            YardPilot
           </span>
         </Link>
 
@@ -383,7 +434,8 @@ export default function Login() {
                 type="button"
                 key={currentMode}
                 onClick={() => changeMode(currentMode)}
-                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all cursor-pointer ${
+                disabled={currentMode === "register" && !publicRegistrationEnabled && !form.inviteCode.trim()}
+                className={`flex-1 disabled:cursor-not-allowed disabled:opacity-50 py-2 rounded-md text-sm font-semibold transition-all cursor-pointer ${
                   mode === currentMode
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-500 hover:text-gray-700"
@@ -393,6 +445,12 @@ export default function Login() {
               </button>
             ))}
           </div>
+
+          {!publicRegistrationEnabled && !form.inviteCode.trim() && (
+            <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
+              Public registration is temporarily closed while YardPilot is in controlled beta. Existing users can sign in, and valid team invitations still work.
+            </div>
+          )}
 
           <form
             onSubmit={mode === "login" ? handleLogin : handleRegister}
@@ -500,7 +558,7 @@ export default function Login() {
               <label className={labelClass}>Password</label>
               <input
                 required
-                minLength={6}
+                minLength={10}
                 type="password"
                 autoComplete={
                   mode === "login" ? "current-password" : "new-password"
@@ -510,6 +568,15 @@ export default function Login() {
                 onChange={(event) => set("password", event.target.value)}
                 className={inputClass}
               />
+              {mode === "register" && (
+                <ul className="mt-2 grid gap-1 text-xs text-gray-500">
+                  {passwordRequirements(form.password).map((requirement) => (
+                    <li key={requirement.label} className={requirement.met ? "text-green-700" : "text-gray-500"}>
+                      {requirement.met ? "✓" : "○"} {requirement.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {mode === "login" && (
@@ -550,16 +617,18 @@ export default function Login() {
             )}
 
             {mode === "register" && (
-              <p className="text-xs leading-relaxed text-gray-500">
-                By creating an account, you agree to the {" "}
-                <Link to="/terms" className="font-semibold text-green-700 hover:underline">
-                  Terms and Conditions
-                </Link>{" "}
-                and acknowledge the {" "}
-                <Link to="/privacy" className="font-semibold text-green-700 hover:underline">
-                  Privacy Policy
-                </Link>.
-              </p>
+              <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs leading-relaxed text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(event) => setAcceptedTerms(event.target.checked)}
+                  className="mt-0.5"
+                  required
+                />
+                <span>
+                  I agree to the <Link to="/terms" className="font-semibold text-green-700 hover:underline">Terms</Link>, acknowledge the <Link to="/privacy" className="font-semibold text-green-700 hover:underline">Privacy Policy</Link>, and agree to the <Link to="/marketplace-terms" className="font-semibold text-green-700 hover:underline">Marketplace Terms</Link> and <Link to="/acceptable-use" className="font-semibold text-green-700 hover:underline">Acceptable Use Policy</Link>.
+                </span>
+              </label>
             )}
 
             <button

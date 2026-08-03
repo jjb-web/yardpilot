@@ -48,6 +48,8 @@ export function useSubscription() {
         currentPeriodEnd: row?.current_period_end ?? null,
         cancelAtPeriodEnd: Boolean(row?.cancel_at_period_end),
         promotionalAccessUntil: row?.promotional_access_until ?? null,
+        billingIssueCode: row?.billing_issue_code ?? "",
+        billingIssueMessage: row?.billing_issue_message ?? "",
         features: { ...EMPTY_FEATURES, ...(row?.features ?? {}) },
         limits: {
           estimatesPerMonth: row?.limits?.estimates_per_month ?? 5,

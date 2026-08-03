@@ -3,6 +3,8 @@ import {
   BriefcaseBusiness,
   FileBadge,
   CreditCard,
+  Bell,
+  Repeat2,
   LogOut,
   Menu,
   MessageSquareText,
@@ -13,11 +15,14 @@ import {
 } from "lucide-react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
+import { useNotifications } from "../hooks/useNotifications";
+import RouteAnalytics from "./RouteAnalytics";
 
 const nav = [
   { to: "/client/market", label: "Landscaper Market", icon: BriefcaseBusiness },
   { to: "/client/requests", label: "My Bid Requests", icon: FileBadge },
   { to: "/client/payments", label: "Payments", icon: CreditCard },
+  { to: "/client/notifications", label: "Notifications", icon: Bell },
   { to: "/client/feedback", label: "Feedback & review", icon: MessageSquareText },
   { to: "/client/account", label: "Account", icon: User },
 ];
@@ -30,16 +35,17 @@ function initialDarkMode() {
 }
 
 export default function ClientLayout() {
-  const { user, logout } = useApp();
+  const { user, authUserId, switchAccountMode, logout } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
   const mainScrollRef = useRef<HTMLElement | null>(null);
+  const { unreadCount } = useNotifications(authUserId, 25);
 
   useEffect(() => {
     const item = nav.find((entry) => location.pathname.startsWith(entry.to));
-    document.title = item ? `${item.label} · YardPilotUSA` : "YardPilotUSA";
+    document.title = item ? `${item.label} · YardPilot` : "YardPilot";
   }, [location.pathname]);
 
   useEffect(() => {
@@ -76,10 +82,10 @@ export default function ClientLayout() {
       <div className="border-b border-white/10 px-4 py-5">
         <Link to="/client/market" className="flex items-center gap-2.5 px-1">
           <div className="h-9 w-9 overflow-hidden rounded-lg border border-white/15 bg-[#353c38]">
-            <img src="/yardpilot-logo.png" alt="YardPilotUSA" className="h-full w-full object-contain" />
+            <img src="/yardpilot-logo.png" alt="YardPilot" className="h-full w-full object-contain" />
           </div>
           <div>
-            <p className="text-sm font-bold text-white">YardPilotUSA</p>
+            <p className="text-sm font-bold text-white">YardPilot</p>
             <p className="text-xs text-[#b7c5bc]">Client marketplace</p>
           </div>
         </Link>
@@ -101,6 +107,11 @@ export default function ClientLayout() {
             >
               <Icon size={17} />
               {label}
+              {to === "/client/notifications" && unreadCount > 0 && (
+                <span className="ml-auto min-w-5 rounded-full bg-emerald-500 px-1.5 py-0.5 text-center text-[10px] font-bold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -125,6 +136,15 @@ export default function ClientLayout() {
             <p className="text-xs text-[#98a79e]">Client</p>
           </div>
         </div>
+        {user.availableModes?.includes("landscaper") && (
+          <button
+            type="button"
+            onClick={() => void switchAccountMode("landscaper").then(() => navigate("/app/dashboard"))}
+            className="mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#aebbb3] hover:bg-white/5 hover:text-white"
+          >
+            <Repeat2 size={15} /> Switch to business mode
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void handleLogout()}
@@ -170,6 +190,7 @@ export default function ClientLayout() {
           </Link>
         </header>
         <main ref={mainScrollRef} className="app-page-scroll min-h-0 flex-1">
+          <RouteAnalytics />
           <Outlet />
         </main>
       </div>

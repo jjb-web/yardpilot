@@ -8,6 +8,9 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import FAQ from "./pages/FAQ";
 import ContactSupport from "./pages/ContactSupport";
+import AcceptableUse from "./pages/AcceptableUse";
+import MarketplaceTerms from "./pages/MarketplaceTerms";
+import RefundPolicy from "./pages/RefundPolicy";
 import AppLayout from "./components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import EstimateBuilder from "./pages/EstimateBuilder";
@@ -37,6 +40,8 @@ import Marketplace from "./pages/Marketplace";
 import Feedback from "./pages/Feedback";
 import EmployeePayments from "./pages/EmployeePayments";
 import ClientPayments from "./pages/ClientPayments";
+import Notifications from "./pages/Notifications";
+import NotFound from "./pages/NotFound";
 import { useApp } from "./context/AppContext";
 
 function LoadingScreen() {
@@ -83,6 +88,9 @@ export const router = createBrowserRouter([
   { path: "/privacy", Component: Privacy },
   { path: "/faq", Component: FAQ },
   { path: "/contact", Component: ContactSupport },
+  { path: "/acceptable-use", Component: AcceptableUse },
+  { path: "/marketplace-terms", Component: MarketplaceTerms },
+  { path: "/refund-policy", Component: RefundPolicy },
   { path: "/estimate/share/:token", Component: PublicEstimate },
   { path: "/invoice/share/:token", Component: PublicInvoice },
   { path: "/redeem/:code", Component: RedeemAccess },
@@ -100,38 +108,10 @@ export const router = createBrowserRouter([
           </ManagerOnly>
         ),
       },
-      {
-        path: "estimates",
-        element: (
-          <ManagerOnly>
-            <Estimates />
-          </ManagerOnly>
-        ),
-      },
-      {
-        path: "estimates/:id",
-        element: (
-          <ManagerOnly>
-            <EstimateDetail />
-          </ManagerOnly>
-        ),
-      },
-      {
-        path: "estimate/new",
-        element: (
-          <ManagerOnly>
-            <EstimateBuilder />
-          </ManagerOnly>
-        ),
-      },
-      {
-        path: "estimate/:id",
-        element: (
-          <ManagerOnly>
-            <EstimateBuilder />
-          </ManagerOnly>
-        ),
-      },
+      { path: "estimates", Component: Estimates },
+      { path: "estimates/:id", Component: EstimateDetail },
+      { path: "estimate/new", Component: EstimateBuilder },
+      { path: "estimate/:id", Component: EstimateBuilder },
       { path: "jobs/:id", Component: JobDetail },
       { path: "projects/current", element: <Projects status="active" /> },
       { path: "marketplace", Component: Marketplace },
@@ -163,6 +143,7 @@ export const router = createBrowserRouter([
       { path: "follow-ups", element: <FeatureGate feature="followups"><FollowUps /></FeatureGate> },
       { path: "team", element: <FeatureGate feature="team"><Team /></FeatureGate> },
       { path: "team-payments", element: <FeatureGate feature="team"><EmployeePayments /></FeatureGate> },
+      { path: "notifications", Component: Notifications },
       { path: "feedback", Component: Feedback },
       { path: "account", Component: Account },
       { path: "billing", Component: Billing },
@@ -178,9 +159,10 @@ export const router = createBrowserRouter([
       { path: "market/:workspaceId", Component: MarketplaceBusinessDetail },
       { path: "requests", Component: ClientRequests },
       { path: "payments", Component: ClientPayments },
+      { path: "notifications", Component: Notifications },
       { path: "feedback", Component: Feedback },
       { path: "account", Component: ClientAccount },
     ],
   },
-  { path: "*", element: <Navigate to="/" replace /> },
+  { path: "*", Component: NotFound },
 ]);

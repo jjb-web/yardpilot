@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../context/AppContext";
 import type { ClientJobBid, ClientJobRequest, MarketplaceBusiness } from "../data/marketplace";
+import { useFeatureFlags } from "../hooks/useFeatureFlags";
 
 type RequestForm = {
   title: string;
@@ -28,6 +29,8 @@ export default function ClientRequests() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const { flags } = useFeatureFlags(["marketplace_bidding"]);
+  const biddingEnabled = flags.marketplace_bidding;
   const [form, setForm] = useState<RequestForm>({
     title: "",
     description: "",
@@ -116,6 +119,10 @@ export default function ClientRequests() {
 
   async function submitRequest() {
     if (!authUserId) return;
+    if (!biddingEnabled) {
+      setError("New marketplace bid requests are temporarily paused.");
+      return;
+    }
     if (!form.title.trim() || !form.description.trim()) {
       setError("Enter a project title and description.");
       return;
@@ -187,12 +194,13 @@ export default function ClientRequests() {
           <h1 className="text-2xl font-bold text-slate-900">My Bid Requests</h1>
           <p className="mt-1 text-sm text-slate-500">Post landscaping work and compare offers from published companies and workgroups.</p>
         </div>
-        <button type="button" onClick={() => setShowForm((current) => !current)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">
+        <button type="button" onClick={() => setShowForm((current) => !current)} disabled={!biddingEnabled} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
           {showForm ? <XCircle size={16} /> : <PlusCircle size={16} />}
           {showForm ? "Close form" : "Post a project"}
         </button>
       </div>
 
+      {!biddingEnabled && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">New bid requests are temporarily paused. Existing requests and accepted work remain visible.</div>}
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
       {requests.some((request) => request.status === "awarded") && (

@@ -163,6 +163,12 @@ function mapProject(row: Record<string, unknown>): Project {
     scheduledEnd: text(row.scheduled_end) || null,
     followUpAt: text(row.follow_up_at) || null,
     assignedMemberIds: [],
+    internalApprovalStatus: "approved",
+    submittedForApprovalAt: null,
+    submittedForApprovalBy: null,
+    approvedAt: text(row.approved_at) || null,
+    approvedBy: text(row.approved_by) || null,
+    approvalNotes: "",
     createdAt: text(row.created_at),
     updatedAt: text(row.updated_at),
   };
@@ -172,7 +178,7 @@ function mapCompany(row: Record<string, unknown> | null): User {
   return {
     name: text(row?.full_name) || "YardPilot Professional",
     email: text(row?.email),
-    company: text(row?.company) || "YardPilotUSA",
+    company: text(row?.company) || "YardPilot",
     phone: text(row?.phone),
     city: text(row?.city),
     state: text(row?.state),

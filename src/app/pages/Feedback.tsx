@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import { Loader2, MessageSquareText, Star } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
+import { YARDPILOT_APP_VERSION } from "../lib/legal";
 
-type Submission = {
+ type Submission = {
   id: string;
   category: string;
   rating: number | null;
@@ -15,11 +17,13 @@ type Submission = {
 
 export default function Feedback() {
   const { user, authUserId, activeWorkspaceId } = useApp();
+  const location = useLocation();
   const [category, setCategory] = useState("feedback");
   const [rating, setRating] = useState(5);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [allowPublic, setAllowPublic] = useState(false);
+  const [allowContact, setAllowContact] = useState(true);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -36,10 +40,7 @@ export default function Feedback() {
     else setSubmissions((data ?? []) as Submission[]);
   }
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUserId]);
+  useEffect(() => { void load(); }, [authUserId]);
 
   async function submit() {
     if (!authUserId || !message.trim()) {
@@ -57,7 +58,11 @@ export default function Feedback() {
       rating: category === "review" ? rating : null,
       title: title.trim(),
       message: message.trim(),
-      allow_public: allowPublic,
+      allow_public: category === "review" ? allowPublic : false,
+      allow_contact: allowContact,
+      route: `${location.pathname}${location.search}`.slice(0, 500),
+      app_version: YARDPILOT_APP_VERSION,
+      browser_summary: `${navigator.userAgent.slice(0, 400)} | ${window.innerWidth}x${window.innerHeight}`,
     });
     setBusy(false);
     if (insertError) {
@@ -67,73 +72,48 @@ export default function Feedback() {
     setTitle("");
     setMessage("");
     setAllowPublic(false);
-    setNotice("Thank you. Your submission was sent to YardPilot.");
+    setNotice("Thank you. Your submission was saved with the current page and app version so it is easier to investigate.");
     await load();
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-7">
       <div>
-        <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-900"><MessageSquareText size={24} /> Feedback & review</h1>
-        <p className="mt-1 text-sm text-slate-500">Report a bug, request a feature, leave general feedback, or submit a YardPilot review.</p>
+        <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-900 dark:text-white"><MessageSquareText size={24} /> Feedback & review</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Report a bug, request a feature, leave private feedback, or submit a YardPilot product review.</p>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      {notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
+      {notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</div>}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-medium text-slate-700">Type
-            <select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5">
-              <option value="feedback">General feedback</option>
-              <option value="review">Review</option>
-              <option value="bug">Bug report</option>
-              <option value="feature">Feature request</option>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Type
+            <select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
+              <option value="feedback">General feedback</option><option value="review">YardPilot review</option><option value="bug">Bug report</option><option value="feature">Feature request</option>
             </select>
           </label>
           {category === "review" && (
-            <label className="text-sm font-medium text-slate-700">Rating
-              <div className="mt-2 flex gap-1">
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <button key={value} type="button" onClick={() => setRating(value)} aria-label={`${value} stars`} className={value <= rating ? "text-amber-500" : "text-slate-300"}>
-                    <Star size={22} fill="currentColor" />
-                  </button>
-                ))}
-              </div>
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Rating
+              <div className="mt-2 flex gap-1">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" onClick={() => setRating(value)} aria-label={`${value} stars`} className={value <= rating ? "text-amber-500" : "text-slate-300"}><Star size={22} fill="currentColor" /></button>)}</div>
             </label>
           )}
-          <label className="sm:col-span-2 text-sm font-medium text-slate-700">Title
-            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional short title" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          <label className="sm:col-span-2 text-sm font-medium text-slate-700 dark:text-slate-200">Title
+            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional short title" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
           </label>
-          <label className="sm:col-span-2 text-sm font-medium text-slate-700">Message
-            <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={6} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          <label className="sm:col-span-2 text-sm font-medium text-slate-700 dark:text-slate-200">Message
+            <textarea required value={message} onChange={(event) => setMessage(event.target.value)} rows={6} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
           </label>
         </div>
-        {category === "review" && (
-          <label className="mt-4 flex items-start gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={allowPublic} onChange={(event) => setAllowPublic(event.target.checked)} className="mt-1" />
-            YardPilot may display this review publicly. Your contact information is not included automatically.
-          </label>
-        )}
-        <button type="button" onClick={() => void submit()} disabled={busy} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
-          {busy && <Loader2 size={16} className="animate-spin" />} Submit
-        </button>
+        <label className="mt-4 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={allowContact} onChange={(event) => setAllowContact(event.target.checked)} className="mt-1" /> YardPilot may contact me about this submission.</label>
+        {category === "review" && <label className="mt-3 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={allowPublic} onChange={(event) => setAllowPublic(event.target.checked)} className="mt-1" /> YardPilot may display this product review publicly after moderation. Contact information is not included automatically.</label>}
+        <button type="button" onClick={() => void submit()} disabled={busy} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-emerald-700">{busy && <Loader2 size={16} className="animate-spin" />} Submit</button>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-bold text-slate-900">Your submissions</h2>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Your submissions</h2>
         <div className="mt-4 space-y-3">
-          {submissions.map((submission) => (
-            <article key={submission.id} className="rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-semibold capitalize text-slate-900">{submission.title || submission.category}</p>
-                <span className="text-xs font-semibold uppercase text-slate-500">{submission.status}</span>
-              </div>
-              {submission.rating && <p className="mt-1 text-sm text-amber-600">{"★".repeat(submission.rating)}</p>}
-              <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{submission.message}</p>
-              <p className="mt-2 text-xs text-slate-400">{new Date(submission.created_at).toLocaleString()}</p>
-            </article>
-          ))}
+          {submissions.map((submission) => <article key={submission.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700"><div className="flex items-center justify-between gap-3"><p className="font-semibold capitalize text-slate-900 dark:text-white">{submission.title || submission.category}</p><span className="text-xs font-semibold uppercase text-slate-500">{submission.status}</span></div>{submission.rating && <p className="mt-1 text-sm text-amber-600">{"★".repeat(submission.rating)}</p>}<p className="mt-2 whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{submission.message}</p><p className="mt-2 text-xs text-slate-400">{new Date(submission.created_at).toLocaleString()}</p></article>)}
           {submissions.length === 0 && <p className="text-sm text-slate-500">No submissions yet.</p>}
         </div>
       </section>

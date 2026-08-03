@@ -99,6 +99,7 @@ type AppContextType = {
   logout: () => Promise<void>;
   register: (user: User, password: string) => Promise<boolean>;
   updateProfile: (details: Pick<User, "name" | "company" | "phone" | "city" | "state">) => Promise<User>;
+  switchAccountMode: (mode: AccountType) => Promise<void>;
 
   switchWorkspace: (workspaceId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
@@ -133,6 +134,8 @@ type AppContextType = {
   updateProject: (project: Project) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
   setProjectSharing: (id: string, enabled: boolean) => Promise<Project>;
+  submitEstimateForApproval: (id: string) => Promise<void>;
+  reviewEstimateApproval: (id: string, decision: "approve" | "changes_requested", notes?: string) => Promise<void>;
   assignSelfToProject: (projectId: string) => Promise<void>;
   completeProject: (projectId: string) => Promise<string>;
   bulkDeleteProjects: (projectIds: string[]) => Promise<void>;
@@ -289,6 +292,12 @@ type ProjectRow = {
   scheduled_end: string | null;
   follow_up_at: string | null;
   assigned_member_ids?: string[] | null;
+  internal_approval_status?: "draft" | "pending" | "approved" | "changes_requested" | null;
+  submitted_for_approval_at?: string | null;
+  submitted_for_approval_by?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  approval_notes?: string | null;
   contact_details?: unknown;
   property_details?: unknown;
   created_at: string;
@@ -476,6 +485,7 @@ function userFromAuth(authUser: SupabaseAuthUser): User {
   return {
     id: authUser.id,
     accountType: metadata.account_type === "client" ? "client" : "landscaper",
+    availableModes: [metadata.account_type === "client" ? "client" : "landscaper"],
     name:
       metadata.full_name ??
       metadata.name ??
@@ -497,6 +507,7 @@ function userFromProfile(
   return {
     id: authUser.id,
     accountType: profile.account_type === "client" ? "client" : "landscaper",
+    availableModes: [profile.account_type === "client" ? "client" : "landscaper"],
     name: profile.full_name || fallback.name,
     email: profile.email || fallback.email,
     company: profile.company || fallback.company,
@@ -768,6 +779,12 @@ function rowToProject(
     scheduledEnd: row.scheduled_end,
     followUpAt: row.follow_up_at,
     assignedMemberIds: laborAssignments.map((assignment) => assignment.userId),
+    internalApprovalStatus: row.internal_approval_status ?? "approved",
+    submittedForApprovalAt: row.submitted_for_approval_at ?? null,
+    submittedForApprovalBy: row.submitted_for_approval_by ?? null,
+    approvedAt: row.approved_at ?? null,
+    approvedBy: row.approved_by ?? null,
+    approvalNotes: row.approval_notes ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1100,19 +1117,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function loadProfile(authUser: SupabaseAuthUser) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("email, phone, full_name, company, city, state, account_type")
-      .eq("id", authUser.id)
-      .maybeSingle();
+    const [{ data, error }, modesResult] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("email, phone, full_name, company, city, state, account_type")
+        .eq("id", authUser.id)
+        .maybeSingle(),
+      supabase.rpc("get_my_profile_modes"),
+    ]);
+
+    const baseUser = data
+      ? userFromProfile(authUser, data as ProfileRow)
+      : userFromAuth(authUser);
 
     if (error) {
       console.error("Could not load profile:", error.message);
-      setUser(userFromAuth(authUser));
+    }
+
+    if (!modesResult.error && modesResult.data) {
+      const modes = modesResult.data as Record<string, unknown>;
+      const activeMode = modes.activeMode === "client" ? "client" : "landscaper";
+      const availableModes: AccountType[] = [];
+      if (modes.landscaperEnabled !== false) availableModes.push("landscaper");
+      if (modes.clientEnabled === true) availableModes.push("client");
+      setUser({
+        ...baseUser,
+        accountType: activeMode,
+        availableModes: availableModes.length ? availableModes : [activeMode],
+      });
       return;
     }
 
-    setUser(data ? userFromProfile(authUser, data as ProfileRow) : userFromAuth(authUser));
+    setUser(baseUser);
   }
 
   async function fetchWorkspaces(): Promise<Workspace[]> {
@@ -1164,7 +1200,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }),
           ])
         : Promise.all([
-            supabase.rpc("get_employee_projects", {
+            supabase.rpc("get_employee_assigned_projects", {
+              requested_workspace_id: workspaceId,
+            }),
+            supabase.rpc("get_employee_estimate_drafts", {
               requested_workspace_id: workspaceId,
             }),
             supabase.rpc("get_employee_project_operational_details", {
@@ -1274,27 +1313,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
           )
         );
       } else {
-        const [employeeResult, operationalResult] = projectResult as [
+        const [employeeResult, draftResult, operationalResult] = projectResult as [
+          { data: unknown[] | null; error: { message: string } | null },
           { data: unknown[] | null; error: { message: string } | null },
           { data: unknown[] | null; error: { message: string } | null }
         ];
         if (employeeResult.error) throw new Error(employeeResult.error.message);
+        if (draftResult.error) throw new Error(draftResult.error.message);
         if (operationalResult.error) throw new Error(operationalResult.error.message);
         const operationalMap = new Map(
           ((operationalResult.data ?? []) as Array<Record<string, unknown>>).map(
             (row) => [String(row.project_id ?? ""), row] as const
           )
         );
-        setProjects(
-          ((employeeResult.data ?? []) as ProjectRow[]).map((row) => {
-            const details = operationalMap.get(row.id);
-            return rowToProject({
-              ...row,
-              contact_details: details?.contact_details,
-              property_details: details?.property_details,
-            });
-          })
+        const assignedProjects = ((employeeResult.data ?? []) as ProjectRow[]).map((row) => {
+          const details = operationalMap.get(row.id);
+          return rowToProject({
+            ...row,
+            contact_details: details?.contact_details,
+            property_details: details?.property_details,
+          });
+        });
+        const ownDrafts = ((draftResult.data ?? []) as ProjectRow[]).map((row) =>
+          rowToProject(row)
         );
+        const combined = [...ownDrafts, ...assignedProjects].filter(
+          (project, index, all) => all.findIndex((candidate) => candidate.id === project.id) === index
+        );
+        setProjects(combined);
       }
 
       if (contactResult.error) setContactsError(contactResult.error.message);
@@ -1544,6 +1590,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return updated;
   }
 
+  async function switchAccountMode(mode: AccountType) {
+    const { data, error } = await supabase.rpc("set_active_profile_mode", {
+      requested_mode: mode,
+    });
+    if (error) throw new Error(error.message);
+    const modes = (data ?? {}) as Record<string, unknown>;
+    const availableModes: AccountType[] = [];
+    if (modes.landscaperEnabled !== false) availableModes.push("landscaper");
+    if (modes.clientEnabled === true) availableModes.push("client");
+    setUser((current) =>
+      current
+        ? {
+            ...current,
+            accountType: mode,
+            availableModes: availableModes.length ? availableModes : [mode],
+          }
+        : current
+    );
+    if (mode === "client") {
+      activeWorkspaceIdRef.current = null;
+      setActiveWorkspaceId(null);
+      clearWorkspaceData();
+    } else {
+      const loaded = await fetchWorkspaces();
+      setWorkspaces(loaded);
+      const selected = loaded.find((workspace) => workspace.id === activeWorkspaceIdRef.current) ?? loaded[0];
+      if (selected) {
+        activeWorkspaceIdRef.current = selected.id;
+        setActiveWorkspaceId(selected.id);
+        localStorage.setItem("yardpilot-workspace", selected.id);
+        await loadWorkspaceBundle(selected.id, selected.role);
+      }
+    }
+  }
+
   async function refreshWorkspaces() {
     const loaded = await fetchWorkspaces();
     setWorkspaces(loaded);
@@ -1656,6 +1737,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function acceptWorkspaceInvite(code: string) {
+    await supabase.rpc("enable_my_profile_mode", { requested_mode: "landscaper" });
+    await supabase.rpc("set_active_profile_mode", { requested_mode: "landscaper" });
+    setUser((current) => current ? {
+      ...current,
+      accountType: "landscaper",
+      availableModes: Array.from(new Set([...(current.availableModes ?? []), "landscaper"])) as AccountType[],
+    } : current);
     const { data, error } = await supabase.rpc("accept_workspace_invite", {
       invite_code: code.trim(),
     });
@@ -1820,10 +1908,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function deleteAccount() {
-    const { error } = await supabase.functions.invoke("delete-account", {
+    const { data, error } = await supabase.functions.invoke("delete-account", {
       body: { confirmation: "DELETE" },
     });
-    if (error) throw new Error(error.message);
+    const response = (data ?? {}) as Record<string, unknown>;
+    if (error || response.error) {
+      const workspaces = Array.isArray(response.workspaces)
+        ? response.workspaces
+            .map((item) => item && typeof item === "object" && "name" in item ? String(item.name) : "")
+            .filter(Boolean)
+        : [];
+      const suffix = workspaces.length ? ` Affected workspaces: ${workspaces.join(", ")}.` : "";
+      throw new Error(`${String(response.error ?? error?.message ?? "The account could not be deleted.")}${suffix}`);
+    }
     clearAccount();
   }
 
@@ -1886,6 +1983,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       scheduled_start: project.scheduledStart,
       scheduled_end: project.scheduledEnd,
       follow_up_at: project.followUpAt,
+      internal_approval_status: project.internalApprovalStatus,
+      submitted_for_approval_at: project.submittedForApprovalAt,
+      submitted_for_approval_by: project.submittedForApprovalBy,
+      approved_at: project.approvedAt,
+      approved_by: project.approvedBy,
+      approval_notes: project.approvalNotes,
       created_at: project.createdAt,
       updated_at: project.updatedAt,
     };
@@ -1944,7 +2047,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function addProject(project: Project) {
-    ensureManager();
+    if (role === "employee") {
+      if (project.createdBy !== currentUserOrThrow()) {
+        throw new Error("Employees may save only estimates they created.");
+      }
+      if (project.estimateStatus !== "draft" || project.internalApprovalStatus !== "draft") {
+        throw new Error("Employees may create draft estimates and submit them for approval.");
+      }
+    } else {
+      ensureManager();
+    }
     validateProjectContent(project);
     const { data, error } = await supabase
       .from("projects")
@@ -1952,7 +2064,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .select("*")
       .single();
     if (error) throw new Error(error.message);
-    await syncProjectAssignments(project);
+    if (role !== "employee") await syncProjectAssignments(project);
     const saved = enrichProjectOperationalDetails(
       rowToProject(data as ProjectRow, project.laborAssignments),
       contacts,
@@ -1964,7 +2076,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function updateProject(project: Project) {
-    ensureManager();
+    if (role === "employee") {
+      if (project.createdBy !== currentUserOrThrow()) {
+        throw new Error("Employees may edit only estimates they created.");
+      }
+      if (project.estimateStatus !== "draft" || !["draft", "changes_requested"].includes(project.internalApprovalStatus)) {
+        throw new Error("This estimate is locked while it is awaiting or has completed review.");
+      }
+    } else {
+      ensureManager();
+    }
     validateProjectContent(project);
     const workspaceId = currentWorkspaceOrThrow();
     const { data, error } = await supabase
@@ -1975,7 +2096,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .select("*")
       .single();
     if (error) throw new Error(error.message);
-    await syncProjectAssignments(project);
+    if (role !== "employee") await syncProjectAssignments(project);
     const saved = enrichProjectOperationalDetails(
       rowToProject(data as ProjectRow, project.laborAssignments),
       contacts,
@@ -1990,6 +2111,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function setProjectSharing(id: string, enabled: boolean) {
     ensureManager();
+    const project = projects.find((item) => item.id === id);
+    if (enabled && project?.internalApprovalStatus !== "approved") {
+      throw new Error("Approve this estimate internally before sharing it with the client.");
+    }
     const workspaceId = currentWorkspaceOrThrow();
     const now = new Date().toISOString();
     const updates: Record<string, unknown> = {
@@ -2020,6 +2145,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       previous.map((project) => (project.id === id ? saved : project))
     );
     return saved;
+  }
+
+  async function submitEstimateForApproval(id: string) {
+    const { error } = await supabase.rpc("submit_estimate_for_approval", {
+      requested_project_id: id,
+    });
+    if (error) throw new Error(error.message);
+    await refreshProjects();
+  }
+
+  async function reviewEstimateApproval(
+    id: string,
+    decision: "approve" | "changes_requested",
+    notes = ""
+  ) {
+    ensureManager();
+    const { error } = await supabase.rpc("review_estimate_approval", {
+      requested_project_id: id,
+      requested_decision: decision,
+      requested_notes: notes,
+    });
+    if (error) throw new Error(error.message);
+    await refreshProjects();
   }
 
   async function deleteProject(id: string) {
@@ -2832,6 +2980,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logout,
         register,
         updateProfile,
+        switchAccountMode,
         switchWorkspace,
         refreshWorkspaces,
         createCompanyWorkspace,
@@ -2852,6 +3001,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateProject,
         deleteProject,
         setProjectSharing,
+        submitEstimateForApproval,
+        reviewEstimateApproval,
         assignSelfToProject,
         completeProject,
         bulkDeleteProjects,

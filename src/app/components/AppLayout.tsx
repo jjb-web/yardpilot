@@ -28,12 +28,15 @@ import {
   Store,
   MessageSquareText,
   WalletCards,
+  Repeat2,
   X,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import type { WorkspaceRole } from "../data/types";
 import { useSubscription } from "../hooks/useSubscription";
 import type { FeatureKey } from "../lib/subscription";
+import { useNotifications } from "../hooks/useNotifications";
+import RouteAnalytics from "./RouteAnalytics";
 
 type NavItem = {
   to: string;
@@ -46,7 +49,7 @@ type NavItem = {
 const nav: NavItem[] = [
   { to: "/app/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/contacts", icon: Users, label: "Contacts", roles: ["owner", "co_owner", "manager"] },
-  { to: "/app/estimates", icon: FileText, label: "Estimates", roles: ["owner", "co_owner", "manager"] },
+  { to: "/app/estimates", icon: FileText, label: "Estimates", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/projects/current", icon: FolderOpen, label: "Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/marketplace", icon: Store, label: "Marketplace", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/schedule", icon: CalendarDays, label: "Schedule", roles: ["owner", "co_owner", "manager", "employee"], feature: "schedule" },
@@ -56,6 +59,7 @@ const nav: NavItem[] = [
   { to: "/app/projects/past", icon: Archive, label: "Past Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
   { to: "/app/team-payments", icon: WalletCards, label: "Employee payments", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
+  { to: "/app/notifications", icon: BellRing, label: "Notifications", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/feedback", icon: MessageSquareText, label: "Feedback & review", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/account", icon: User, label: "Account", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/billing", icon: CreditCard, label: "Plans & billing", roles: ["owner", "co_owner", "manager", "employee"] },
@@ -82,16 +86,21 @@ export default function AppLayout() {
     activeWorkspace,
     activeWorkspaceId,
     workspaceLoading,
+    authUserId,
     switchWorkspace,
+    switchAccountMode,
     logout,
   } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const { hasFeature, loading: subscriptionLoading } = useSubscription();
+  const { unreadCount } = useNotifications(authUserId, 25);
 
   useEffect(() => {
     const routeLabel = nav.find((item) => location.pathname.startsWith(item.to))?.label;
-    document.title = routeLabel ? `${routeLabel} · YardPilotUSA` : "YardPilotUSA";
+    document.title = routeLabel === "Dashboard"
+      ? "YardPilot"
+      : routeLabel ? `${routeLabel} · YardPilot` : "YardPilot";
   }, [location.pathname]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
@@ -165,7 +174,7 @@ export default function AppLayout() {
           <div className="w-9 h-9 rounded-lg border border-white/15 bg-[#353c38] flex items-center justify-center shrink-0 overflow-hidden">
             <img
               src="/yardpilot-logo.png"
-              alt="YardPilotUSA logo"
+              alt="YardPilot logo"
               className="w-full h-full object-contain"
             />
           </div>
@@ -174,7 +183,7 @@ export default function AppLayout() {
               className="text-white font-bold text-sm"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
-              YardPilotUSA
+              YardPilot
             </p>
             <p className="text-[#b7c5bc] text-xs truncate">
               {activeWorkspace?.name || user.company || "Workspace"}
@@ -221,6 +230,11 @@ export default function AppLayout() {
                 className={active ? "text-[#b9c9bf]" : "text-[#829087]"}
               />
               {label}
+              {to === "/app/notifications" && unreadCount > 0 && (
+                <span className="ml-auto min-w-5 rounded-full bg-emerald-500 px-1.5 py-0.5 text-center text-[10px] font-bold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
               {locked && <LockKeyhole size={13} className="ml-auto text-[#98a79e]" />}
               {active && !locked && (
                 <ChevronRight size={14} className="ml-auto text-[#b9c9bf]" />
@@ -253,6 +267,15 @@ export default function AppLayout() {
             </p>
           </div>
         </div>
+        {user.availableModes?.includes("client") && (
+          <button
+            type="button"
+            onClick={() => void switchAccountMode("client").then(() => navigate("/client/market"))}
+            className="mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#aebbb3] hover:bg-white/5 hover:text-white"
+          >
+            <Repeat2 size={15} /> Switch to client mode
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void handleLogout()}
@@ -335,6 +358,7 @@ export default function AppLayout() {
         </header>
 
         <main ref={mainScrollRef} className="app-page-scroll flex-1 min-h-0">
+          <RouteAnalytics />
           <Outlet />
         </main>
       </div>

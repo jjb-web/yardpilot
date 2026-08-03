@@ -140,6 +140,7 @@ export default function Account() {
     role,
     workspaceMembers,
     updateProfile,
+    switchAccountMode,
     updateMyWorkspaceRate,
     startStripeOnboarding,
     refreshStripeConnection,
@@ -445,9 +446,22 @@ export default function Account() {
     }
   }
 
+  async function enableClientMode() {
+    setSaving(true);
+    setError("");
+    try {
+      await switchAccountMode("client");
+      window.location.assign("/client/market");
+    } catch (switchError) {
+      setError(switchError instanceof Error ? switchError.message : "Client mode could not be enabled.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function removeAccount() {
     const first = window.confirm(
-      "Delete your YardPilot account? This permanently removes your personal workspace and all data you own. Shared workspace memberships will also be removed."
+      "Delete your YardPilot account? Shared workspace memberships will be removed. Company or workgroup ownership must be transferred first when other members exist. Some completed business, invoice, payment, or legal records may be retained or reassigned rather than erased."
     );
     if (!first) return;
     const typed = window.prompt('Type DELETE to permanently delete your account.');
@@ -819,12 +833,18 @@ export default function Account() {
       </div>
 
 
+      <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+        <h2 className="font-bold text-slate-900 dark:text-white">Client marketplace mode</h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Use the same login to hire landscapers personally, post bid requests, and manage client payments. This does not remove your business workspaces.</p>
+        <button type="button" onClick={() => void enableClientMode()} disabled={saving} className="mt-4 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Enable and switch to client mode</button>
+      </div>
+
       <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-bold text-red-800">Delete account</h2>
             <p className="mt-1 text-sm text-red-700">
-              Permanently deletes your authentication account, personal workspace, and data you own. This cannot be undone.
+              Permanently removes your login and personal workspace. Shared business records may be reassigned or retained, and deletion is blocked when an owned company/workgroup still has other members.
             </p>
           </div>
           <button

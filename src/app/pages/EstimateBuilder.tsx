@@ -292,6 +292,7 @@ export default function EstimateBuilder() {
     properties,
     propertyPhotos,
     workspaceMembers,
+    role,
     addProject,
     updateProject,
   } = useApp();
@@ -418,7 +419,7 @@ export default function EstimateBuilder() {
       }
 
       if (request.projectId) {
-        showError("This marketplace request is already linked to an estimate.");
+        navigate(`/app/estimates/${request.projectId}?origin=marketplace`, { replace: true });
         return;
       }
 
@@ -870,6 +871,12 @@ export default function EstimateBuilder() {
         scheduledEnd: lastEnd,
         followUpAt: toIso(form.followUpAt),
         assignedMemberIds: assignments.map((assignment) => assignment.userId),
+        internalApprovalStatus: existing?.internalApprovalStatus ?? "draft",
+        submittedForApprovalAt: existing?.submittedForApprovalAt ?? null,
+        submittedForApprovalBy: existing?.submittedForApprovalBy ?? null,
+        approvedAt: existing?.approvedAt ?? null,
+        approvedBy: existing?.approvedBy ?? null,
+        approvalNotes: existing?.approvalNotes ?? "",
         updatedAt: now,
       };
 
@@ -911,7 +918,11 @@ export default function EstimateBuilder() {
       }
 
       if (draftKey) localStorage.removeItem(draftKey);
-      navigate(`/app/estimates/${saved.id}`);
+      navigate(
+        marketplaceRequestId
+          ? `/app/estimates/${saved.id}?origin=marketplace`
+          : `/app/estimates/${saved.id}`
+      );
     } catch (error) {
       showError(error instanceof Error ? error.message : "The estimate could not be saved.");
     } finally {
@@ -944,10 +955,10 @@ export default function EstimateBuilder() {
         <div>
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => marketplaceRequestId ? navigate("/app/marketplace?tab=bidding") : navigate(-1)}
             className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900"
           >
-            <ArrowLeft size={16} /> Back
+            <ArrowLeft size={16} /> {marketplaceRequestId ? "Back to bidding market" : "Back"}
           </button>
           <h1 className="text-2xl font-bold text-gray-900">
             {editing ? "Edit Estimate" : "Create Estimate"}
@@ -963,7 +974,9 @@ export default function EstimateBuilder() {
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
         >
           {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {editing ? "Update Estimate" : "Create Estimate"}
+          {role === "employee"
+            ? editing ? "Update Draft" : "Save Draft"
+            : editing ? "Update Estimate" : "Create Estimate"}
         </button>
       </div>
 
@@ -973,6 +986,11 @@ export default function EstimateBuilder() {
       {draftMessage && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           {draftMessage}
+        </div>
+      )}
+      {role === "employee" && (
+        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Employee estimates are saved as internal drafts. Open the saved estimate and submit it for manager approval before it can be shared with a client.
         </div>
       )}
 

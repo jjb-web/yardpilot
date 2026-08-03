@@ -48,3 +48,16 @@ verify_jwt = true
 [functions.generate-gift-code]
 enabled = true
 verify_jwt = true
+
+# Public support, waitlist, and privacy-limited client error endpoints.
+[functions.submit-public-contact]
+enabled = true
+verify_jwt = false
+
+[functions.subscribe-interest]
+enabled = true
+verify_jwt = false
+
+[functions.report-client-error]
+enabled = true
+verify_jwt = false

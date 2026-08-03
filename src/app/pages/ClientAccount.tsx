@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
-import { supabase } from "../lib/supabase";
 
 export default function ClientAccount() {
-  const { user, updateProfile } = useApp();
+  const { user, updateProfile, switchAccountMode } = useApp();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: "", company: "", phone: "", city: "", state: "" });
   const [saving, setSaving] = useState(false);
@@ -34,40 +33,39 @@ export default function ClientAccount() {
   async function becomeLandscaper() {
     setSaving(true);
     setError("");
-    const { error: rpcError } = await supabase.rpc("set_my_account_type", {
-      requested_account_type: "landscaper",
-    });
-    setSaving(false);
-    if (rpcError) {
-      setError(rpcError.message);
-      return;
+    try {
+      await switchAccountMode("landscaper");
+      navigate("/app/dashboard");
+    } catch (switchError) {
+      setError(switchError instanceof Error ? switchError.message : "Could not enable landscaper mode.");
+    } finally {
+      setSaving(false);
     }
-    window.location.assign("/app/dashboard");
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-7">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Client account</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Client account</h1>
         <p className="mt-1 text-sm text-slate-500">Your city and state are used as the default marketplace search area.</p>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-medium text-slate-700">Full name
-            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Full name
+            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
           </label>
-          <label className="text-sm font-medium text-slate-700">Phone
-            <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Phone
+            <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
           </label>
-          <label className="text-sm font-medium text-slate-700">City
-            <input value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">City
+            <input value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
           </label>
-          <label className="text-sm font-medium text-slate-700">State
-            <input value={form.state} onChange={(event) => setForm((current) => ({ ...current, state: event.target.value }))} placeholder="OR" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">State
+            <input value={form.state} onChange={(event) => setForm((current) => ({ ...current, state: event.target.value }))} placeholder="OR" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
           </label>
         </div>
         <button type="button" onClick={() => void save()} disabled={saving} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
@@ -75,11 +73,11 @@ export default function ClientAccount() {
         </button>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-bold text-slate-900">Run or join a landscaping business</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">Switching to a landscaper account opens the existing YardPilot business application, company workspaces, team invitations, hiring market, and bidding market.</p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Run or join a landscaping business</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">One login can use both client and landscaper modes. Enabling landscaper mode opens a personal worker workspace, company workspaces, team invitations, the hiring market, and the bidding market without deleting your client profile.</p>
         <button type="button" onClick={() => void becomeLandscaper()} disabled={saving} className="mt-4 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50">
-          Switch to landscaper account
+          Enable and switch to landscaper mode
         </button>
       </section>
     </div>

@@ -49,6 +49,8 @@ export default function Estimates() {
     projectsError,
     contacts,
     properties,
+    role,
+    authUserId,
     setProjectSharing,
     deleteProject,
   } = useApp();
@@ -66,6 +68,7 @@ export default function Estimates() {
         if (project.status !== "active" || project.estimateStatus === "accepted") {
           return false;
         }
+        if (role === "employee" && project.createdBy !== authUserId) return false;
         if (status !== "all" && project.estimateStatus !== status) return false;
         if (!query) return true;
 
@@ -87,7 +90,7 @@ export default function Estimates() {
         (first, second) =>
           new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime()
       );
-  }, [projects, contacts, properties, search, status]);
+  }, [projects, contacts, properties, search, status, role, authUserId]);
 
   function stop(event: MouseEvent) {
     event.stopPropagation();
@@ -108,7 +111,7 @@ export default function Estimates() {
       const url = estimateShareUrl(sharedProject.shareToken);
       const shareData = {
         title: `${sharedProject.estimateNumber} - ${sharedProject.name}`,
-        text: `Landscaping estimate from YardPilotUSA for ${sharedProject.client || sharedProject.name}`,
+        text: `Landscaping estimate from YardPilot for ${sharedProject.client || sharedProject.name}`,
         url,
       };
 
@@ -157,7 +160,7 @@ export default function Estimates() {
             Estimates
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Draft, sent, and declined estimates. Accepted estimates automatically move into Jobs.
+            Draft, sent, and declined estimates. Internal approval is separate from customer acceptance.
           </p>
         </div>
         <button
@@ -233,10 +236,10 @@ export default function Estimates() {
                 key={project.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => navigate(`/app/estimate/${project.id}`)}
+                onClick={() => navigate(`/app/estimates/${project.id}`)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
-                    navigate(`/app/estimate/${project.id}`);
+                    navigate(`/app/estimates/${project.id}`);
                   }
                 }}
                 className="bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-slate-400 hover:shadow-md transition-all cursor-pointer"
@@ -249,6 +252,23 @@ export default function Estimates() {
                       </span>
                       <span className="text-xs font-semibold text-gray-400">
                         {project.estimateNumber}
+                      </span>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        project.internalApprovalStatus === "approved"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : project.internalApprovalStatus === "pending"
+                            ? "bg-amber-100 text-amber-700"
+                            : project.internalApprovalStatus === "changes_requested"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {project.internalApprovalStatus === "approved"
+                          ? "Approved internally"
+                          : project.internalApprovalStatus === "pending"
+                            ? "Awaiting approval"
+                            : project.internalApprovalStatus === "changes_requested"
+                              ? "Changes requested"
+                              : "Internal draft"}
                       </span>
                     </div>
                     <h2 className="text-lg font-bold text-gray-900">{project.name}</h2>
@@ -327,16 +347,18 @@ export default function Estimates() {
                       >
                         <Eye size={14} /> View
                       </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          stop(event);
-                          navigate(`/app/estimate/${project.id}`);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-100 cursor-pointer"
-                      >
-                        <Edit3 size={14} /> Edit
-                      </button>
+                      {(role !== "employee" || ["draft", "changes_requested"].includes(project.internalApprovalStatus)) && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            stop(event);
+                            navigate(`/app/estimate/${project.id}`);
+                          }}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-100 cursor-pointer"
+                        >
+                          <Edit3 size={14} /> Edit
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(event) => {
@@ -347,26 +369,32 @@ export default function Estimates() {
                       >
                         <Download size={14} /> PDF
                       </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          stop(event);
-                          void shareEstimate(project);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 cursor-pointer"
-                      >
-                        <Share2 size={14} /> Share
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          stop(event);
-                          void removeEstimate(project);
-                        }}
-                        className="col-span-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-white text-red-600 text-xs font-semibold hover:bg-red-50 cursor-pointer"
-                      >
-                        <Trash2 size={14} /> Delete Estimate
-                      </button>
+                      {role !== "employee" && (
+                        <button
+                          type="button"
+                          disabled={project.internalApprovalStatus !== "approved"}
+                          title={project.internalApprovalStatus !== "approved" ? "Internal approval required" : undefined}
+                          onClick={(event) => {
+                            stop(event);
+                            void shareEstimate(project);
+                          }}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Share2 size={14} /> Share
+                        </button>
+                      )}
+                      {role !== "employee" && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            stop(event);
+                            void removeEstimate(project);
+                          }}
+                          className="col-span-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-white text-red-600 text-xs font-semibold hover:bg-red-50 cursor-pointer"
+                        >
+                          <Trash2 size={14} /> Delete Estimate
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

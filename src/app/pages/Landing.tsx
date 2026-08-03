@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { CheckCircle, Zap, Camera, Users, FileText, Bell, Smartphone, ChevronRight, } from "lucide-react";
+import { CheckCircle, Zap, Camera, Users, FileText, Bell, Smartphone, ChevronRight, Loader2 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 const problems = [
   "Creating quotes manually for every job",
@@ -20,10 +21,10 @@ const features = [
 ];
 
 const incentives = [
-  { label: "Founding Member Pricing", desc: "Lock in the lowest rate we'll ever offer." },
-  { label: "Free Beta Access", desc: "Use the full product before anyone else." },
-  { label: "Direct Influence", desc: "Your feedback shapes what gets built first." },
-  { label: "Lifetime Discount", desc: "Founding members keep their rate forever." },
+  { label: "Early Product Access", desc: "Test launch features before the public release." },
+  { label: "Beta Access", desc: "Use the current beta and help uncover workflow issues." },
+  { label: "Direct Input", desc: "Your feedback helps prioritize the launch roadmap." },
+  { label: "Launch Updates", desc: "Receive important product and availability updates." },
 ];
 
 // Inline UI mockup — no images needed
@@ -35,7 +36,7 @@ function DashboardMockup() {
         <div className="w-2.5 h-2.5 rounded-full bg-green-400/60" />
         <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/60" />
         <div className="w-2.5 h-2.5 rounded-full bg-red-400/60" />
-        <span className="ml-3 text-green-200 text-xs font-medium">YardPilotUSA — Estimate Builder</span>
+        <span className="ml-3 text-green-200 text-xs font-medium">YardPilot — Estimate Builder</span>
       </div>
       {/* Mockup body */}
       <div className="p-4 space-y-3 bg-gray-50">
@@ -66,9 +67,23 @@ function DashboardMockup() {
 export default function Landing() {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+  const [subscribeError, setSubscribeError] = useState("");
+  const [website, setWebsite] = useState("");
 
-  function handleSubscribe(e: React.FormEvent) {
+  async function handleSubscribe(e: React.FormEvent) {
     e.preventDefault();
+    setSubscribeError("");
+    setSubscribing(true);
+    const { data, error } = await supabase.functions.invoke("subscribe-interest", {
+      body: { email: email.trim(), source: "landing_page", website },
+    });
+    setSubscribing(false);
+    const responseError = data && typeof data === "object" && "error" in data ? String(data.error) : "";
+    if (error || responseError) {
+      setSubscribeError(responseError || error?.message || "Signup failed.");
+      return;
+    }
     setSubscribed(true);
   }
 
@@ -82,11 +97,11 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg overflow-hidden">
               <img
                 src="/yardpilot-logo.png"
-                alt="YardPilotUSA logo"
+                alt="YardPilot logo"
                 className="w-full h-full object-contain"
               />
             </div>
-            <span className="font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilotUSA</span>
+            <span className="font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilot</span>
           </div>
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
@@ -170,7 +185,7 @@ export default function Landing() {
             className="text-3xl lg:text-4xl font-extrabold text-white mb-4"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            Meet YardPilotUSA
+            Meet YardPilot
           </h2>
           <p className="text-green-100 text-lg mb-10 max-w-xl mx-auto">
             A straightforward estimating and job-management platform designed specifically for landscaping businesses.
@@ -254,22 +269,22 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Founder */}
+      {/* Team note */}
       <section className="py-20 px-6 bg-white">
         <div className="max-w-2xl mx-auto">
           <div className="border border-green-100 rounded-2xl p-8 bg-green-50/30">
             <div className="w-12 h-12 bg-green-700 rounded-full flex items-center justify-center mb-5 text-white font-bold text-lg" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              J
+              YP
             </div>
             <p className="text-gray-700 leading-relaxed text-lg mb-4">
-              Hi — I'm building YardPilotUSA after spending time with landscaping crews and seeing firsthand how much time goes into creating estimates and chasing down customers.
+              YardPilot is being tested with real landscaping workflows so the launch version solves practical estimating, scheduling, marketplace, and payment problems.
             </p>
             <p className="text-gray-700 leading-relaxed mb-6">
-              Before we write another line of code, I want to hear from real landscapers. What's actually slowing you down? What would make the biggest difference? Your input shapes what we build first."
+              Beta feedback is reviewed directly by the product team. Bug reports and feature requests help determine what is fixed or built next.
             </p>
             <div>
-              <p className="font-semibold text-gray-900">William B.</p>
-              <p className="text-sm text-gray-500">Co-Founder, YardPilotUSA</p>
+              <p className="font-semibold text-gray-900">YardPilot product team</p>
+              <p className="text-sm text-gray-500">Private beta</p>
             </div>
           </div>
         </div>
@@ -287,15 +302,13 @@ export default function Landing() {
           <p className="text-green-100 text-lg mb-10">
             Take our 3-minute survey and help determine what features get built first.
           </p>
-          <a
-            href="https://forms.google.com"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to="/contact"
             className="inline-block px-10 py-4 bg-white text-green-700 font-bold text-lg rounded-xl hover:bg-green-50 transition-colors shadow-lg"
           >
-            Take the Survey →
-          </a>
-          <p className="text-green-200 text-sm mt-4">Takes 3 minutes · No sign-up required</p>
+            Send Beta Feedback →
+          </Link>
+          <p className="text-green-200 text-sm mt-4">No account required · Please do not submit sensitive customer information</p>
         </div>
       </section>
 
@@ -308,7 +321,7 @@ export default function Landing() {
               className="text-3xl font-extrabold text-gray-900"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
-              Join Early, Benefit Forever
+              Help Build a Better Launch
             </h2>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -341,31 +354,42 @@ export default function Landing() {
               <p className="text-gray-400 text-sm mt-1">We'll reach out when beta access opens.</p>
             </div>
           ) : (
-            <form onSubmit={handleSubscribe} className="flex gap-2">
-              <input
-                required
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-              />
-              <button
-                type="submit"
-                className="px-5 py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm shrink-0"
-              >
-                Subscribe
-              </button>
+            <form onSubmit={handleSubscribe} className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  required
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="min-w-0 flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-gray-500 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                />
+                <button
+                  type="submit"
+                  disabled={subscribing}
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-green-700 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm shrink-0 disabled:opacity-60"
+                >
+                  {subscribing && <Loader2 size={15} className="animate-spin" />} Subscribe
+                </button>
+              </div>
+              <input aria-hidden="true" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} className="hidden" />
+              {subscribeError && <p className="text-sm text-red-300">{subscribeError}</p>}
             </form>
           )}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-950 border-t border-white/5 py-6 px-6 text-center">
-        <p className="text-gray-600 text-xs">
-          © 2025 YardPilotUSA · Built for landscapers · All rights reserved
-        </p>
+      <footer className="bg-gray-950 border-t border-white/5 py-8 px-6 text-center">
+        <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-semibold text-gray-400">
+          <Link to="/terms" className="hover:text-white">Terms</Link>
+          <Link to="/privacy" className="hover:text-white">Privacy</Link>
+          <Link to="/marketplace-terms" className="hover:text-white">Marketplace Terms</Link>
+          <Link to="/acceptable-use" className="hover:text-white">Acceptable Use</Link>
+          <Link to="/refund-policy" className="hover:text-white">Refund Policy</Link>
+          <Link to="/contact" className="hover:text-white">Contact</Link>
+        </nav>
+        <p className="mt-4 text-gray-600 text-xs">© 2026 YardPilot · Built for landscaping businesses and clients · All rights reserved</p>
       </footer>
     </div>
   );

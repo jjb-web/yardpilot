@@ -1,59 +1,60 @@
-# Manual settings
+# Manual Production Settings
 
-## Branded Google sign-in URL
+These cannot be completed by copying source files.
 
-The random-letter domain shown during Google sign-in is the default Supabase
-project domain. Frontend code alone cannot replace it. Configure a Supabase
-custom domain such as:
+## Supabase Auth
 
-```text
-https://auth.yardpilotusa.com
+- Configure custom SMTP.
+- Set production Site URL and approved redirect URLs.
+- Review Google OAuth redirect configuration.
+- Customize confirmation and password-reset templates.
+- For a real emergency signup shutdown, disable new signups in Supabase Auth in
+  addition to the `public_registration` database flag.
+
+## Supabase secrets
+
+Keep current Stripe secrets and add:
+
+```bash
+npx supabase@latest secrets set RATE_LIMIT_SALT="LONG_RANDOM_SECRET"
 ```
 
-Then:
+## Stripe
 
-1. Add and verify the custom domain in Supabase using the DNS records Supabase
-   gives you.
-2. In Google Cloud / Google Auth Platform, add this authorized redirect URI in
-   addition to the existing Supabase callback:
+The billing webhook should continue receiving:
 
-   ```text
-   https://auth.yardpilotusa.com/auth/v1/callback
-   ```
+```text
+checkout.session.completed
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+invoice.paid
+invoice.payment_failed
+invoice.payment_action_required
+invoice.finalization_failed
+```
 
-3. In Supabase Authentication URL Configuration, use your production site URL
-   and allow both production hostnames used by the app:
+Keep the separate connected-account invoice webhook. Rotate any live Stripe
+secret previously exposed in a screenshot, chat, commit, or log.
 
-   ```text
-   Site URL: https://yardpilotusa.com
-   Redirect URLs:
-   https://yardpilotusa.com/**
-   https://www.yardpilotusa.com/**
-   ```
+## Vercel
 
-4. After the custom domain is activated, you may change the Vercel environment
-   variable `VITE_SUPABASE_URL` to `https://auth.yardpilotusa.com` and redeploy.
-   Keep the existing publishable key.
+Set only browser-safe values:
 
-## Mobile favicon
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+VITE_APP_VERSION
+VITE_GA_MEASUREMENT_ID (optional)
+```
 
-Chrome and iOS cache icons aggressively. After the Vercel deployment is Ready:
+## Domain/email
 
-1. Close all YardPilot tabs.
-2. Reopen `https://yardpilotusa.com`.
-3. Remove and recreate any old home-screen shortcut/PWA installation.
-4. Clear site data only when the old icon still persists.
+Configure SPF, DKIM, and DMARC for production email. Verify the uploaded
+YardPilot favicon by removing and re-adding any cached iOS Home Screen shortcut.
 
-The package preserves your existing `public/yardpilot-logo.png` and adds new
-favicon/manifest icon files separately.
+## Legal/business
 
-## Stripe disconnect behavior
-
-The new YardPilot button disconnects the current workspace locally and stops
-new online invoice links from using that connection. The external Stripe
-account stays open.
-
-To fully remove a full-dashboard connected account from the YardPilot platform,
-open the connected account in the Stripe Dashboard, use the overflow menu, and
-choose **Remove account**. That is intentionally not performed automatically by
-this package.
+The included policies are beta scaffolds. Attorney review, LLC/EIN formation,
+founder/IP agreements, business bank setup, and company ownership of provider
+accounts remain manual launch requirements.

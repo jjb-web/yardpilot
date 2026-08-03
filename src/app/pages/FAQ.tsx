@@ -37,7 +37,7 @@ export default function FAQ() {
           to="/"
           className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"
         >
-          <ArrowLeft size={16} /> Back to YardPilotUSA
+          <ArrowLeft size={16} /> Back to YardPilot
         </Link>
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="mb-7 flex items-center gap-3">

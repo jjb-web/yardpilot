@@ -18,20 +18,24 @@ export default function Reports() {
   }, [projects, invoices, contacts]);
 
   const cards = [
-    ["Contacts", String(report.contacts)],
-    ["Active jobs", String(report.activeJobs)],
-    ["Completed jobs", String(report.completedJobs)],
-    ["Accepted estimate value", formatMoney(report.acceptedEstimateValue)],
-    ["Paid invoice revenue", formatMoney(report.paidRevenue)],
-    ["Outstanding invoices", formatMoney(report.outstandingRevenue)],
+    ["Contacts", String(report.contacts), "Current contact records in this workspace."],
+    ["Active jobs", String(report.activeJobs), "Accepted estimates whose project status is active."],
+    ["Completed jobs", String(report.completedJobs), "Projects explicitly marked completed."],
+    ["Accepted estimate value", formatMoney(report.acceptedEstimateValue), "Sum of accepted estimate totals. This is not collected revenue."],
+    ["Paid invoice revenue", formatMoney(report.paidRevenue), "Sum of invoices marked paid. Refunds and processing fees are not deducted here."],
+    ["Outstanding invoices", formatMoney(report.outstandingRevenue), "Unpaid, non-void invoice totals. This is not guaranteed future revenue."],
   ];
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-7">
-      <div><h1 className="text-2xl font-bold">Reports</h1><p className="mt-1 text-sm text-gray-500">Workspace job, estimate, and invoice overview.</p></div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-sm text-gray-500">{label}</p><p className="mt-2 text-2xl font-bold">{value}</p></div>)}
+      <div>
+        <div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-bold text-slate-900 dark:text-white">Reports</h1><span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold uppercase text-amber-800">Beta</span></div>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A small set of clearly defined workspace totals. Tax, payroll, profit, refunds, processing fees, and accounting exports are not calculated in this release.</p>
       </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map(([label, value, definition]) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900"><p className="text-sm text-slate-500 dark:text-slate-400">{label}</p><p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{definition}</p></article>)}
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Use exported invoice and job records with a qualified accountant for taxes and financial statements. YardPilot reports are operational summaries, not accounting or tax reports.</div>
     </div>
   );
 }

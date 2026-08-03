@@ -6,6 +6,12 @@ export type EstimateStatus =
   | "accepted"
   | "declined";
 
+export type InternalApprovalStatus =
+  | "draft"
+  | "pending"
+  | "approved"
+  | "changes_requested";
+
 export type ProjectBillingMethod = "fixed" | "hourly";
 
 export type AccountType = "landscaper" | "client";
@@ -153,6 +159,12 @@ export type Project = {
   scheduledEnd: string | null;
   followUpAt: string | null;
   assignedMemberIds: string[];
+  internalApprovalStatus: InternalApprovalStatus;
+  submittedForApprovalAt: string | null;
+  submittedForApprovalBy: string | null;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  approvalNotes: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -391,6 +403,7 @@ export type JobRequest = {
 
 export type User = {
   accountType: AccountType;
+  availableModes?: AccountType[];
   id?: string;
   name: string;
   email: string;

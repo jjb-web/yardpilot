@@ -176,7 +176,7 @@ function mapCompany(row: Record<string, unknown> | null): User {
   return {
     name: text(row?.full_name) || "YardPilot Professional",
     email: text(row?.email),
-    company: text(row?.company) || "YardPilotUSA",
+    company: text(row?.company) || "YardPilot",
     phone: text(row?.phone),
     city: text(row?.city),
     state: text(row?.state),
