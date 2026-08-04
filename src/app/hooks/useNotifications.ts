@@ -13,6 +13,13 @@ export type YardPilotNotification = {
   created_at: string;
 };
 
+function createRealtimeChannelToken() {
+  const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+  return randomUUID
+    ? randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function useNotifications(userId: string | null, limit = 50) {
   const [notifications, setNotifications] = useState<YardPilotNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,34 +29,60 @@ export function useNotifications(userId: string | null, limit = 50) {
     if (!userId) {
       setNotifications([]);
       setLoading(false);
+      setError("");
       return;
     }
+
     setLoading(true);
+
     const { data, error: loadError } = await supabase
       .from("notifications")
       .select("id, workspace_id, type, title, message, action_url, data, read_at, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(limit);
-    if (loadError) setError(loadError.message);
-    else {
+
+    if (loadError) {
+      setError(loadError.message);
+    } else {
       setError("");
       setNotifications((data ?? []) as YardPilotNotification[]);
     }
+
     setLoading(false);
   }, [userId, limit]);
 
   useEffect(() => {
     void load();
+
     if (!userId) return;
+
+    // Supabase Realtime reuses channels with identical topic names. Give each
+    // effect instance its own topic so remounts can never receive an already
+    // subscribed channel and then try to add another postgres_changes callback.
     const channel = supabase
-      .channel(`yardpilot-notifications-${userId}`)
+      .channel(`yardpilot-notifications-${userId}-${createRealtimeChannelToken()}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        () => void load()
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void load();
+        }
       )
-      .subscribe();
+      .subscribe((status, subscribeError) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setError(
+            subscribeError?.message ??
+              "Could not connect to live notification updates."
+          );
+        }
+      });
+
     return () => {
       void supabase.removeChannel(channel);
     };
@@ -59,15 +92,19 @@ export function useNotifications(userId: string | null, limit = 50) {
 
   async function markRead(id: string) {
     if (!userId) return;
+
+    const readAt = new Date().toISOString();
     const { error: updateError } = await supabase
       .from("notifications")
-      .update({ read_at: new Date().toISOString() })
+      .update({ read_at: readAt })
       .eq("id", id)
       .eq("user_id", userId);
+
     if (updateError) throw new Error(updateError.message);
+
     setNotifications((current) =>
       current.map((item) =>
-        item.id === id ? { ...item, read_at: new Date().toISOString() } : item
+        item.id === id ? { ...item, read_at: readAt } : item
       )
     );
   }
@@ -75,20 +112,40 @@ export function useNotifications(userId: string | null, limit = 50) {
   async function markAllRead() {
     const { error: rpcError } = await supabase.rpc("mark_all_notifications_read");
     if (rpcError) throw new Error(rpcError.message);
+
     const now = new Date().toISOString();
-    setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at ?? now })));
+    setNotifications((current) =>
+      current.map((item) => ({
+        ...item,
+        read_at: item.read_at ?? now,
+      }))
+    );
   }
 
   async function remove(id: string) {
     if (!userId) return;
+
     const { error: deleteError } = await supabase
       .from("notifications")
       .delete()
       .eq("id", id)
       .eq("user_id", userId);
+
     if (deleteError) throw new Error(deleteError.message);
-    setNotifications((current) => current.filter((item) => item.id !== id));
+
+    setNotifications((current) =>
+      current.filter((item) => item.id !== id)
+    );
   }
 
-  return { notifications, unreadCount, loading, error, load, markRead, markAllRead, remove };
+  return {
+    notifications,
+    unreadCount,
+    loading,
+    error,
+    load,
+    markRead,
+    markAllRead,
+    remove,
+  };
 }

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
-import { useNotifications } from "../hooks/useNotifications";
+import { useNotificationCenter } from "../context/NotificationsContext";
 import RouteAnalytics from "./RouteAnalytics";
 
 const nav = [
@@ -35,13 +35,13 @@ function initialDarkMode() {
 }
 
 export default function ClientLayout() {
-  const { user, authUserId, switchAccountMode, logout } = useApp();
+  const { user, switchAccountMode, logout } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
   const mainScrollRef = useRef<HTMLElement | null>(null);
-  const { unreadCount } = useNotifications(authUserId, 25);
+  const { unreadCount } = useNotificationCenter();
 
   useEffect(() => {
     const item = nav.find((entry) => location.pathname.startsWith(entry.to));

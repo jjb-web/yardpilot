@@ -2,14 +2,21 @@ import { useEffect, useState } from "react";
 import { Bell, CheckCheck, Save, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
-import { useNotifications } from "../hooks/useNotifications";
+import { useNotificationCenter } from "../context/NotificationsContext";
 import { supabase } from "../lib/supabase";
 
 export default function Notifications() {
   const { authUserId } = useApp();
   const navigate = useNavigate();
-  const { notifications, unreadCount, loading, error, markRead, markAllRead, remove } =
-    useNotifications(authUserId, 100);
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    error,
+    markRead,
+    markAllRead,
+    remove,
+  } = useNotificationCenter();
   const [actionError, setActionError] = useState("");
   const [preferences, setPreferences] = useState({
     in_app_enabled: true,

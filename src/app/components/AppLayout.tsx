@@ -35,7 +35,7 @@ import { useApp } from "../context/AppContext";
 import type { WorkspaceRole } from "../data/types";
 import { useSubscription } from "../hooks/useSubscription";
 import type { FeatureKey } from "../lib/subscription";
-import { useNotifications } from "../hooks/useNotifications";
+import { useNotificationCenter } from "../context/NotificationsContext";
 import RouteAnalytics from "./RouteAnalytics";
 
 type NavItem = {
@@ -86,7 +86,6 @@ export default function AppLayout() {
     activeWorkspace,
     activeWorkspaceId,
     workspaceLoading,
-    authUserId,
     switchWorkspace,
     switchAccountMode,
     logout,
@@ -94,7 +93,7 @@ export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { hasFeature, loading: subscriptionLoading } = useSubscription();
-  const { unreadCount } = useNotifications(authUserId, 25);
+  const { unreadCount } = useNotificationCenter();
 
   useEffect(() => {
     const routeLabel = nav.find((item) => location.pathname.startsWith(item.to))?.label;
