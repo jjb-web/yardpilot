@@ -189,7 +189,7 @@ export default function ClientLayout() {
             Post a project
           </Link>
         </header>
-        <main ref={mainScrollRef} className="app-page-scroll min-h-0 flex-1">
+        <main ref={mainScrollRef} className="app-page-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
           <RouteAnalytics />
           <Outlet />
         </main>

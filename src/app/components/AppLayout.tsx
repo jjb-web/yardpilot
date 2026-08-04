@@ -357,7 +357,7 @@ export default function AppLayout() {
           </Link>
         </header>
 
-        <main ref={mainScrollRef} className="app-page-scroll flex-1 min-h-0">
+        <main ref={mainScrollRef} className="app-page-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
           <RouteAnalytics />
           <Outlet />
         </main>
