@@ -14,7 +14,11 @@ order by key;
 
 -- Billing/paywall functions that write must be VOLATILE.
 select p.oid::regprocedure as function_name,
-       case p.provolatile when 'v' then 'volatile' when 's' then 'stable' when 'i' then 'immutable' end as volatility
+       case p.provolatile
+         when 'v' then 'volatile'
+         when 's' then 'stable'
+         when 'i' then 'immutable'
+       end as volatility
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'

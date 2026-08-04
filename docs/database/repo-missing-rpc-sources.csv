@@ -1,0 +1,14 @@
+rpc,query_defs,app_locations
+accept_workspace_invite,"28, 30","src/app/context/AppContext.tsx, src/app/pages/Login.tsx"
+create_company_workspace,29,src/app/context/AppContext.tsx
+create_workgroup_workspace,26,src/app/context/AppContext.tsx
+delete_project_with_connected_data,26,src/app/context/AppContext.tsx
+get_employee_project_operational_details,14,src/app/context/AppContext.tsx
+get_project_labor_assignments,29,src/app/context/AppContext.tsx
+get_workspace_members,"29, 30",src/app/context/AppContext.tsx
+record_estimate_view,29,src/app/pages/PublicEstimate.tsx
+record_invoice_view,27,src/app/pages/PublicInvoice.tsx
+respond_to_estimate,29,src/app/pages/PublicEstimate.tsx
+update_my_profile,27,src/app/context/AppContext.tsx
+update_my_workspace_rate,26,src/app/context/AppContext.tsx
+update_workspace_member,29,src/app/context/AppContext.tsx
