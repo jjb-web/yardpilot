@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  analyticsConfigured,
   getAnalyticsConsent,
   loadAnalytics,
   setAnalyticsConsent,
@@ -9,6 +10,7 @@ export default function AnalyticsConsent() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    if (!analyticsConfigured()) return;
     const consent = getAnalyticsConsent();
     if (consent === "granted") loadAnalytics();
     if (consent === null) setVisible(true);

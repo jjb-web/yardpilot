@@ -5,6 +5,8 @@ import { supabase } from "../lib/supabase";
 import { useApp } from "../context/AppContext";
 import type { ClientJobBid, ClientJobRequest, MarketplaceBusiness } from "../data/marketplace";
 import { useFeatureFlags } from "../hooks/useFeatureFlags";
+import { checkTextSafety } from "../lib/contentSafety";
+import { trackEvent } from "../lib/analytics";
 
 type RequestForm = {
   title: string;
@@ -127,6 +129,14 @@ export default function ClientRequests() {
       setError("Enter a project title and description.");
       return;
     }
+    const safety = checkTextSafety(
+      [form.title, form.description, form.serviceType, form.city, form.state].join(" "),
+      "Project request",
+    );
+    if (!safety.safe) {
+      setError(safety.message);
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -158,6 +168,7 @@ export default function ClientRequests() {
     setForm((current) => ({ ...current, title: "", description: "", serviceType: "", budgetMin: "", budgetMax: "", desiredStart: "", bidDeadline: "" }));
     setShowForm(false);
     setMessage("Your project is now open for landscaping businesses to bid on.");
+    trackEvent("marketplace_request_created", { has_budget: Boolean(form.budgetMin || form.budgetMax) });
     await load();
   }
 
@@ -172,7 +183,8 @@ export default function ClientRequests() {
       setError(rpcError.message);
       return;
     }
-    setMessage("Bid accepted. The business can now create your YardPilot estimate and invoice from this request.");
+    setMessage("Bid accepted. Review the selected company under Accepted projects, then continue through the YardPilot estimate and invoice workflow.");
+    trackEvent("marketplace_bid_accepted");
     await load();
   }
 
@@ -280,7 +292,7 @@ export default function ClientRequests() {
                       <article key={bid.id} className="rounded-xl border border-slate-200 p-4">
                         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                           <div>
-                            <p className="font-bold text-slate-900">{business?.display_name || "Landscaping business"}</p>
+                            {business ? <Link to={`/client/market/${business.workspace_id}`} className="font-bold text-emerald-700 hover:underline">{business.display_name}</Link> : <p className="font-bold text-slate-900">Landscaping business</p>}
                             <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{bid.status}</p>
                             <p className="mt-3 whitespace-pre-line text-sm text-slate-600">{bid.message}</p>
                             {bid.amount != null && <p className="mt-2 text-sm font-semibold text-slate-900">Offer: ${Number(bid.amount).toLocaleString()}</p>}

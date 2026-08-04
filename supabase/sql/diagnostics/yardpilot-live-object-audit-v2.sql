@@ -337,8 +337,15 @@ where con.contype = 'f'
 order by source_schema, source_table, constraint_name;
 
 -- ============================================================================
--- 14. Migration history recorded in the live project
+-- 14. Migration-history availability
+-- Some hosted projects do not expose supabase_migrations.schema_migrations
+-- through the SQL Editor. This safe check never references a missing relation.
 -- ============================================================================
-select version, name, statements
-from supabase_migrations.schema_migrations
-order by version;
+select
+  to_regclass('supabase_migrations.schema_migrations') as migration_history_relation,
+  case
+    when to_regclass('supabase_migrations.schema_migrations') is null then
+      'Migration history table is not exposed in this project. Use the Supabase CLI (migration list / db pull) to inspect remote migration history.'
+    else
+      'Migration history table is available.'
+  end as note;

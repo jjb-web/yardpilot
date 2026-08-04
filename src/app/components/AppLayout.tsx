@@ -60,7 +60,7 @@ const nav: NavItem[] = [
   { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
   { to: "/app/team-payments", icon: WalletCards, label: "Employee payments", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
   { to: "/app/notifications", icon: BellRing, label: "Notifications", roles: ["owner", "co_owner", "manager", "employee"] },
-  { to: "/app/feedback", icon: MessageSquareText, label: "Feedback & review", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/feedback", icon: MessageSquareText, label: "YardPilot feedback", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/account", icon: User, label: "Account", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/billing", icon: CreditCard, label: "Plans & billing", roles: ["owner", "co_owner", "manager", "employee"] },
 ];

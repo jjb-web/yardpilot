@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
 
 /* KEEP_IN_SYNC(fullscreen/resources/figmake/shadcn/globals.css) */
 

@@ -112,3 +112,12 @@ export type MarketplaceWorkOrder = {
   invoice_id: string | null;
   updated_at: string;
 };
+
+export type MarketplaceReview = {
+  id: string;
+  rating: number;
+  title: string;
+  body: string;
+  business_response: string;
+  created_at: string;
+};

@@ -3,6 +3,7 @@ import { CheckCircle2, CreditCard, Download, Loader2 } from "lucide-react";
 import { useParams, useSearchParams } from "react-router";
 import InvoiceDocument from "../components/InvoiceDocument";
 import { supabase } from "../lib/supabase";
+import { trackEvent } from "../lib/analytics";
 import type {
   Contact,
   EstimateJob,
@@ -340,6 +341,7 @@ export default function PublicInvoice() {
       if (functionError) throw new Error(functionError.message);
       const url = typeof data?.url === "string" ? data.url : "";
       if (!url) throw new Error("Stripe did not return a payment page.");
+      trackEvent("invoice_payment_started");
       window.location.assign(url);
     } catch (paymentError) {
       setPaymentMessage(

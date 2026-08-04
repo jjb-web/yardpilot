@@ -167,6 +167,17 @@ export default function Account() {
   const [liveStripeStatus, setLiveStripeStatus] =
     useState<StripeConnectionStatus | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [platformAdmin, setPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function checkPlatformAdmin() {
+      const { data } = await import("../lib/supabase").then(({ supabase }) => supabase.rpc("is_platform_admin"));
+      if (active) setPlatformAdmin(Boolean(data));
+    }
+    void checkPlatformAdmin();
+    return () => { active = false; };
+  }, [authUserId]);
 
   useEffect(() => {
     if (!user) return;
@@ -832,6 +843,14 @@ export default function Account() {
         </div>
       </div>
 
+
+      {platformAdmin && (
+        <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-5 shadow-sm dark:border-violet-900 dark:bg-violet-950/20 sm:p-6">
+          <h2 className="font-bold text-violet-950 dark:text-violet-100">Platform administration</h2>
+          <p className="mt-1 text-sm text-violet-800 dark:text-violet-200">Review pending verified-project reviews and recent support submissions.</p>
+          <a href="/app/admin/moderation" className="mt-4 inline-flex rounded-lg bg-violet-800 px-4 py-2.5 text-sm font-semibold text-white">Open moderation</a>
+        </div>
+      )}
 
       <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
         <h2 className="font-bold text-slate-900 dark:text-white">Client marketplace mode</h2>

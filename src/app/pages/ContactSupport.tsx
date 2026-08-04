@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { ArrowLeft, Loader2, Mail } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { checkTextSafety } from "../lib/contentSafety";
+import { trackEvent } from "../lib/analytics";
 
 export default function ContactSupport() {
   const [email, setEmail] = useState("");
@@ -16,6 +18,8 @@ export default function ContactSupport() {
     event.preventDefault();
     setError("");
     setNotice("");
+    const safety = checkTextSafety(`${subject} ${message}`, "Support message");
+    if (!safety.safe) { setError(safety.message); return; }
     setBusy(true);
     const { data, error: invokeError } = await supabase.functions.invoke("submit-public-contact", {
       body: {
@@ -34,7 +38,11 @@ export default function ContactSupport() {
     }
     setSubject("");
     setMessage("");
-    setNotice("Your message was received. Keep the confirmation email or check back with support@yardpilotusa.com if the issue is urgent.");
+    const delivery = data && typeof data === "object" && "emailDelivery" in data ? String(data.emailDelivery) : "unknown";
+    setNotice(delivery === "delivered"
+      ? "Your message was saved and emailed to YardPilot support."
+      : "Your message was saved in the YardPilot support inbox. Email delivery is not fully configured yet, so check back with support@yardpilotusa.com if urgent.");
+    trackEvent("support_message_submitted", { email_delivery: delivery });
   }
 
   return (

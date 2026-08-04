@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useApp } from "../context/AppContext";
 import { useSubscription } from "../hooks/useSubscription";
 import { FEATURE_LABELS, PRO_FEATURES } from "../lib/subscription";
+import { trackEvent } from "../lib/analytics";
 
 async function functionError(error: unknown) {
   if (error instanceof Error) return error.message;
@@ -69,6 +70,7 @@ export default function Billing() {
         workspaceId: activeWorkspaceId,
         interval,
       });
+      trackEvent("subscription_checkout_started", { interval });
       window.location.assign(data.url);
     } catch (requestError) {
       setActionError(await functionError(requestError));
@@ -100,6 +102,7 @@ export default function Billing() {
         code: code.trim(),
       });
       setMessage(data.message ?? "Promotional access applied.");
+      trackEvent("promotional_access_redeemed");
       setCode("");
       await refresh();
     } catch (requestError) {

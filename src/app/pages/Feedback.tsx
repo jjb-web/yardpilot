@@ -4,6 +4,8 @@ import { Loader2, MessageSquareText, Star } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
 import { YARDPILOT_APP_VERSION } from "../lib/legal";
+import { checkTextSafety } from "../lib/contentSafety";
+import { trackEvent } from "../lib/analytics";
 
  type Submission = {
   id: string;
@@ -47,39 +49,47 @@ export default function Feedback() {
       setError("Enter your feedback or review.");
       return;
     }
+    const safety = checkTextSafety(`${title} ${message}`, "Feedback");
+    if (!safety.safe) { setError(safety.message); return; }
     setBusy(true);
     setError("");
     setNotice("");
-    const { error: insertError } = await supabase.from("feedback_submissions").insert({
-      user_id: authUserId,
-      workspace_id: user?.accountType === "landscaper" ? activeWorkspaceId : null,
-      account_type: user?.accountType ?? "landscaper",
-      category,
-      rating: category === "review" ? rating : null,
-      title: title.trim(),
-      message: message.trim(),
-      allow_public: category === "review" ? allowPublic : false,
-      allow_contact: allowContact,
-      route: `${location.pathname}${location.search}`.slice(0, 500),
-      app_version: YARDPILOT_APP_VERSION,
-      browser_summary: `${navigator.userAgent.slice(0, 400)} | ${window.innerWidth}x${window.innerHeight}`,
+    const { data, error: submitError } = await supabase.functions.invoke("submit-feedback", {
+      body: {
+        workspaceId: user?.accountType === "landscaper" ? activeWorkspaceId : null,
+        accountType: user?.accountType ?? "landscaper",
+        category,
+        rating: category === "review" ? rating : null,
+        title: title.trim(),
+        message: message.trim(),
+        allowPublic: category === "review" ? allowPublic : false,
+        allowContact,
+        route: `${location.pathname}${location.search}`.slice(0, 500),
+        appVersion: YARDPILOT_APP_VERSION,
+        browserSummary: `${navigator.userAgent.slice(0, 400)} | ${window.innerWidth}x${window.innerHeight}`,
+      },
     });
     setBusy(false);
-    if (insertError) {
-      setError(insertError.message);
+    if (submitError || data?.error) {
+      setError(data?.error || submitError?.message || "Feedback could not be submitted.");
       return;
     }
     setTitle("");
     setMessage("");
     setAllowPublic(false);
-    setNotice("Thank you. Your submission was saved with the current page and app version so it is easier to investigate.");
+    setNotice(
+      data?.emailDelivery === "delivered"
+        ? "Thank you. Your submission was saved and emailed to YardPilot support."
+        : "Thank you. Your submission was saved. The support email alert could not be confirmed, but the submission remains available to YardPilot administrators.",
+    );
+    trackEvent("feedback_submitted", { category, has_rating: category === "review" });
     await load();
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-7">
       <div>
-        <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-900 dark:text-white"><MessageSquareText size={24} /> Feedback & review</h1>
+        <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-900 dark:text-white"><MessageSquareText size={24} /> YardPilot feedback</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Report a bug, request a feature, leave private feedback, or submit a YardPilot product review.</p>
       </div>
 

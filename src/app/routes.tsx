@@ -42,6 +42,8 @@ import EmployeePayments from "./pages/EmployeePayments";
 import ClientPayments from "./pages/ClientPayments";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
+import MarketplaceMessages from "./pages/MarketplaceMessages";
+import AdminModeration from "./pages/AdminModeration";
 import { useApp } from "./context/AppContext";
 
 function LoadingScreen() {
@@ -144,6 +146,8 @@ export const router = createBrowserRouter([
       { path: "team", element: <FeatureGate feature="team"><Team /></FeatureGate> },
       { path: "team-payments", element: <FeatureGate feature="team"><EmployeePayments /></FeatureGate> },
       { path: "notifications", Component: Notifications },
+      { path: "marketplace/:workOrderId/messages", Component: MarketplaceMessages },
+      { path: "admin/moderation", Component: AdminModeration },
       { path: "feedback", Component: Feedback },
       { path: "account", Component: Account },
       { path: "billing", Component: Billing },
@@ -160,6 +164,7 @@ export const router = createBrowserRouter([
       { path: "requests", Component: ClientRequests },
       { path: "payments", Component: ClientPayments },
       { path: "notifications", Component: Notifications },
+      { path: "projects/:workOrderId/messages", Component: MarketplaceMessages },
       { path: "feedback", Component: Feedback },
       { path: "account", Component: ClientAccount },
     ],

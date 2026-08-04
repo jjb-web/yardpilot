@@ -23,7 +23,7 @@ const nav = [
   { to: "/client/requests", label: "My Bid Requests", icon: FileBadge },
   { to: "/client/payments", label: "Payments", icon: CreditCard },
   { to: "/client/notifications", label: "Notifications", icon: Bell },
-  { to: "/client/feedback", label: "Feedback & review", icon: MessageSquareText },
+  { to: "/client/feedback", label: "YardPilot feedback", icon: MessageSquareText },
   { to: "/client/account", label: "Account", icon: User },
 ];
 

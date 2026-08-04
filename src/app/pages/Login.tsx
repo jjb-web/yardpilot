@@ -11,6 +11,7 @@ import {
 } from "react-router";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
+import { trackEvent } from "../lib/analytics";
 import { passwordError, passwordRequirements } from "../lib/password";
 import { YARDPILOT_PRIVACY_VERSION, YARDPILOT_TERMS_VERSION } from "../lib/legal";
 import { useFeatureFlags } from "../hooks/useFeatureFlags";
@@ -260,6 +261,7 @@ export default function Login() {
     }
 
     if (data.session) {
+      trackEvent("login", { method: "password" });
       processingSessionRef.current = false;
       // The auth-state listener completes invite acceptance and navigation.
     }
@@ -336,6 +338,7 @@ export default function Login() {
     }
 
     setLoading(false);
+    trackEvent("sign_up", { method: "password", account_type: form.inviteCode.trim() ? "invited_landscaper" : form.accountType });
     setMessage(
       form.inviteCode.trim()
         ? "Account created. Confirm your email, then the team invitation will be joined automatically."
@@ -360,6 +363,7 @@ export default function Login() {
       ? `${window.location.origin}/login?invite=${encodeURIComponent(invite)}`
       : `${window.location.origin}/login`;
 
+    trackEvent(mode === "register" ? "sign_up_started" : "login_started", { method: "google" });
     const { error: googleError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

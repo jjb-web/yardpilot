@@ -1,10 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type PostgrestError } from "@supabase/supabase-js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
+
+type TransferResult = { label: string; error: PostgrestError | null };
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -70,23 +72,47 @@ Deno.serve(async (request) => {
       const ownerId = workspace?.created_by as string | undefined;
       if (!ownerId || ownerId === user.id) continue;
       const workspaceId = membership.workspace_id;
-      const updates: Array<PromiseLike<unknown>> = [
-        admin.from("projects").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id),
-        admin.from("projects").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id),
-        admin.from("contacts").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id),
-        admin.from("properties").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id),
-        admin.from("property_photos").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id),
-        admin.from("invoices").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id),
-        admin.from("schedule_events").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id),
-        admin.from("follow_ups").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id),
-        admin.from("project_assignments").update({ assigned_by: ownerId }).eq("workspace_id", workspaceId).eq("assigned_by", user.id),
+
+      const operationSpecs: Array<{
+        label: string;
+        operation: PromiseLike<{ error: PostgrestError | null }>;
+      }> = [
+        { label: "projects.created_by", operation: admin.from("projects").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id) },
+        { label: "projects.user_id", operation: admin.from("projects").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id) },
+        { label: "contacts.user_id", operation: admin.from("contacts").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id) },
+        { label: "properties.user_id", operation: admin.from("properties").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id) },
+        { label: "property_photos.user_id", operation: admin.from("property_photos").update({ user_id: ownerId }).eq("workspace_id", workspaceId).eq("user_id", user.id) },
+        { label: "invoices.created_by", operation: admin.from("invoices").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id) },
+        { label: "schedule_events.created_by", operation: admin.from("schedule_events").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id) },
+        { label: "follow_ups.created_by", operation: admin.from("follow_ups").update({ created_by: ownerId }).eq("workspace_id", workspaceId).eq("created_by", user.id) },
+        { label: "project_assignments.assigned_by", operation: admin.from("project_assignments").update({ assigned_by: ownerId }).eq("workspace_id", workspaceId).eq("assigned_by", user.id) },
       ];
-      await Promise.allSettled(updates);
+
+      const transferResults: TransferResult[] = await Promise.all(
+        operationSpecs.map(async ({ label, operation }) => {
+          const { error } = await operation;
+          return { label, error };
+        }),
+      );
+      const failures = transferResults.filter((result) => result.error);
+      if (failures.length) {
+        return json({
+          error: "Account deletion stopped because shared workspace records could not be transferred safely.",
+          code: "TRANSFER_FAILED",
+          failures: failures.map((failure) => ({ label: failure.label, message: failure.error?.message })),
+        }, 409);
+      }
     }
 
-    const { data: resumeObjects } = await admin.storage.from("marketplace-resumes").list(user.id, { limit: 1000 });
+    const { data: resumeObjects, error: resumeListError } = await admin.storage
+      .from("marketplace-resumes")
+      .list(user.id, { limit: 1000 });
+    if (resumeListError && !/not found/i.test(resumeListError.message)) throw new Error(resumeListError.message);
     if (resumeObjects?.length) {
-      await admin.storage.from("marketplace-resumes").remove(resumeObjects.map((item) => `${user.id}/${item.name}`));
+      const { error: resumeDeleteError } = await admin.storage
+        .from("marketplace-resumes")
+        .remove(resumeObjects.map((item) => `${user.id}/${item.name}`));
+      if (resumeDeleteError) throw new Error(resumeDeleteError.message);
     }
 
     const ownedIds = (ownedWorkspaces ?? []).map((workspace) => workspace.id);
@@ -95,8 +121,12 @@ Deno.serve(async (request) => {
       if (workspaceDeleteError) throw new Error(workspaceDeleteError.message);
     }
 
-    await admin.from("workspace_memberships").delete().eq("user_id", user.id);
-    await admin.from("profiles").delete().eq("id", user.id);
+    const { error: membershipDeleteError } = await admin.from("workspace_memberships").delete().eq("user_id", user.id);
+    if (membershipDeleteError) throw new Error(membershipDeleteError.message);
+
+    const { error: profileDeleteError } = await admin.from("profiles").delete().eq("id", user.id);
+    if (profileDeleteError) throw new Error(profileDeleteError.message);
+
     const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
     if (deleteError) throw new Error(deleteError.message);
 

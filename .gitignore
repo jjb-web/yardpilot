@@ -30,13 +30,14 @@ supabase/.temp/
 *.log
 .DS_Store
 Thumbs.db
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
+.vscode/
 .idea/
 
-# Local diagnostic/export archives
-yardpilot-*-bundle-*.tar.gz
-yardpilot-code-audit-*
-supabase-query-export-*
+# Local diagnostics, database exports, archives, and rollback bundles
 backups/
+*.tar.gz
+*.zip
+supabase-query-export-*/
+yardpilot-code-audit-*/
+yardpilot-current-debug-bundle-*
+yardpilot-before-*

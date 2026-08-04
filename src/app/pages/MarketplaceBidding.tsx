@@ -11,6 +11,8 @@ import {
 import { Link } from "react-router";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
+import { checkTextSafety } from "../lib/contentSafety";
+import { trackEvent } from "../lib/analytics";
 import type { ClientJobBid, ClientJobRequest, MarketplaceWorkOrder } from "../data/marketplace";
 
 const PAGE_SIZE = 20;
@@ -152,6 +154,11 @@ export default function MarketplaceBidding() {
       setError("Enter a proposal message.");
       return;
     }
+    const safety = checkTextSafety(bidMessage, "Proposal");
+    if (!safety.safe) {
+      setError(safety.message);
+      return;
+    }
 
     setBusy(true);
     setError("");
@@ -180,6 +187,7 @@ export default function MarketplaceBidding() {
     setBidMessage("");
     setProposedStart("");
     setMessage("Bid submitted. The client can now see it under My Bid Requests.");
+    trackEvent("marketplace_bid_submitted", { has_amount: Boolean(bidAmount), has_proposed_start: Boolean(proposedStart) });
     await loadWorkspaceMarketplaceState();
   }
 
@@ -224,9 +232,12 @@ export default function MarketplaceBidding() {
                     <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Client: {work.client_name || "Client"}{work.client_email ? ` · ${work.client_email}` : ""}{work.client_phone ? ` · ${work.client_phone}` : ""}</p>
                     {work.bid_amount != null && <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Accepted offer: ${Number(work.bid_amount).toLocaleString()}</p>}
                   </div>
-                  <Link to={work.project_id ? `/app/estimates/${work.project_id}` : `/app/estimate/new?marketplaceRequest=${work.request_id}`} className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">
-                    <FilePlus2 size={16} /> {work.project_id ? "View estimate" : "Create estimate"}
-                  </Link>
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <Link to={work.project_id ? `/app/estimates/${work.project_id}` : `/app/estimate/new?marketplaceRequest=${work.request_id}`} className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">
+                      <FilePlus2 size={16} /> {work.project_id ? "View estimate" : "Create estimate"}
+                    </Link>
+                    <Link to={`/app/marketplace/${work.work_order_id}/messages`} className="inline-flex items-center justify-center rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:text-emerald-200">Project messages</Link>
+                  </div>
                 </div>
               </article>
             ))}

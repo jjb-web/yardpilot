@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, BriefcaseBusiness, Globe2, Mail, MapPin, Phone, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Globe2, Mail, MapPin, Phone, ShieldCheck, Star, Users } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { supabase } from "../lib/supabase";
-import type { MarketplaceBusiness, MarketplaceOpening } from "../data/marketplace";
+import type { MarketplaceBusiness, MarketplaceOpening, MarketplaceReview } from "../data/marketplace";
 
 export default function MarketplaceBusinessDetail() {
   const { workspaceId } = useParams();
   const [business, setBusiness] = useState<MarketplaceBusiness | null>(null);
   const [openings, setOpenings] = useState<MarketplaceOpening[]>([]);
+  const [reviews, setReviews] = useState<MarketplaceReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -17,14 +18,19 @@ export default function MarketplaceBusinessDetail() {
     async function load() {
       if (!workspaceId) return;
       setLoading(true);
-      const [{ data: profile, error: profileError }, { data: openingRows, error: openingError }] = await Promise.all([
+      const [
+        { data: profile, error: profileError },
+        { data: openingRows, error: openingError },
+        { data: reviewRows, error: reviewError },
+      ] = await Promise.all([
         supabase.from("marketplace_business_profiles").select("*").eq("workspace_id", workspaceId).eq("published", true).maybeSingle(),
         supabase.from("marketplace_job_openings").select("*").eq("workspace_id", workspaceId).eq("active", true).order("created_at", { ascending: false }),
+        supabase.rpc("get_public_marketplace_reviews", { requested_workspace_id: workspaceId }),
       ]);
 
       if (!active) return;
-      if (profileError || openingError) {
-        setError(profileError?.message || openingError?.message || "Could not load this business.");
+      if (profileError || openingError || reviewError) {
+        setError(profileError?.message || openingError?.message || reviewError?.message || "Could not load this business.");
       } else {
         setBusiness(profile as MarketplaceBusiness | null);
         setOpenings(
@@ -34,6 +40,7 @@ export default function MarketplaceBusinessDetail() {
             business_headline: String(profile?.headline ?? ""),
           })),
         );
+        setReviews((reviewRows ?? []) as MarketplaceReview[]);
       }
       setLoading(false);
     }
@@ -98,6 +105,26 @@ export default function MarketplaceBusinessDetail() {
               {business.public_phone && <a href={`tel:${business.public_phone}`} className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-slate-700"><Phone size={16} />{business.public_phone}</a>}
               {business.public_email && <a href={`mailto:${business.public_email}`} className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-slate-700"><Mail size={16} />{business.public_email}</a>}
               {business.website_url && <a href={business.website_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-slate-700"><Globe2 size={16} />Website</a>}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3"><Star size={20} className="text-amber-500" /><h2 className="text-lg font-bold text-slate-900 dark:text-white">Verified YardPilot reviews</h2></div>
+              {reviews.length > 0 && <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">{(reviews.reduce((sum, review) => sum + Number(review.rating), 0) / reviews.length).toFixed(1)} / 5 · {reviews.length}</p>}
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Only clients connected to a paid or completed YardPilot marketplace project can submit these reviews. Reviews are moderated for abuse, not for whether they are positive or negative.</p>
+            <div className="mt-4 space-y-3">
+              {reviews.map((review) => (
+                <article key={review.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <div className="flex items-center gap-1 text-amber-500">{Array.from({ length: 5 }, (_, index) => <Star key={index} size={15} className={index < review.rating ? "fill-current" : "text-slate-300"} />)}</div>
+                  {review.title && <h3 className="mt-2 font-bold text-slate-900 dark:text-white">{review.title}</h3>}
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">{review.body}</p>
+                  <p className="mt-2 text-xs text-slate-400">Verified YardPilot project · {new Date(review.created_at).toLocaleDateString()}</p>
+                  {review.business_response && <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200"><strong>Business response:</strong> {review.business_response}</div>}
+                </article>
+              ))}
+              {reviews.length === 0 && <p className="text-sm text-slate-500">No published verified-project reviews yet.</p>}
             </div>
           </section>
 

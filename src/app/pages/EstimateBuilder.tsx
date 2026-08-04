@@ -28,6 +28,7 @@ import type {
 } from "../data/types";
 import { calculateEstimate, calculateJob, formatMoney } from "../lib/estimate";
 import { checkTextSafety } from "../lib/contentSafety";
+import { trackEvent } from "../lib/analytics";
 import { generateEstimateDescription } from "../lib/descriptionGenerator";
 import { useSubscription } from "../hooks/useSubscription";
 import { supabase } from "../lib/supabase";
@@ -918,6 +919,10 @@ export default function EstimateBuilder() {
       }
 
       if (draftKey) localStorage.removeItem(draftKey);
+      trackEvent(existing ? "estimate_updated" : "estimate_created", {
+        marketplace_origin: Boolean(marketplaceRequestId),
+        job_count: normalizedJobs.length,
+      });
       navigate(
         marketplaceRequestId
           ? `/app/estimates/${saved.id}?origin=marketplace`
