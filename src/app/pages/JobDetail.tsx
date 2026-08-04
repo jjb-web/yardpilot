@@ -35,7 +35,6 @@ export default function JobDetail() {
     contacts,
     properties,
     propertyPhotos,
-    assignSelfToProject,
   } = useApp();
 
   const project = projects.find((item) => item.id === id) ?? null;
@@ -79,7 +78,6 @@ export default function JobDetail() {
   };
   const jobs = project.jobSections?.length ? project.jobSections : [fallback];
   const isAssigned = Boolean(authUserId && project.assignedMemberIds.includes(authUserId));
-  const canClaim = role === "employee" && project.assignedMemberIds.length === 0 && project.status === "active";
   const isPast = project.status === "completed" || project.status === "archived";
   const serviceAddress = [
     linkedProperty?.address || linkedContact?.address || project.address,
@@ -115,9 +113,6 @@ export default function JobDetail() {
             </div>
             {isAssigned && !isPast && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1.5 text-sm font-semibold text-green-200"><CheckCircle2 size={15} /> Assigned to you</span>
-            )}
-            {canClaim && (
-              <button type="button" onClick={() => void assignSelfToProject(project.id)} className="rounded-lg bg-green-500 px-4 py-2.5 text-sm font-bold text-green-950">Claim this job</button>
             )}
           </div>
         </div>

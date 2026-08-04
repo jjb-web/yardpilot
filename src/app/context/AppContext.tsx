@@ -136,7 +136,6 @@ type AppContextType = {
   setProjectSharing: (id: string, enabled: boolean) => Promise<Project>;
   submitEstimateForApproval: (id: string) => Promise<void>;
   reviewEstimateApproval: (id: string, decision: "approve" | "changes_requested", notes?: string) => Promise<void>;
-  assignSelfToProject: (projectId: string) => Promise<void>;
   completeProject: (projectId: string) => Promise<string>;
   bulkDeleteProjects: (projectIds: string[]) => Promise<void>;
 
@@ -2181,14 +2180,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await Promise.all([refreshSchedule(), refreshFollowUps()]);
   }
 
-  async function assignSelfToProject(projectId: string) {
-    const { error } = await supabase.rpc("employee_claim_project", {
-      requested_project_id: projectId,
-    });
-    if (error) throw new Error(error.message);
-    await refreshCurrentBundle();
-  }
-
   function contactToDatabase(contact: Contact) {
     return {
       id: contact.id,
@@ -3003,7 +2994,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setProjectSharing,
         submitEstimateForApproval,
         reviewEstimateApproval,
-        assignSelfToProject,
         completeProject,
         bulkDeleteProjects,
         refreshContacts,

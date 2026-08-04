@@ -35,15 +35,10 @@ npm run preview
 
 ## Database changes
 
-Apply SQL migrations manually and in order. For this release, first confirm the
-latest marketplace visibility/RLS migration was applied, then run:
-
-```text
-supabase/sql/yardpilot-launch-hardening-v1.sql
-```
-
-Do not rerun older migrations afterward because they may restore obsolete
-functions or policies.
+Historical SQL is preserved under `supabase/sql/history/` and must not be rerun
+against production. Keep future executable database changes as reviewed,
+timestamped migrations under `supabase/migrations/`. Read
+`docs/database/cleanup-plan.md` before changing the live schema.
 
 ## Edge Functions changed by launch hardening
 
@@ -60,8 +55,9 @@ Stripe Connect functions.
 
 Read:
 
-- `README-FIRST.md`
+- `docs/archive/launch-hardening-v1.md`
 - `docs/DEPLOYMENT.md`
 - `docs/LAUNCH-CHECKLIST.md`
 - `docs/ROLE-TEST-MATRIX.md`
 - `docs/DEFERRED-ROADMAP.md`
+- `docs/CODEBASE-STRUCTURE.md`

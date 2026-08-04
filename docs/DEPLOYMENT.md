@@ -42,6 +42,7 @@ Do not put this value in Vercel or any `VITE_` variable.
 
 ```bash
 npx supabase@latest link --project-ref zuaikajypdcrbfcksiuf
+npx supabase@latest functions deploy create-invoice-checkout
 npx supabase@latest functions deploy delete-account
 npx supabase@latest functions deploy stripe-billing-webhook
 npx supabase@latest functions deploy submit-public-contact

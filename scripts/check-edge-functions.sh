@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if ! command -v deno >/dev/null 2>&1; then
@@ -9,23 +8,27 @@ if ! command -v deno >/dev/null 2>&1; then
   exit 1
 fi
 
-functions=(
-  stripe-connect-account
-  create-invoice-checkout
-  stripe-webhook
-  delete-account
-)
+status=0
+while IFS= read -r -d '' function_dir; do
+  function_name="$(basename "$function_dir")"
+  if [[ ! -f "$function_dir/index.ts" ]]; then
+    echo "ERROR: $function_name is missing index.ts" >&2
+    status=1
+    continue
+  fi
+  if [[ ! -f "$function_dir/deno.json" ]]; then
+    echo "ERROR: $function_name is missing deno.json" >&2
+    status=1
+    continue
+  fi
 
-for function_name in "${functions[@]}"; do
-  function_dir="$ROOT/supabase/functions/$function_name"
-  echo "Installing and checking $function_name"
+  echo "Checking $function_name"
   (
     cd "$function_dir"
-    deno install
     deno check index.ts
     deno lint index.ts
     deno fmt --check index.ts deno.json
-  )
-done
+  ) || status=1
+done < <(find "$ROOT/supabase/functions" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
-echo "All YardPilot Edge Functions passed Deno checks."
+exit "$status"
