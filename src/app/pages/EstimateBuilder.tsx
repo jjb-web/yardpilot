@@ -621,7 +621,6 @@ export default function EstimateBuilder() {
       client: contact?.name || current.client,
       address: onlyProperty?.address || contact?.address || current.address,
       city: onlyProperty?.city || contact?.city || current.city,
-      name: current.name || onlyProperty?.name || "",
       notes: current.notes || contact?.notes || onlyProperty?.internalNotes || "",
       clientNotes: current.clientNotes || onlyProperty?.clientNotes || "",
     }));
@@ -635,7 +634,6 @@ export default function EstimateBuilder() {
           index === 0
             ? {
                 ...job,
-                title: job.title || onlyProperty.name,
                 scopeDescription: job.scopeDescription || onlyProperty.description,
                 internalNotes: job.internalNotes || onlyProperty.internalNotes,
                 photoIds: job.photoIds.length ? job.photoIds : photoIds,
@@ -664,7 +662,6 @@ export default function EstimateBuilder() {
       client: contact?.name || current.client,
       address: property.address || contact?.address || current.address,
       city: property.city || contact?.city || current.city,
-      name: current.name || property.name || "",
       notes: current.notes || [contact?.notes, property.internalNotes].filter(Boolean).join("\n\n"),
       clientNotes: current.clientNotes || property.clientNotes || "",
     }));
@@ -674,7 +671,6 @@ export default function EstimateBuilder() {
         index === 0
           ? {
               ...job,
-              title: job.title || property.name,
               scopeDescription: job.scopeDescription || property.description,
               internalNotes: job.internalNotes || property.internalNotes,
               photoIds: job.photoIds.length ? job.photoIds : photoIds,
@@ -755,6 +751,20 @@ export default function EstimateBuilder() {
     }
     if (!form.estimateNumber.trim()) {
       showError("Enter an estimate number.");
+      return false;
+    }
+    const normalizedEstimateNumber = form.estimateNumber.trim().toLowerCase();
+    if (/^0+$/.test(normalizedEstimateNumber.replace(/[^0-9]/g, ""))) {
+      showError("Estimate number cannot be all zeros.");
+      return false;
+    }
+    const duplicateNumber = projects.some(
+      (project) =>
+        project.id !== existing?.id &&
+        project.estimateNumber.trim().toLowerCase() === normalizedEstimateNumber,
+    );
+    if (duplicateNumber) {
+      showError("That estimate number is already in use. Enter a unique number.");
       return false;
     }
     if (!jobSections.length) {
@@ -872,12 +882,21 @@ export default function EstimateBuilder() {
         scheduledEnd: lastEnd,
         followUpAt: toIso(form.followUpAt),
         assignedMemberIds: assignments.map((assignment) => assignment.userId),
-        internalApprovalStatus: existing?.internalApprovalStatus ?? "draft",
-        submittedForApprovalAt: existing?.submittedForApprovalAt ?? null,
-        submittedForApprovalBy: existing?.submittedForApprovalBy ?? null,
-        approvedAt: existing?.approvedAt ?? null,
-        approvedBy: existing?.approvedBy ?? null,
-        approvalNotes: existing?.approvalNotes ?? "",
+        internalApprovalStatus:
+          existing?.internalApprovalStatus ?? (role === "employee" ? "draft" : "approved"),
+        submittedForApprovalAt:
+          role === "employee" ? existing?.submittedForApprovalAt ?? null : null,
+        submittedForApprovalBy:
+          role === "employee" ? existing?.submittedForApprovalBy ?? null : null,
+        approvedAt:
+          role === "employee" ? existing?.approvedAt ?? null : existing?.approvedAt ?? now,
+        approvedBy:
+          role === "employee" ? existing?.approvedBy ?? null : existing?.approvedBy ?? authUserId,
+        approvalNotes:
+          existing?.approvalNotes ??
+          (role === "employee"
+            ? ""
+            : "Internal review not required for an owner or manager-created estimate."),
         updatedAt: now,
       };
 
@@ -919,6 +938,12 @@ export default function EstimateBuilder() {
       }
 
       if (draftKey) localStorage.removeItem(draftKey);
+      draftReadyRef.current = false;
+      setGeneratedDescription("");
+      if (!editing) {
+        setForm(blankForm());
+        setJobSections([blankJob()]);
+      }
       trackEvent(existing ? "estimate_updated" : "estimate_created", {
         marketplace_origin: Boolean(marketplaceRequestId),
         job_count: normalizedJobs.length,
@@ -944,8 +969,8 @@ export default function EstimateBuilder() {
       <div className="p-6">
         <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white p-10 text-center">
           <h1 className="text-xl font-bold">Estimate not found</h1>
-          <button onClick={() => navigate(-1)} className="mt-4 text-sm font-semibold text-green-700">
-            Back
+          <button onClick={() => navigate("/app/estimates", { replace: true })} className="mt-4 text-sm font-semibold text-green-700">
+            Back to Estimates
           </button>
         </div>
       </div>
@@ -960,10 +985,10 @@ export default function EstimateBuilder() {
         <div>
           <button
             type="button"
-            onClick={() => marketplaceRequestId ? navigate("/app/marketplace?tab=bidding") : navigate(-1)}
+            onClick={() => navigate("/app/estimates", { replace: true })}
             className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900"
           >
-            <ArrowLeft size={16} /> {marketplaceRequestId ? "Back to bidding market" : "Back"}
+            <ArrowLeft size={16} /> Back to Estimates
           </button>
           <h1 className="text-2xl font-bold text-gray-900">
             {editing ? "Edit Estimate" : "Create Estimate"}

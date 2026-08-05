@@ -44,6 +44,7 @@ export default function EstimateDetail() {
     contacts,
     properties,
     propertyPhotos,
+    workspaceMembers,
     setProjectSharing,
     deleteProject,
     submitEstimateForApproval,
@@ -60,6 +61,9 @@ export default function EstimateDetail() {
   const photos = propertyPhotos.filter((item) => item.propertyId === property?.id);
 
   const isManager = role === "owner" || role === "co_owner" || role === "manager";
+  const creatorMember = workspaceMembers.find((member) => member.userId === project?.createdBy) ?? null;
+  const creatorName = creatorMember?.name || (project?.createdBy === authUserId ? user?.name : "Team member");
+  const createdByEmployee = creatorMember?.role === "employee" || Boolean(project?.submittedForApprovalBy);
   const isEmployeeOwner = role === "employee" && project?.createdBy === authUserId;
   const canEdit = Boolean(
     isManager ||
@@ -68,14 +72,15 @@ export default function EstimateDetail() {
         ["draft", "changes_requested"].includes(project.internalApprovalStatus))
   );
   const canSubmit = Boolean(
-    project?.estimateStatus === "draft" &&
-      ["draft", "changes_requested"].includes(project.internalApprovalStatus) &&
-      (isManager || isEmployeeOwner)
+    isEmployeeOwner &&
+      project?.estimateStatus === "draft" &&
+      ["draft", "changes_requested"].includes(project.internalApprovalStatus)
   );
-  const originMarketplace = searchParams.get("origin") === "marketplace";
-  const backLabel = originMarketplace ? "Go to Estimates" : "Back";
-  const backAction = () =>
-    originMarketplace ? navigate("/app/estimates", { replace: true }) : navigate(-1);
+  const canReviewEmployeeEstimate = Boolean(
+    isManager && createdByEmployee && project?.internalApprovalStatus === "pending"
+  );
+  const backLabel = "Back to Estimates";
+  const backAction = () => navigate("/app/estimates", { replace: true });
 
   const approvalByName = useMemo(() => {
     if (!project?.approvedBy) return "";
@@ -253,10 +258,14 @@ export default function EstimateDetail() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex items-center gap-2 font-bold">
-              <ShieldCheck size={18} /> {approvalLabel(project.internalApprovalStatus)}
+              <ShieldCheck size={18} /> {createdByEmployee
+                ? approvalLabel(project.internalApprovalStatus)
+                : `Internal review not required · created by ${creatorName}`}
             </div>
             <p className="mt-1 text-sm opacity-80">
-              Internal approval is separate from the customer accepting the estimate.
+              {createdByEmployee
+                ? "Employee-created estimates require a manager review before they can be shared. Customer acceptance remains separate."
+                : "Owner, co-owner, and manager-created estimates are approved at creation. Customer acceptance remains separate."}
             </p>
             {project.approvedAt && (
               <p className="mt-2 text-xs opacity-70">
@@ -282,7 +291,7 @@ export default function EstimateDetail() {
               </button>
             )}
 
-            {isManager && project.internalApprovalStatus !== "approved" && (
+            {canReviewEmployeeEstimate && (
               <>
                 <textarea
                   value={reviewNotes}

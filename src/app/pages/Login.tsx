@@ -491,6 +491,14 @@ export default function Login() {
                         <span className="mt-1 block text-xs">Find landscapers and post work for bids.</span>
                       </button>
                     </div>
+                    <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      <summary className="cursor-pointer font-semibold text-slate-800">Not sure which account type to choose?</summary>
+                      <div className="mt-2 space-y-2 leading-5">
+                        <p><strong>Client:</strong> request landscaping work, compare bids, accept an estimate, pay invoices, and review completed work.</p>
+                        <p><strong>Landscaper:</strong> run a personal workspace, create or join a company/workgroup, prepare estimates, manage assigned jobs, or look for work.</p>
+                        <p>You can enable both modes later from the same account, so a landscaper can also hire another company as a client.</p>
+                      </div>
+                    </details>
                   </div>
                 )}
 

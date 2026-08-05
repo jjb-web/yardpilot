@@ -884,6 +884,14 @@ export default function Team() {
                     <option value="co_owner">Co-owner — full company access</option>
                   )}
                 </select>
+                <details className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <summary className="cursor-pointer font-semibold text-slate-800">What can each role do?</summary>
+                  <div className="mt-2 space-y-1.5 leading-5">
+                    <p><strong>Employee:</strong> sees their own draft estimates, assigned jobs, relevant schedule/follow-ups, limited marketplace tools, and only their own payment records.</p>
+                    <p><strong>Manager:</strong> assigns work, reviews employee estimates, manages operations and employee payment records, but cannot transfer ownership.</p>
+                    <p><strong>Co-owner:</strong> has nearly full company access, including team and billing administration.</p>
+                  </div>
+                </details>
               </div>
               <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500">
                 YardPilot does not send invitations automatically. After creating it, give the person the code or use Copy Link under Pending Invites.

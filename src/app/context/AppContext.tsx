@@ -995,9 +995,32 @@ function getFileExtension(file: File) {
   if (extension && /^[a-z0-9]+$/.test(extension)) return extension;
   if (file.type === "image/png") return "png";
   if (file.type === "image/webp") return "webp";
+  if (file.type === "image/gif") return "gif";
   if (file.type === "image/heic") return "heic";
   if (file.type === "image/heif") return "heif";
   return "jpg";
+}
+
+function normalizedImageContentType(file: File, extension: string) {
+  const normalized = file.type.trim().toLowerCase();
+  if (normalized.startsWith("image/")) return normalized;
+  switch (extension) {
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "gif":
+      return "image/gif";
+    case "heic":
+      return "image/heic";
+    case "heif":
+      return "image/heif";
+    case "jpg":
+    case "jpeg":
+    case "jfif":
+    default:
+      return "image/jpeg";
+  }
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -1911,7 +1934,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       body: { confirmation: "DELETE" },
     });
     const response = (data ?? {}) as Record<string, unknown>;
-    if (error || response.error) {
+    if (error || response.error || response.deleted !== true) {
       const workspaces = Array.isArray(response.workspaces)
         ? response.workspaces
             .map((item) => item && typeof item === "object" && "name" in item ? String(item.name) : "")
@@ -1919,6 +1942,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : [];
       const suffix = workspaces.length ? ` Affected workspaces: ${workspaces.join(", ")}.` : "";
       throw new Error(`${String(response.error ?? error?.message ?? "The account could not be deleted.")}${suffix}`);
+    }
+
+    // The Auth user is already gone remotely. Remove the browser session and all
+    // account-specific local state before routing back to the public site.
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // A deleted Auth user can make signOut return an expired-session error.
+      // Local cleanup below is still required and sufficient.
+    }
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("yardpilot-")) localStorage.removeItem(key);
     }
     clearAccount();
   }
@@ -2046,6 +2081,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function addProject(project: Project) {
+    let projectToSave = project;
     if (role === "employee") {
       if (project.createdBy !== currentUserOrThrow()) {
         throw new Error("Employees may save only estimates they created.");
@@ -2055,17 +2091,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     } else {
       ensureManager();
+      const approvedAt = new Date().toISOString();
+      projectToSave = {
+        ...project,
+        internalApprovalStatus: "approved",
+        submittedForApprovalAt: null,
+        submittedForApprovalBy: null,
+        approvedAt,
+        approvedBy: currentUserOrThrow(),
+        approvalNotes: project.approvalNotes || "Internal review not required for an owner or manager-created estimate.",
+      };
     }
-    validateProjectContent(project);
+    validateProjectContent(projectToSave);
     const { data, error } = await supabase
       .from("projects")
-      .insert(projectToDatabase(project))
+      .insert(projectToDatabase(projectToSave))
       .select("*")
       .single();
     if (error) throw new Error(error.message);
-    if (role !== "employee") await syncProjectAssignments(project);
+    if (role !== "employee") await syncProjectAssignments(projectToSave);
     const saved = enrichProjectOperationalDetails(
-      rowToProject(data as ProjectRow, project.laborAssignments),
+      rowToProject(data as ProjectRow, projectToSave.laborAssignments),
       contacts,
       properties
     );
@@ -2429,7 +2475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .upload(path, file, {
         cacheControl: "3600",
         upsert: false,
-        contentType: file.type || fallbackContentType,
+        contentType: normalizedImageContentType(file, extension) || fallbackContentType,
       });
     if (uploadError) throw new Error(uploadError.message);
     const now = new Date().toISOString();

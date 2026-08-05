@@ -51,10 +51,10 @@ const nav: NavItem[] = [
   { to: "/app/contacts", icon: Users, label: "Contacts", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/estimates", icon: FileText, label: "Estimates", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/projects/current", icon: FolderOpen, label: "Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/invoices", icon: ReceiptText, label: "Invoices", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/marketplace", icon: Store, label: "Marketplace", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/schedule", icon: CalendarDays, label: "Schedule", roles: ["owner", "co_owner", "manager", "employee"], feature: "schedule" },
   { to: "/app/follow-ups", icon: BellRing, label: "Follow-ups", roles: ["owner", "co_owner", "manager", "employee"], feature: "followups" },
-  { to: "/app/invoices", icon: ReceiptText, label: "Invoices", roles: ["owner", "co_owner", "manager"] },
   { to: "/app/reports", icon: BarChart3, label: "Reports", roles: ["owner", "co_owner", "manager"], feature: "advanced_reports" },
   { to: "/app/projects/past", icon: Archive, label: "Past Jobs", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
@@ -62,7 +62,7 @@ const nav: NavItem[] = [
   { to: "/app/notifications", icon: BellRing, label: "Notifications", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/feedback", icon: MessageSquareText, label: "YardPilot feedback", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/account", icon: User, label: "Account", roles: ["owner", "co_owner", "manager", "employee"] },
-  { to: "/app/billing", icon: CreditCard, label: "Plans & billing", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/billing", icon: CreditCard, label: "Plans & billing", roles: ["owner", "co_owner"] },
 ];
 
 function initialDarkMode() {

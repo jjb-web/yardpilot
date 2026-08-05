@@ -51,6 +51,7 @@ export default function Estimates() {
     properties,
     role,
     authUserId,
+    workspaceMembers,
     setProjectSharing,
     deleteProject,
   } = useApp();
@@ -230,6 +231,8 @@ export default function Estimates() {
             const laborHours = combinedLaborHours(project);
             const contact = contacts.find((item) => item.id === project.contactId);
             const property = properties.find((item) => item.id === project.propertyId);
+            const creator = workspaceMembers.find((member) => member.userId === project.createdBy);
+            const createdByEmployee = creator?.role === "employee" || Boolean(project.submittedForApprovalBy);
 
             return (
               <article
@@ -262,13 +265,15 @@ export default function Estimates() {
                               ? "bg-red-100 text-red-700"
                               : "bg-slate-100 text-slate-600"
                       }`}>
-                        {project.internalApprovalStatus === "approved"
-                          ? "Approved internally"
-                          : project.internalApprovalStatus === "pending"
-                            ? "Awaiting approval"
-                            : project.internalApprovalStatus === "changes_requested"
-                              ? "Changes requested"
-                              : "Internal draft"}
+                        {!createdByEmployee
+                          ? `Created by ${creator?.name || "owner/manager"} · no review required`
+                          : project.internalApprovalStatus === "approved"
+                            ? `Approved by ${project.approvedBy === authUserId ? "you" : "manager"}`
+                            : project.internalApprovalStatus === "pending"
+                              ? "Awaiting manager approval"
+                              : project.internalApprovalStatus === "changes_requested"
+                                ? "Changes requested"
+                                : "Employee draft"}
                       </span>
                     </div>
                     <h2 className="text-lg font-bold text-gray-900">{project.name}</h2>

@@ -47,6 +47,11 @@ export default function Dashboard() {
 
   const now = Date.now();
   const isEmployee = role === "employee";
+  const activeEstimates = projects.filter(
+    (project) =>
+      project.status === "active" &&
+      (project.estimateStatus === "draft" || project.estimateStatus === "sent")
+  );
   const activeJobs = projects.filter(
     (project) =>
       project.status === "active" && project.estimateStatus === "accepted"
@@ -54,9 +59,6 @@ export default function Dashboard() {
   const assignedJobs = activeJobs.filter(
     (project) =>
       !isEmployee || project.assignedMemberIds.includes(authUserId ?? "")
-  );
-  const unassignedJobs = activeJobs.filter(
-    (project) => project.assignedMemberIds.length === 0
   );
   const customers = contacts.filter(
     (contact) => contact.contactType === "customer"
@@ -68,9 +70,12 @@ export default function Dashboard() {
     (sum, invoice) => sum + invoice.amount,
     0
   );
-  const estimateValue = projects.reduce(
+  const estimateValue = activeEstimates.reduce(
     (sum, project) => sum + project.totalEstimate,
     0
+  );
+  const myDraftEstimates = activeEstimates.filter(
+    (project) => project.createdBy === authUserId
   );
   const dueFollowUps = followUps.filter(
     (followUp) =>
@@ -97,8 +102,8 @@ export default function Dashboard() {
       className: "bg-blue-50 text-blue-700",
     },
     {
-      label: "Total Estimates",
-      value: projects.length,
+      label: "Active Estimates",
+      value: activeEstimates.length,
       icon: FileText,
       className: "bg-violet-50 text-violet-700",
     },
@@ -124,9 +129,9 @@ export default function Dashboard() {
       className: "bg-green-50 text-green-700",
     },
     {
-      label: "Open Jobs",
-      value: unassignedJobs.length,
-      icon: PlusCircle,
+      label: "My Draft Estimates",
+      value: myDraftEstimates.length,
+      icon: FileText,
       className: "bg-blue-50 text-blue-700",
     },
     {
@@ -146,7 +151,7 @@ export default function Dashboard() {
   ];
 
   const stats = isEmployee ? employeeStats : managerStats;
-  const recentProjects = [...(isEmployee ? activeJobs : projects)]
+  const recentProjects = [...(isEmployee ? [...myDraftEstimates, ...assignedJobs] : projects)]
     .sort(
       (a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -212,7 +217,7 @@ export default function Dashboard() {
             <FileText className="text-green-700 mb-3" size={21} />
             <p className="font-bold text-gray-900">Estimate pipeline</p>
             <p className="text-sm text-gray-500 mt-1">
-              {money(estimateValue)} across {projects.length} estimates
+              {money(estimateValue)} across {activeEstimates.length} active estimates
             </p>
           </Link>
           <Link
@@ -242,7 +247,7 @@ export default function Dashboard() {
         <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
             <h2 className="font-bold text-gray-900">
-              {isEmployee ? "Available and Assigned Jobs" : "Recent Estimates & Jobs"}
+              {isEmployee ? "My Estimates & Assigned Jobs" : "Recent Estimates & Jobs"}
             </h2>
             <Link
               to="/app/projects/current"
