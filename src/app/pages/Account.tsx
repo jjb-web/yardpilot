@@ -863,7 +863,7 @@ export default function Account() {
           <div>
             <h2 className="font-bold text-red-800">Delete account</h2>
             <p className="mt-1 text-sm text-red-700">
-              Permanently removes your login and personal workspace. Shared business records may be reassigned or retained, and deletion is blocked when an owned company/workgroup still has other members.
+              Permanently deletes your login, client data, personal workspace, sole-owned workspaces, uploaded personal files, and other account-scoped Supabase records. Shared company records are transferred to the workspace owner or anonymized, and deletion is blocked when an owned company/workgroup still has other members.
             </p>
           </div>
           <button

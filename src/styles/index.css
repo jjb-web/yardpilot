@@ -169,3 +169,104 @@ body.yardpilot-app-open #root {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
+
+/* YardPilot full application dark mode v1
+   Most legacy pages use fixed Tailwind white/gray/slate utilities. These rules
+   scope the dark conversion to signed-in shells while keeping printable client
+   documents white. */
+.dark body.yardpilot-app-open {
+  background: #020807;
+  color: #e5e7eb;
+  color-scheme: dark;
+}
+
+.dark .app-shell,
+.dark .client-shell {
+  background-color: #07100a !important;
+  color: #e5e7eb;
+}
+
+.dark .app-shell .app-page-scroll,
+.dark .client-shell .app-page-scroll {
+  background-color: #07100a !important;
+  color: #e5e7eb;
+}
+
+.dark :is(.app-shell, .client-shell) .bg-white {
+  background-color: #111827 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.bg-gray-50, .bg-slate-50) {
+  background-color: #0b1410 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.bg-gray-100, .bg-slate-100) {
+  background-color: #1b2520 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.bg-gray-200, .bg-slate-200) {
+  background-color: #27332d !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.bg-blue-50, .bg-emerald-50, .bg-green-50, .bg-violet-50) {
+  background-color: #14201a !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.bg-red-50, .bg-rose-50, .bg-amber-50, .bg-yellow-50) {
+  background-color: #251716 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.text-gray-950, .text-gray-900, .text-gray-800, .text-gray-700, .text-slate-950, .text-slate-900, .text-slate-800, .text-slate-700) {
+  color: #f1f5f9 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.text-gray-600, .text-gray-500, .text-slate-600, .text-slate-500) {
+  color: #b4c0b9 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.text-gray-400, .text-slate-400) {
+  color: #87958d !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.border-gray-50, .border-gray-100, .border-gray-200, .border-gray-300, .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-400) {
+  border-color: #33423a !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(input, textarea, select) {
+  background-color: #0f172a !important;
+  border-color: #3b4a43 !important;
+  color: #f8fafc !important;
+  color-scheme: dark;
+}
+
+.dark :is(.app-shell, .client-shell) :is(input, textarea)::placeholder {
+  color: #718078 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover) {
+  background-color: #223029 !important;
+}
+
+.dark :is(.app-shell, .client-shell) :is(.divide-gray-50, .divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not(:last-child) {
+  border-color: #33423a !important;
+}
+
+/* Client-facing documents remain white in every application theme. */
+.dark :is(.estimate-print-root, .invoice-print-root),
+.dark :is(.estimate-print-root, .invoice-print-root) .bg-white {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  color-scheme: light;
+}
+
+.dark :is(.estimate-print-root, .invoice-print-root) :is(.text-gray-950, .text-gray-900, .text-gray-800, .text-gray-700, .text-slate-950, .text-slate-900, .text-slate-800, .text-slate-700) {
+  color: #111827 !important;
+}
+
+.dark :is(.estimate-print-root, .invoice-print-root) :is(.text-gray-600, .text-gray-500, .text-slate-600, .text-slate-500) {
+  color: #4b5563 !important;
+}
+
+.dark :is(.estimate-print-root, .invoice-print-root) :is(.bg-gray-50, .bg-slate-50) {
+  background-color: #f8fafc !important;
+}
