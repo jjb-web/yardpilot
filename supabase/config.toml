@@ -24,7 +24,7 @@ verify_jwt = false
 # Authenticated account-deletion action.
 [functions.delete-account]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 # YardPilot subscription checkout and customer portal require a signed-in owner/co-owner.
 [functions.create-subscription-checkout]
 enabled = true

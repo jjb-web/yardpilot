@@ -1933,28 +1933,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.functions.invoke("delete-account", {
       body: { confirmation: "DELETE" },
     });
-    const response = (data ?? {}) as Record<string, unknown>;
+
+    let response = (data ?? {}) as Record<string, unknown>;
+
+    if (error instanceof FunctionsHttpError) {
+      try {
+        response = (await error.context.clone().json()) as Record<string, unknown>;
+      } catch {
+        response = {
+          error: await edgeFunctionErrorMessage(error),
+        };
+      }
+    } else if (error) {
+      response = {
+        error: await edgeFunctionErrorMessage(error),
+      };
+    }
+
     if (error || response.error || response.deleted !== true) {
       const workspaces = Array.isArray(response.workspaces)
         ? response.workspaces
-            .map((item) => item && typeof item === "object" && "name" in item ? String(item.name) : "")
+            .map((item) =>
+              item && typeof item === "object" && "name" in item
+                ? String(item.name)
+                : ""
+            )
             .filter(Boolean)
         : [];
-      const suffix = workspaces.length ? ` Affected workspaces: ${workspaces.join(", ")}.` : "";
-      throw new Error(`${String(response.error ?? error?.message ?? "The account could not be deleted.")}${suffix}`);
+
+      const stage =
+        typeof response.stage === "string" && response.stage.trim()
+          ? ` Failed while ${response.stage}.`
+          : "";
+
+      const code =
+        typeof response.code === "string" && response.code.trim()
+          ? ` [${response.code}]`
+          : "";
+
+      const suffix = workspaces.length
+        ? ` Affected workspaces: ${workspaces.join(", ")}.`
+        : "";
+
+      throw new Error(
+        `${String(
+          response.error ??
+            error?.message ??
+            "The account could not be deleted."
+        )}${stage}${code}${suffix}`
+      );
     }
 
-    // The Auth user is already gone remotely. Remove the browser session and all
-    // account-specific local state before routing back to the public site.
     try {
       await supabase.auth.signOut({ scope: "local" });
     } catch {
-      // A deleted Auth user can make signOut return an expired-session error.
-      // Local cleanup below is still required and sufficient.
+      // The remote Auth user is already gone. Local cleanup must still finish.
     }
+
     for (const key of Object.keys(localStorage)) {
-      if (key.startsWith("yardpilot-")) localStorage.removeItem(key);
+      if (key.startsWith("yardpilot-") || key.startsWith("sb-")) {
+        localStorage.removeItem(key);
+      }
     }
+
     clearAccount();
   }
 

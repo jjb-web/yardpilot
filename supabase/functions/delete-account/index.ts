@@ -2,7 +2,9 @@ import { createClient, type PostgrestError } from "@supabase/supabase-js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 const json = (body: unknown, status = 200) =>
@@ -13,6 +15,7 @@ type WorkspaceRow = {
   name: string;
   created_by: string;
   is_personal?: boolean | null;
+  kind?: string | null;
 };
 
 type PropertyPhotoRow = {
@@ -21,16 +24,21 @@ type PropertyPhotoRow = {
   storage_path: string;
 };
 
-type StorageEntry = {
-  id?: string | null;
-  name: string;
-  metadata?: unknown;
+type OwnedStorageObject = {
+  bucket_id: string;
+  object_name: string;
 };
 
 function isMissingObject(error: PostgrestError | null) {
   if (!error) return false;
-  return ["42P01", "42703", "PGRST204", "PGRST205"].includes(error.code) ||
-    /relation .* does not exist|column .* does not exist|could not find the table|could not find.*column/i.test(error.message);
+  return (
+    ["42P01", "42703", "PGRST202", "PGRST204", "PGRST205"].includes(
+      error.code,
+    ) ||
+    /relation .* does not exist|column .* does not exist|could not find the table|could not find.*column|function .* does not exist/i.test(
+      error.message,
+    )
+  );
 }
 
 async function requireQuery(
@@ -45,76 +53,136 @@ async function requireQuery(
 }
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  if (request.method === "OPTIONS") {
+    return new Response("ok", { headers: cors });
+  }
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed." }, 405);
+  }
+
+  let stage = "starting";
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const anonKey =
+      Deno.env.get("SUPABASE_ANON_KEY") ??
+      Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-      throw new Error("Account deletion is not configured in Supabase.");
+      throw new Error(
+        "Account deletion is not configured. A required Supabase function environment variable is missing.",
+      );
     }
 
     const authorization = request.headers.get("authorization") ?? "";
-    if (!authorization) return json({ error: "Sign in before deleting your account." }, 401);
+    if (!authorization) {
+      return json({ error: "Sign in before deleting your account." }, 401);
+    }
 
     const body = await request.json().catch(() => ({}));
     if (body.confirmation !== "DELETE") {
       return json({ error: "Account deletion was not confirmed." }, 400);
     }
 
+    stage = "validating session";
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: userData, error: userError } = await userClient.auth.getUser();
+
+    const { data: userData, error: userError } =
+      await userClient.auth.getUser();
     const user = userData.user;
-    if (userError || !user) return json({ error: "Your session is invalid or expired." }, 401);
+
+    if (userError || !user) {
+      return json(
+        {
+          error: "Your session is invalid or expired. Sign in again and retry.",
+          code: "INVALID_SESSION",
+        },
+        401,
+      );
+    }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    stage = "checking owned workspaces";
     const { data: ownedData, error: ownedError } = await admin
       .from("workspaces")
-      .select("id,name,created_by,is_personal")
+      .select("id,name,created_by,is_personal,kind")
       .eq("created_by", user.id);
-    if (ownedError) throw new Error(`Could not inspect owned workspaces: ${ownedError.message}`);
-    const ownedWorkspaces = (ownedData ?? []) as WorkspaceRow[];
 
+    if (ownedError) {
+      throw new Error(
+        `Could not inspect owned workspaces: ${ownedError.message}`,
+      );
+    }
+
+    const ownedWorkspaces = (ownedData ?? []) as WorkspaceRow[];
     const blocked: Array<{ id: string; name: string; members: number }> = [];
+
     for (const workspace of ownedWorkspaces) {
-      if (workspace.is_personal) continue;
+      const personal =
+        workspace.is_personal === true || workspace.kind === "personal";
+      if (personal) continue;
+
       const { count, error } = await admin
         .from("workspace_memberships")
         .select("id", { count: "exact", head: true })
         .eq("workspace_id", workspace.id)
         .neq("user_id", user.id);
-      if (error) throw new Error(`Could not inspect ${workspace.name}: ${error.message}`);
+
+      if (error) {
+        throw new Error(
+          `Could not inspect ${workspace.name}: ${error.message}`,
+        );
+      }
+
       if ((count ?? 0) > 0) {
-        blocked.push({ id: workspace.id, name: workspace.name, members: count ?? 0 });
+        blocked.push({
+          id: workspace.id,
+          name: workspace.name,
+          members: count ?? 0,
+        });
       }
     }
 
     if (blocked.length > 0) {
-      return json({
-        error: "Transfer ownership or remove the other members from each owned company/workgroup before deleting your account.",
-        code: "OWNERSHIP_TRANSFER_REQUIRED",
-        workspaces: blocked,
-      }, 409);
+      return json(
+        {
+          error:
+            "This account still owns a company or workgroup with other members. Transfer ownership or remove those members before deleting the account.",
+          code: "OWNERSHIP_TRANSFER_REQUIRED",
+          workspaces: blocked,
+        },
+        409,
+      );
     }
 
     const ownerCache = new Map<string, string | null>();
+
     const getWorkspaceOwner = async (workspaceId: string) => {
-      if (ownerCache.has(workspaceId)) return ownerCache.get(workspaceId) ?? null;
+      if (ownerCache.has(workspaceId)) {
+        return ownerCache.get(workspaceId) ?? null;
+      }
+
       const { data, error } = await admin
         .from("workspaces")
         .select("created_by")
         .eq("id", workspaceId)
         .maybeSingle();
-      if (error) throw new Error(`Could not resolve workspace ownership: ${error.message}`);
-      const ownerId = typeof data?.created_by === "string" ? data.created_by : null;
+
+      if (error) {
+        throw new Error(
+          `Could not resolve workspace ownership: ${error.message}`,
+        );
+      }
+
+      const ownerId =
+        typeof data?.created_by === "string" ? data.created_by : null;
       ownerCache.set(workspaceId, ownerId);
       return ownerId;
     };
@@ -124,63 +192,41 @@ Deno.serve(async (request) => {
         .from(table)
         .select("workspace_id")
         .eq(column, user.id);
+
       if (error) {
         if (isMissingObject(error)) return;
-        throw new Error(`Could not inspect ${table}.${column}: ${error.message}`);
+        throw new Error(
+          `Could not inspect ${table}.${column}: ${error.message}`,
+        );
       }
 
-      const workspaceIds = [...new Set(
-        (data ?? [])
-          .map((row) => typeof row.workspace_id === "string" ? row.workspace_id : "")
-          .filter(Boolean),
-      )];
+      const workspaceIds = [
+        ...new Set(
+          (data ?? [])
+            .map((row) =>
+              typeof row.workspace_id === "string" ? row.workspace_id : ""
+            )
+            .filter(Boolean),
+        ),
+      ];
 
       for (const workspaceId of workspaceIds) {
         const ownerId = await getWorkspaceOwner(workspaceId);
         if (!ownerId || ownerId === user.id) continue;
+
         await requireQuery(
           `Could not transfer ${table}.${column}`,
-          admin.from(table).update({ [column]: ownerId }).eq("workspace_id", workspaceId).eq(column, user.id),
+          admin
+            .from(table)
+            .update({ [column]: ownerId })
+            .eq("workspace_id", workspaceId)
+            .eq(column, user.id),
           { ignoreMissing: true },
         );
       }
     }
 
-    // Property photos uploaded by this user for a shared company are company
-    // records. Move the object path to the workspace owner's folder before the
-    // user's remaining storage folder is erased.
-    const { data: photoData, error: photoError } = await admin
-      .from("property_photos")
-      .select("id,workspace_id,storage_path")
-      .eq("user_id", user.id);
-    if (photoError && !isMissingObject(photoError)) {
-      throw new Error(`Could not inspect property photos: ${photoError.message}`);
-    }
-
-    for (const photo of (photoData ?? []) as PropertyPhotoRow[]) {
-      const ownerId = await getWorkspaceOwner(photo.workspace_id);
-      if (!ownerId || ownerId === user.id) continue;
-      const suffix = photo.storage_path.includes("/")
-        ? photo.storage_path.slice(photo.storage_path.indexOf("/") + 1)
-        : photo.storage_path;
-      const targetPath = `${ownerId}/${suffix}`;
-      if (targetPath !== photo.storage_path) {
-        const { error: moveError } = await admin.storage
-          .from("property-photos")
-          .move(photo.storage_path, targetPath);
-        if (moveError) {
-          throw new Error(`Could not preserve a shared property photo before deletion: ${moveError.message}`);
-        }
-      }
-      await requireQuery(
-        "Could not transfer shared property photo metadata",
-        admin.from("property_photos").update({ user_id: ownerId, storage_path: targetPath }).eq("id", photo.id),
-      );
-    }
-
-    // Preserve shared company records by moving creator/owner attribution to the
-    // workspace owner. Sole-owned workspaces are removed by the auth-user
-    // cascade later.
+    stage = "transferring shared records";
     const transferColumns: Array<[string, string]> = [
       ["projects", "created_by"],
       ["projects", "user_id"],
@@ -199,13 +245,88 @@ Deno.serve(async (request) => {
       ["employee_payment_records", "paid_by"],
       ["access_code_redemptions", "redeemed_by"],
     ];
+
     for (const [table, column] of transferColumns) {
       await transferWorkspaceColumn(table, column);
     }
 
-    // Remove or anonymize account-scoped records that intentionally use SET NULL
-    // rather than CASCADE. This prevents support/error text from remaining tied
-    // to the deleted account while preserving shared audit history.
+    stage = "preserving shared property photos";
+    const { data: photoData, error: photoError } = await admin
+      .from("property_photos")
+      .select("id,workspace_id,storage_path")
+      .eq("user_id", user.id);
+
+    if (photoError && !isMissingObject(photoError)) {
+      throw new Error(
+        `Could not inspect property photos: ${photoError.message}`,
+      );
+    }
+
+    for (const photo of (photoData ?? []) as PropertyPhotoRow[]) {
+      const ownerId = await getWorkspaceOwner(photo.workspace_id);
+      if (!ownerId || ownerId === user.id) continue;
+
+      const fileName =
+        photo.storage_path.split("/").filter(Boolean).pop() ??
+        `${photo.id}.bin`;
+      const targetPath =
+        `${ownerId}/transferred-${photo.id}-${fileName}`;
+
+      const { data: downloaded, error: downloadError } =
+        await admin.storage
+          .from("property-photos")
+          .download(photo.storage_path);
+
+      if (downloadError || !downloaded) {
+        throw new Error(
+          `Could not download a shared property photo before account deletion: ${
+            downloadError?.message ?? "Unknown download error"
+          }`,
+        );
+      }
+
+      const uploadOptions: {
+        upsert: boolean;
+        contentType?: string;
+      } = { upsert: true };
+
+      if (downloaded.type) {
+        uploadOptions.contentType = downloaded.type;
+      }
+
+      const { error: uploadError } = await admin.storage
+        .from("property-photos")
+        .upload(targetPath, downloaded, uploadOptions);
+
+      if (uploadError) {
+        throw new Error(
+          `Could not preserve a shared property photo before account deletion: ${uploadError.message}`,
+        );
+      }
+
+      await requireQuery(
+        "Could not transfer shared property photo metadata",
+        admin
+          .from("property_photos")
+          .update({
+            user_id: ownerId,
+            storage_path: targetPath,
+          })
+          .eq("id", photo.id),
+      );
+
+      const { error: removeOriginalError } = await admin.storage
+        .from("property-photos")
+        .remove([photo.storage_path]);
+
+      if (removeOriginalError) {
+        throw new Error(
+          `Could not remove the original shared property photo: ${removeOriginalError.message}`,
+        );
+      }
+    }
+
+    stage = "removing account-scoped records";
     await requireQuery(
       "Could not remove support messages",
       admin.from("support_messages").delete().eq("user_id", user.id),
@@ -218,95 +339,165 @@ Deno.serve(async (request) => {
     );
     await requireQuery(
       "Could not anonymize audit records",
-      admin.from("audit_log").update({ actor_user_id: null }).eq("actor_user_id", user.id),
+      admin
+        .from("audit_log")
+        .update({ actor_user_id: null })
+        .eq("actor_user_id", user.id),
       { ignoreMissing: true },
     );
     await requireQuery(
       "Could not anonymize access-code creator records",
-      admin.from("access_codes").update({ created_by: null }).eq("created_by", user.id),
+      admin
+        .from("access_codes")
+        .update({ created_by: null })
+        .eq("created_by", user.id),
+      { ignoreMissing: true },
+    );
+    await requireQuery(
+      "Could not clear project submission attribution",
+      admin
+        .from("projects")
+        .update({ submitted_for_approval_by: null })
+        .eq("submitted_for_approval_by", user.id),
       { ignoreMissing: true },
     );
     await requireQuery(
       "Could not clear project approval attribution",
-      admin.from("projects").update({ submitted_for_approval_by: null }).eq("submitted_for_approval_by", user.id),
-      { ignoreMissing: true },
-    );
-    await requireQuery(
-      "Could not clear project approval attribution",
-      admin.from("projects").update({ approved_by: null }).eq("approved_by", user.id),
-      { ignoreMissing: true },
-    );
-    await requireQuery(
-      "Could not clear cancellation attribution",
-      admin.from("marketplace_work_orders").update({ cancellation_requested_by: null }).eq("cancellation_requested_by", user.id),
+      admin
+        .from("projects")
+        .update({ approved_by: null })
+        .eq("approved_by", user.id),
       { ignoreMissing: true },
     );
     await requireQuery(
       "Could not clear cancellation attribution",
-      admin.from("marketplace_work_orders").update({ cancellation_responded_by: null }).eq("cancellation_responded_by", user.id),
+      admin
+        .from("marketplace_work_orders")
+        .update({ cancellation_requested_by: null })
+        .eq("cancellation_requested_by", user.id),
+      { ignoreMissing: true },
+    );
+    await requireQuery(
+      "Could not clear cancellation attribution",
+      admin
+        .from("marketplace_work_orders")
+        .update({ cancellation_responded_by: null })
+        .eq("cancellation_responded_by", user.id),
       { ignoreMissing: true },
     );
     await requireQuery(
       "Could not clear review moderation attribution",
-      admin.from("marketplace_reviews").update({ moderated_by: null }).eq("moderated_by", user.id),
+      admin
+        .from("marketplace_reviews")
+        .update({ moderated_by: null })
+        .eq("moderated_by", user.id),
       { ignoreMissing: true },
     );
 
-    async function collectStorageFiles(bucket: string, folder: string): Promise<string[]> {
-      const files: string[] = [];
-      let offset = 0;
-      while (true) {
-        const { data, error } = await admin.storage.from(bucket).list(folder, { limit: 1000, offset });
+    stage = "listing owned Storage objects";
+    const { data: storageData, error: storageListError } = await admin.rpc(
+      "yardpilot_list_owned_storage_objects",
+      { requested_user_id: user.id },
+    );
+
+    if (storageListError) {
+      if (isMissingObject(storageListError)) {
+        return json(
+          {
+            error:
+              "The account-deletion Storage helper is not installed. Run yardpilot-account-deletion-storage-helper-v1.sql, then retry.",
+            code: "STORAGE_HELPER_MISSING",
+          },
+          409,
+        );
+      }
+      throw new Error(
+        `Could not inspect Storage ownership: ${storageListError.message}`,
+      );
+    }
+
+    const ownedObjects = (storageData ?? []) as OwnedStorageObject[];
+    const byBucket = new Map<string, string[]>();
+
+    for (const object of ownedObjects) {
+      const paths = byBucket.get(object.bucket_id) ?? [];
+      paths.push(object.object_name);
+      byBucket.set(object.bucket_id, paths);
+    }
+
+    stage = "deleting owned Storage objects";
+    for (const [bucket, paths] of byBucket.entries()) {
+      for (let index = 0; index < paths.length; index += 1000) {
+        const { error } = await admin.storage
+          .from(bucket)
+          .remove(paths.slice(index, index + 1000));
+
         if (error) {
-          if (/bucket not found|not found/i.test(error.message)) return [];
-          throw new Error(`Could not list ${bucket} files: ${error.message}`);
+          throw new Error(
+            `Could not delete files from ${bucket}: ${error.message}`,
+          );
         }
-        const entries = (data ?? []) as StorageEntry[];
-        for (const entry of entries) {
-          const path = folder ? `${folder}/${entry.name}` : entry.name;
-          if (entry.id || entry.metadata) {
-            files.push(path);
-          } else {
-            files.push(...await collectStorageFiles(bucket, path));
-          }
-        }
-        if (entries.length < 1000) break;
-        offset += entries.length;
-      }
-      return files;
-    }
-
-    async function deleteStorageFolder(bucket: string, folder: string) {
-      const files = await collectStorageFiles(bucket, folder);
-      for (let index = 0; index < files.length; index += 100) {
-        const { error } = await admin.storage.from(bucket).remove(files.slice(index, index + 100));
-        if (error) throw new Error(`Could not delete ${bucket} files: ${error.message}`);
       }
     }
 
-    await deleteStorageFolder("marketplace-resumes", user.id);
-    await deleteStorageFolder("property-photos", user.id);
+    const { data: remainingStorage, error: remainingStorageError } =
+      await admin.rpc("yardpilot_list_owned_storage_objects", {
+        requested_user_id: user.id,
+      });
 
-    // Hard-delete the auth user last. PostgreSQL performs the remaining CASCADE
-    // and SET NULL actions atomically, including the profile, memberships,
-    // notifications, feedback, client requests, personal/sole-owned workspaces,
-    // and their workspace-owned records.
-    const { error: deleteError } = await admin.auth.admin.deleteUser(user.id, false);
+    if (remainingStorageError) {
+      throw new Error(
+        `Could not verify Storage cleanup: ${remainingStorageError.message}`,
+      );
+    }
+
+    const remaining = (remainingStorage ?? []) as OwnedStorageObject[];
+    if (remaining.length > 0) {
+      return json(
+        {
+          error:
+            "Supabase Storage still reports files owned by this account. The Auth user was not deleted.",
+          code: "STORAGE_CLEANUP_INCOMPLETE",
+          remainingStorageObjects: remaining.slice(0, 20),
+        },
+        409,
+      );
+    }
+
+    stage = "deleting Supabase Auth user";
+    const { error: deleteError } =
+      await admin.auth.admin.deleteUser(user.id, false);
+
     if (deleteError) {
-      return json({
-        error: `Supabase could not finish account deletion: ${deleteError.message}`,
-        code: "AUTH_DELETE_FAILED",
-      }, 409);
+      return json(
+        {
+          error:
+            `Supabase could not finish account deletion: ${deleteError.message}`,
+          code: "AUTH_DELETE_FAILED",
+          stage,
+        },
+        409,
+      );
     }
 
     return json({
       deleted: true,
-      message: "The Supabase Auth user and account-scoped YardPilot data were permanently deleted.",
+      message:
+        "The Supabase Auth user, owned Storage objects, and account-scoped YardPilot data were permanently deleted.",
     });
   } catch (error) {
-    console.error("delete-account failed", error);
-    return json({
-      error: error instanceof Error ? error.message : "The account could not be deleted.",
-    }, 400);
+    console.error("delete-account failed", { stage, error });
+
+    return json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "The account could not be deleted.",
+        code: "ACCOUNT_DELETE_FAILED",
+        stage,
+      },
+      400,
+    );
   }
 });
