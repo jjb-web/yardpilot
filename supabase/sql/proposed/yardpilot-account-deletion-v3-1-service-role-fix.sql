@@ -1,4 +1,5 @@
--- YardPilot account deletion v3 (corrected)
+-- YardPilot account deletion v3.1
+-- Fixes false "service_role is required" failures with current Supabase API keys.
 -- Authorization is enforced through EXECUTE privileges: only service_role may call these RPCs.
 -- Run once in the Supabase SQL Editor before deploying delete-account v3.
 -- Idempotent: safe to run again.

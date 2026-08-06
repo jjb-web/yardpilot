@@ -1,5 +1,4 @@
--- YardPilot account deletion v3 (corrected)
--- Authorization is enforced through EXECUTE privileges: only service_role may call these RPCs.
+-- YardPilot account deletion v3
 -- Run once in the Supabase SQL Editor before deploying delete-account v3.
 -- Idempotent: safe to run again.
 
@@ -19,6 +18,10 @@ declare
   item record;
   nullable_column boolean;
 begin
+  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+    raise exception 'service_role is required';
+  end if;
+
   if not exists (
     select 1
     from auth.users
@@ -300,29 +303,3 @@ select
   to_regprocedure(
     'public.yardpilot_list_account_storage_objects(uuid)'
   ) as storage_function;
-
--- Verification: both RPCs must exist, and only service_role should have EXECUTE.
-select
-  routine.routine_name,
-  has_function_privilege(
-    'anon',
-    format('public.%I(uuid)', routine.routine_name),
-    'EXECUTE'
-  ) as anon_can_execute,
-  has_function_privilege(
-    'authenticated',
-    format('public.%I(uuid)', routine.routine_name),
-    'EXECUTE'
-  ) as authenticated_can_execute,
-  has_function_privilege(
-    'service_role',
-    format('public.%I(uuid)', routine.routine_name),
-    'EXECUTE'
-  ) as service_role_can_execute
-from information_schema.routines as routine
-where routine.routine_schema = 'public'
-  and routine.routine_name in (
-    'yardpilot_prepare_account_deletion',
-    'yardpilot_list_account_storage_objects'
-  )
-order by routine.routine_name;
