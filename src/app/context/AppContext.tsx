@@ -1930,29 +1930,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function deleteAccount() {
-    const { data, error } = await supabase.functions.invoke("delete-account", {
-      body: { confirmation: "DELETE" },
-    });
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-    let response = (data ?? {}) as Record<string, unknown>;
-
-    if (error instanceof FunctionsHttpError) {
-      try {
-        response = (await error.context.clone().json()) as Record<string, unknown>;
-      } catch {
-        response = {
-          error: await edgeFunctionErrorMessage(error),
-        };
-      }
-    } else if (error) {
-      response = {
-        error: await edgeFunctionErrorMessage(error),
-      };
+    if (sessionError || !session?.access_token) {
+      throw new Error("Your session expired. Sign in again before deleting your account.");
     }
 
-    if (error || response.error || response.deleted !== true) {
-      const workspaces = Array.isArray(response.workspaces)
-        ? response.workspaces
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+    const publishableKey = import.meta.env
+      .VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+
+    if (!supabaseUrl || !publishableKey) {
+      throw new Error("The account-deletion service is not configured.");
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 90000);
+
+    let response: Response;
+
+    try {
+      response = await fetch(`${supabaseUrl}/functions/v1/delete-account`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: publishableKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+        signal: controller.signal,
+      });
+    } catch (requestError) {
+      if (requestError instanceof DOMException && requestError.name === "AbortError") {
+        throw new Error(
+          "Account deletion took too long and was stopped. No success response was received."
+        );
+      }
+      throw new Error(
+        requestError instanceof Error
+          ? `Could not reach account deletion: ${requestError.message}`
+          : "Could not reach account deletion."
+      );
+    } finally {
+      window.clearTimeout(timeout);
+    }
+
+    const rawBody = await response.text();
+    let result: Record<string, unknown> = {};
+
+    if (rawBody.trim()) {
+      try {
+        result = JSON.parse(rawBody) as Record<string, unknown>;
+      } catch {
+        result = { error: rawBody };
+      }
+    }
+
+    if (!response.ok || result.deleted !== true) {
+      const workspaces = Array.isArray(result.workspaces)
+        ? result.workspaces
             .map((item) =>
               item && typeof item === "object" && "name" in item
                 ? String(item.name)
@@ -1962,32 +2001,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : [];
 
       const stage =
-        typeof response.stage === "string" && response.stage.trim()
-          ? ` Failed while ${response.stage}.`
+        typeof result.stage === "string" && result.stage.trim()
+          ? ` Failed while ${result.stage}.`
           : "";
-
       const code =
-        typeof response.code === "string" && response.code.trim()
-          ? ` [${response.code}]`
+        typeof result.code === "string" && result.code.trim()
+          ? ` [${result.code}]`
           : "";
-
-      const suffix = workspaces.length
+      const workspaceText = workspaces.length
         ? ` Affected workspaces: ${workspaces.join(", ")}.`
         : "";
 
       throw new Error(
         `${String(
-          response.error ??
-            error?.message ??
-            "The account could not be deleted."
-        )}${stage}${code}${suffix}`
+          result.error ??
+            `Account deletion returned HTTP ${response.status}.`
+        )}${stage}${code}${workspaceText}`
       );
     }
 
     try {
       await supabase.auth.signOut({ scope: "local" });
     } catch {
-      // The remote Auth user is already gone. Local cleanup must still finish.
+      // The Auth user no longer exists, so local cleanup continues regardless.
     }
 
     for (const key of Object.keys(localStorage)) {
@@ -1996,6 +2032,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    sessionStorage.clear();
     clearAccount();
   }
 

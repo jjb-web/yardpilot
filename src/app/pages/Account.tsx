@@ -16,6 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
 import type { StripeConnectionStatus, Workspace } from "../data/types";
 
 
@@ -167,16 +168,34 @@ export default function Account() {
   const [liveStripeStatus, setLiveStripeStatus] =
     useState<StripeConnectionStatus | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountDeleteError, setAccountDeleteError] = useState("");
   const [platformAdmin, setPlatformAdmin] = useState(false);
 
   useEffect(() => {
     let active = true;
+
     async function checkPlatformAdmin() {
-      const { data } = await import("../lib/supabase").then(({ supabase }) => supabase.rpc("is_platform_admin"));
-      if (active) setPlatformAdmin(Boolean(data));
+      try {
+        const { data, error: adminError } = await supabase.rpc(
+          "is_platform_admin"
+        );
+
+        if (adminError) {
+          console.error("Could not check platform admin status:", adminError);
+          return;
+        }
+
+        if (active) setPlatformAdmin(Boolean(data));
+      } catch (adminError) {
+        console.error("Platform admin check failed:", adminError);
+      }
     }
+
     void checkPlatformAdmin();
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, [authUserId]);
 
   useEffect(() => {
@@ -472,22 +491,30 @@ export default function Account() {
 
   async function removeAccount() {
     const first = window.confirm(
-      "Delete your YardPilot account? Shared workspace memberships will be removed. Company or workgroup ownership must be transferred first when other members exist. Some completed business, invoice, payment, or legal records may be retained or reassigned rather than erased."
+      "Delete your YardPilot account? Shared workspace memberships will be removed. Company or workgroup ownership must be transferred first when other members exist. This cannot be undone."
     );
     if (!first) return;
-    const typed = window.prompt('Type DELETE to permanently delete your account.');
+
+    const typed = window.prompt(
+      'Type DELETE to permanently delete your account.'
+    );
     if (typed !== "DELETE") return;
+
     setDeletingAccount(true);
+    setAccountDeleteError("");
     setError("");
+
     try {
       await deleteAccount();
-      window.location.assign("/");
-    } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "The account could not be deleted."
-      );
+      window.location.replace("/");
+    } catch (deleteFailure) {
+      const message =
+        deleteFailure instanceof Error
+          ? deleteFailure.message
+          : "The account could not be deleted.";
+      setAccountDeleteError(message);
+      setError(message);
+    } finally {
       setDeletingAccount(false);
     }
   }
@@ -865,6 +892,11 @@ export default function Account() {
             <p className="mt-1 text-sm text-red-700">
               Permanently deletes your login, client data, personal workspace, sole-owned workspaces, uploaded personal files, and other account-scoped Supabase records. Shared company records are transferred to the workspace owner or anonymized, and deletion is blocked when an owned company/workgroup still has other members.
             </p>
+            {accountDeleteError && (
+              <p className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200">
+                {accountDeleteError}
+              </p>
+            )}
           </div>
           <button
             type="button"

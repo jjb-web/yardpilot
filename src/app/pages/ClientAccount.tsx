@@ -9,6 +9,7 @@ export default function ClientAccount() {
   const [form, setForm] = useState({ name: "", company: "", phone: "", city: "", state: "" });
   const [saving, setSaving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountDeleteError, setAccountDeleteError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -46,21 +47,31 @@ export default function ClientAccount() {
 
   async function removeAccount() {
     const confirmed = window.confirm(
-      "Permanently delete your YardPilot account? Your personal and sole-owned workspace data will be deleted from Supabase. Shared company records are transferred to the workspace owner or anonymized. Deletion is blocked if an owned company still has other members."
+      "Permanently delete your YardPilot account? Your personal and sole-owned workspace data will be deleted from Supabase. Shared company records are preserved. This cannot be undone."
     );
     if (!confirmed) return;
 
-    const typed = window.prompt('Type DELETE to permanently delete your account.');
+    const typed = window.prompt(
+      'Type DELETE to permanently delete your account.'
+    );
     if (typed !== "DELETE") return;
 
     setDeletingAccount(true);
+    setAccountDeleteError("");
     setError("");
     setMessage("");
+
     try {
       await deleteAccount();
-      window.location.assign("/");
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "The account could not be deleted.");
+      window.location.replace("/");
+    } catch (deleteFailure) {
+      const message =
+        deleteFailure instanceof Error
+          ? deleteFailure.message
+          : "The account could not be deleted.";
+      setAccountDeleteError(message);
+      setError(message);
+    } finally {
       setDeletingAccount(false);
     }
   }
@@ -113,6 +124,11 @@ export default function ClientAccount() {
             <p className="mt-2 text-sm leading-6 text-red-700 dark:text-red-300">
               Permanently deletes your login, client data, personal workspace, sole-owned workspaces, uploaded personal files, and other account-scoped Supabase records. Shared company records are transferred to the workspace owner or anonymized instead of being destroyed.
             </p>
+            {accountDeleteError && (
+              <p className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200">
+                {accountDeleteError}
+              </p>
+            )}
           </div>
           <button type="button" onClick={() => void removeAccount()} disabled={deletingAccount} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">
             {deletingAccount ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
