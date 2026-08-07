@@ -36,7 +36,7 @@ function DashboardMockup() {
         <div className="w-2.5 h-2.5 rounded-full bg-green-400/60" />
         <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/60" />
         <div className="w-2.5 h-2.5 rounded-full bg-red-400/60" />
-        <span className="ml-3 text-green-200 text-xs font-medium">YardPilot — Estimate Builder</span>
+        <span className="ml-3 text-green-200 text-xs font-medium">YardPilotUSA — Estimate Builder</span>
       </div>
       {/* Mockup body */}
       <div className="p-4 space-y-3 bg-gray-50">
@@ -97,11 +97,11 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg overflow-hidden">
               <img
                 src="/yardpilot-logo.png"
-                alt="YardPilot logo"
+                alt="YardPilotUSA logo"
                 className="w-full h-full object-contain"
               />
             </div>
-            <span className="font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilot</span>
+            <span className="font-bold text-gray-900" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>YardPilotUSA</span>
           </div>
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
@@ -185,7 +185,7 @@ export default function Landing() {
             className="text-3xl lg:text-4xl font-extrabold text-white mb-4"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            Meet YardPilot
+            Meet YardPilotUSA
           </h2>
           <p className="text-green-100 text-lg mb-10 max-w-xl mx-auto">
             A straightforward estimating and job-management platform designed specifically for landscaping businesses.
@@ -277,13 +277,13 @@ export default function Landing() {
               YP
             </div>
             <p className="text-gray-700 leading-relaxed text-lg mb-4">
-              YardPilot is being tested with real landscaping workflows so the launch version solves practical estimating, scheduling, marketplace, and payment problems.
+              YardPilotUSA is being tested with real landscaping workflows so the launch version solves practical estimating, scheduling, marketplace, and payment problems.
             </p>
             <p className="text-gray-700 leading-relaxed mb-6">
               Beta feedback is reviewed directly by the product team. Bug reports and feature requests help determine what is fixed or built next.
             </p>
             <div>
-              <p className="font-semibold text-gray-900">YardPilot product team</p>
+              <p className="font-semibold text-gray-900">YardPilotUSA product team</p>
               <p className="text-sm text-gray-500">Private beta</p>
             </div>
           </div>
@@ -389,7 +389,7 @@ export default function Landing() {
           <Link to="/refund-policy" className="hover:text-white">Refund Policy</Link>
           <Link to="/contact" className="hover:text-white">Contact</Link>
         </nav>
-        <p className="mt-4 text-gray-600 text-xs">© 2026 YardPilot · Built for landscaping businesses and clients · All rights reserved</p>
+        <p className="mt-4 text-gray-600 text-xs">© 2026 YardPilotUSA · Built for landscaping businesses and clients · All rights reserved</p>
       </footer>
     </div>
   );

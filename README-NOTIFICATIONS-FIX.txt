@@ -1,4 +1,4 @@
-YardPilot notifications Realtime fix
+YardPilotUSA notifications Realtime fix
 
 Root cause:
 - AppLayout or ClientLayout subscribed to notifications.

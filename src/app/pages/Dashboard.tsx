@@ -169,7 +169,7 @@ export default function Dashboard() {
             {isEmployee ? "My Work Dashboard" : "Dashboard"}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {activeWorkspace?.name || user?.company || "YardPilot workspace"}
+            {activeWorkspace?.name || user?.company || "YardPilotUSA workspace"}
             {role ? ` · ${role.charAt(0).toUpperCase()}${role.slice(1)}` : ""}
           </p>
         </div>

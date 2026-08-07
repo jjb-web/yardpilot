@@ -110,17 +110,17 @@ export default function MarketplaceBusinessDetail() {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3"><Star size={20} className="text-amber-500" /><h2 className="text-lg font-bold text-slate-900 dark:text-white">Verified YardPilot reviews</h2></div>
+              <div className="flex items-center gap-3"><Star size={20} className="text-amber-500" /><h2 className="text-lg font-bold text-slate-900 dark:text-white">Verified YardPilotUSA reviews</h2></div>
               {reviews.length > 0 && <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">{(reviews.reduce((sum, review) => sum + Number(review.rating), 0) / reviews.length).toFixed(1)} / 5 · {reviews.length}</p>}
             </div>
-            <p className="mt-2 text-xs text-slate-500">Only clients connected to a paid or completed YardPilot marketplace project can submit these reviews. Reviews are moderated for abuse, not for whether they are positive or negative.</p>
+            <p className="mt-2 text-xs text-slate-500">Only clients connected to a paid or completed YardPilotUSA marketplace project can submit these reviews. Reviews are moderated for abuse, not for whether they are positive or negative.</p>
             <div className="mt-4 space-y-3">
               {reviews.map((review) => (
                 <article key={review.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                   <div className="flex items-center gap-1 text-amber-500">{Array.from({ length: 5 }, (_, index) => <Star key={index} size={15} className={index < review.rating ? "fill-current" : "text-slate-300"} />)}</div>
                   {review.title && <h3 className="mt-2 font-bold text-slate-900 dark:text-white">{review.title}</h3>}
                   <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">{review.body}</p>
-                  <p className="mt-2 text-xs text-slate-400">Verified YardPilot project · {new Date(review.created_at).toLocaleDateString()}</p>
+                  <p className="mt-2 text-xs text-slate-400">Verified YardPilotUSA project · {new Date(review.created_at).toLocaleDateString()}</p>
                   {review.business_response && <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200"><strong>Business response:</strong> {review.business_response}</div>}
                 </article>
               ))}

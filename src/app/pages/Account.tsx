@@ -454,7 +454,7 @@ export default function Account() {
   async function disconnectStripeFromWorkspace() {
     if (!activeWorkspace?.stripeAccountId) return;
     const confirmed = window.confirm(
-      "Disconnect Stripe from this YardPilot workspace? Online invoice payment links will stop working. This does not close or delete the external Stripe account."
+      "Disconnect Stripe from this YardPilotUSA workspace? Online invoice payment links will stop working. This does not close or delete the external Stripe account."
     );
     if (!confirmed) return;
     setStripeError("");
@@ -491,7 +491,7 @@ export default function Account() {
 
   async function removeAccount() {
     const first = window.confirm(
-      "Delete your YardPilot account? Shared workspace memberships will be removed. Company or workgroup ownership must be transferred first when other members exist. This cannot be undone."
+      "Delete your YardPilotUSA account? Shared workspace memberships will be removed. Company or workgroup ownership must be transferred first when other members exist. This cannot be undone."
     );
     if (!first) return;
 

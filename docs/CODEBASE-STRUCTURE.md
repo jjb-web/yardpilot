@@ -1,4 +1,4 @@
-# YardPilot codebase structure
+# YardPilotUSA codebase structure
 
 - `src/app/components/`: shared active application components
 - `src/app/context/`: global application state (scheduled for later decomposition)

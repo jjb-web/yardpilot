@@ -392,7 +392,7 @@ export default function Login() {
           <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden">
             <img
               src="/yardpilot-logo.png"
-              alt="YardPilot"
+              alt="YardPilotUSA"
               className="w-full h-full object-contain"
             />
           </div>
@@ -400,7 +400,7 @@ export default function Login() {
             className="font-bold text-gray-900 text-lg"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            YardPilot
+            YardPilotUSA
           </span>
         </Link>
 
@@ -411,7 +411,7 @@ export default function Login() {
                 Team invitation detected
               </p>
               <p className="text-xs text-green-700 mt-1">
-                Sign in or create an account using the invited email. YardPilot
+                Sign in or create an account using the invited email. YardPilotUSA
                 will join the workspace automatically.
               </p>
             </div>
@@ -452,7 +452,7 @@ export default function Login() {
 
           {!publicRegistrationEnabled && !form.inviteCode.trim() && (
             <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
-              Public registration is temporarily closed while YardPilot is in controlled beta. Existing users can sign in, and valid team invitations still work.
+              Public registration is temporarily closed while YardPilotUSA is in controlled beta. Existing users can sign in, and valid team invitations still work.
             </div>
           )}
 
@@ -464,7 +464,7 @@ export default function Login() {
               <>
                 {!form.inviteCode.trim() && (
                   <div>
-                    <label className={labelClass}>What are you using YardPilot for?</label>
+                    <label className={labelClass}>What are you using YardPilotUSA for?</label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"

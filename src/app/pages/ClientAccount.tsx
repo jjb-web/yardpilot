@@ -47,7 +47,7 @@ export default function ClientAccount() {
 
   async function removeAccount() {
     const confirmed = window.confirm(
-      "Permanently delete your YardPilot account? Your personal and sole-owned workspace data will be deleted from Supabase. Shared company records are preserved. This cannot be undone."
+      "Permanently delete your YardPilotUSA account? Your personal and sole-owned workspace data will be deleted from Supabase. Shared company records are preserved. This cannot be undone."
     );
     if (!confirmed) return;
 

@@ -185,7 +185,7 @@ Deno.serve(async (request) => {
     if (insertError) throw new Error(insertError.message);
 
     const supportEmail = Deno.env.get("YARDPILOT_SUPPORT_EMAIL") ?? "support@yardpilotusa.com";
-    const from = Deno.env.get("YARDPILOT_EMAIL_FROM") ?? "YardPilot <no-reply@yardpilotusa.com>";
+    const from = Deno.env.get("YARDPILOT_EMAIL_FROM") ?? "YardPilotUSA <no-reply@yardpilotusa.com>";
     const userEmail = authData.user.email ?? "";
     const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1);
 
@@ -193,9 +193,9 @@ Deno.serve(async (request) => {
       from,
       to: [supportEmail],
       replyTo: allowContact && userEmail ? userEmail : undefined,
-      subject: `[YardPilot ${categoryLabel}] ${title || "New submission"}`,
+      subject: `[YardPilotUSA ${categoryLabel}] ${title || "New submission"}`,
       html: `
-        <h2>New YardPilot ${escapeHtml(categoryLabel)}</h2>
+        <h2>New YardPilotUSA ${escapeHtml(categoryLabel)}</h2>
         <p><strong>User ID:</strong> ${escapeHtml(authData.user.id)}</p>
         <p><strong>Contact allowed:</strong> ${allowContact ? "Yes" : "No"}</p>
         <p><strong>Email:</strong> ${allowContact && userEmail ? escapeHtml(userEmail) : "Not included"}</p>

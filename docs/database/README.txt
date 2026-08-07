@@ -1,8 +1,8 @@
-YardPilot database cleanup overlay
+YardPilotUSA database cleanup overlay
 
 This archive does not alter the live database.
 
-Extract it into the YardPilot repository root. It adds:
+Extract it into the YardPilotUSA repository root. It adds:
 - organized historical SQL source
 - a read-only live-object audit
 - a proposed resume-policy canonicalization migration

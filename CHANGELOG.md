@@ -12,6 +12,6 @@
 - Added public contact/waitlist rate limits and legal acceptance records.
 - Added legal policy scaffolds, repository security files, CI build workflow,
   launch checklists, and production documentation.
-- Preserved the uploaded YardPilot logo and corrected mobile icon references.
+- Preserved the uploaded YardPilotUSA logo and corrected mobile icon references.
 - Removed unconfirmed founder/pricing promises and placeholder survey links from
   the landing page.

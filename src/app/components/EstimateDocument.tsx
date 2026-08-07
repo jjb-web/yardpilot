@@ -69,10 +69,10 @@ export default function EstimateDocument({
       <header className="flex flex-col gap-5 bg-green-950 px-8 py-7 text-white sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/95">
-            <img src="/yardpilot-logo.png" alt="YardPilot logo" className="h-full w-full object-contain" />
+            <img src="/yardpilot-logo.png" alt="YardPilotUSA logo" className="h-full w-full object-contain" />
           </div>
           <div>
-            <p className="text-xl font-extrabold">{company.company || "YardPilot"}</p>
+            <p className="text-xl font-extrabold">{company.company || "YardPilotUSA"}</p>
             <p className="mt-1 text-sm text-green-200">Professional landscaping estimate</p>
             <div className="mt-2 space-y-0.5 text-xs text-green-100/80">
               {company.name && <p>{company.name}</p>}

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check:edge-functions": "bash scripts/check-edge-functions.sh"
+    "check:edge-functions": "bash scripts/check-edge-functions.sh",
+    "check:branding": "node scripts/check-branding.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.9",

@@ -170,7 +170,7 @@ export default function MarketplaceCompany() {
                 ? `Active registration verified${verification.legalName ? ` for ${verification.legalName}` : ""}${verification.formationState ? ` in ${verification.formationState}` : ""}.`
                 : verification.status === "pending"
                   ? "Verification is pending manual registry review."
-                  : "Not verified. YardPilot administrators can manually compare the listing with a Secretary of State registry."}
+                  : "Not verified. YardPilotUSA administrators can manually compare the listing with a Secretary of State registry."}
             </p>
             {verification.registryNumber && <p className="mt-1 text-xs text-slate-500">Registry number: {verification.registryNumber}{verification.verifiedAt ? ` · Verified ${new Date(verification.verifiedAt).toLocaleDateString()}` : ""}</p>}
             <p className="mt-2 text-xs text-slate-500">The badge confirms only the stated public registration record. It does not verify quality, insurance, contractor licensing, tax compliance, or suitability.</p>

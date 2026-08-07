@@ -1,6 +1,6 @@
 # Public Launch Checklist
 
-YardPilot should remain a controlled private beta until every launch-blocking
+YardPilotUSA should remain a controlled private beta until every launch-blocking
 item is checked.
 
 ## Security and data isolation
@@ -42,7 +42,7 @@ item is checked.
 
 - [ ] Mobile Safari and Android Chrome do not random-zoom or double-scroll.
 - [ ] Dark mode and contact/property/history tabs are readable.
-- [ ] Uploaded YardPilot logo appears as favicon and home-screen icon.
+- [ ] Uploaded YardPilotUSA logo appears as favicon and home-screen icon.
 - [ ] Empty, loading, error, offline, and not-found states are understandable.
 - [ ] Keyboard and screen-reader basics have been reviewed.
 - [ ] Reports are labeled Beta and their definitions match stored data.

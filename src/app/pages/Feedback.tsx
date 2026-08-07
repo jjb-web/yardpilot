@@ -79,8 +79,8 @@ export default function Feedback() {
     setAllowPublic(false);
     setNotice(
       data?.emailDelivery === "delivered"
-        ? "Thank you. Your submission was saved and emailed to YardPilot support."
-        : "Thank you. Your submission was saved. The support email alert could not be confirmed, but the submission remains available to YardPilot administrators.",
+        ? "Thank you. Your submission was saved and emailed to YardPilotUSA support."
+        : "Thank you. Your submission was saved. The support email alert could not be confirmed, but the submission remains available to YardPilotUSA administrators.",
     );
     trackEvent("feedback_submitted", { category, has_rating: category === "review" });
     await load();
@@ -89,8 +89,8 @@ export default function Feedback() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-7">
       <div>
-        <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-900 dark:text-white"><MessageSquareText size={24} /> YardPilot feedback</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Report a bug, request a feature, leave private feedback, or submit a YardPilot product review.</p>
+        <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-900 dark:text-white"><MessageSquareText size={24} /> YardPilotUSA feedback</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Report a bug, request a feature, leave private feedback, or submit a YardPilotUSA product review.</p>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -100,7 +100,7 @@ export default function Feedback() {
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Type
             <select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white">
-              <option value="feedback">General feedback</option><option value="review">YardPilot review</option><option value="bug">Bug report</option><option value="feature">Feature request</option>
+              <option value="feedback">General feedback</option><option value="review">YardPilotUSA review</option><option value="bug">Bug report</option><option value="feature">Feature request</option>
             </select>
           </label>
           {category === "review" && (
@@ -115,8 +115,8 @@ export default function Feedback() {
             <textarea required value={message} onChange={(event) => setMessage(event.target.value)} rows={6} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
           </label>
         </div>
-        <label className="mt-4 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={allowContact} onChange={(event) => setAllowContact(event.target.checked)} className="mt-1" /> YardPilot may contact me about this submission.</label>
-        {category === "review" && <label className="mt-3 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={allowPublic} onChange={(event) => setAllowPublic(event.target.checked)} className="mt-1" /> YardPilot may display this product review publicly after moderation. Contact information is not included automatically.</label>}
+        <label className="mt-4 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={allowContact} onChange={(event) => setAllowContact(event.target.checked)} className="mt-1" /> YardPilotUSA may contact me about this submission.</label>
+        {category === "review" && <label className="mt-3 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={allowPublic} onChange={(event) => setAllowPublic(event.target.checked)} className="mt-1" /> YardPilotUSA may display this product review publicly after moderation. Contact information is not included automatically.</label>}
         <button type="button" onClick={() => void submit()} disabled={busy} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-emerald-700">{busy && <Loader2 size={16} className="animate-spin" />} Submit</button>
       </section>
 

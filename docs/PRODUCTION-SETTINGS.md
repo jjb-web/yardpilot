@@ -51,7 +51,7 @@ VITE_GA_MEASUREMENT_ID (optional)
 ## Domain/email
 
 Configure SPF, DKIM, and DMARC for production email. Verify the uploaded
-YardPilot favicon by removing and re-adding any cached iOS Home Screen shortcut.
+YardPilotUSA favicon by removing and re-adding any cached iOS Home Screen shortcut.
 
 ## Legal/business
 

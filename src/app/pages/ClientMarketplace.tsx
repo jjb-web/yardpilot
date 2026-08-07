@@ -60,7 +60,7 @@ export default function ClientMarketplace() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Landscaper Market</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Search published companies and workgroups near your project. Results are loaded in small pages instead of downloading every company on YardPilot.
+          Search published companies and workgroups near your project. Results are loaded in small pages instead of downloading every company on YardPilotUSA.
         </p>
       </div>
 

@@ -149,8 +149,8 @@ export default function Team() {
       const copied = await copyText(invite.code, "Invite code copied");
       setMessage(
         copied
-          ? `Invite created for ${invite.email}. The code ${invite.code} was copied. YardPilot does not send invitations automatically, so give the person the code or copy their invite link below.`
-          : `Invite created for ${invite.email}. YardPilot does not send it automatically. Give them code ${invite.code}, or use Copy Link under Pending Invites.`
+          ? `Invite created for ${invite.email}. The code ${invite.code} was copied. YardPilotUSA does not send invitations automatically, so give the person the code or copy their invite link below.`
+          : `Invite created for ${invite.email}. YardPilotUSA does not send it automatically. Give them code ${invite.code}, or use Copy Link under Pending Invites.`
       );
       setInviteEmail("");
       setInviteCode("");
@@ -254,11 +254,11 @@ export default function Team() {
   function emailInvite(email: string, token: string) {
     const link = inviteLink(token);
     const subject = encodeURIComponent(
-      `Join ${activeWorkspace?.name ?? "my team"} on YardPilot`
+      `Join ${activeWorkspace?.name ?? "my team"} on YardPilotUSA`
     );
     const invite = workspaceInvites.find((item) => item.token === token);
     const body = encodeURIComponent(
-      `You have been invited to join ${activeWorkspace?.name ?? "a YardPilot workspace"}.\n\nInvite code: ${invite?.code ?? ""}\nInvite link: ${link}\n\nYardPilot does not send invitations automatically; this email was opened by the inviter.`
+      `You have been invited to join ${activeWorkspace?.name ?? "a YardPilotUSA workspace"}.\n\nInvite code: ${invite?.code ?? ""}\nInvite link: ${link}\n\nYardPilot does not send invitations automatically; this email was opened by the inviter.`
     );
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   }
@@ -894,7 +894,7 @@ export default function Team() {
                 </details>
               </div>
               <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                YardPilot does not send invitations automatically. After creating it, give the person the code or use Copy Link under Pending Invites.
+                YardPilotUSA does not send invitations automatically. After creating it, give the person the code or use Copy Link under Pending Invites.
               </div>
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-gray-100 flex justify-end gap-2">

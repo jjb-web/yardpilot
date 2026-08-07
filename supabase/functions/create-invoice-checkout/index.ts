@@ -47,7 +47,7 @@ Deno.serve(async (request) => {
       { requested_workspace_id: invoice.workspace_id, requested_feature_key: "online_payments" }
     );
     if (featureError || !onlinePaymentsEnabled) {
-      throw new Error("Online invoice payments require YardPilot Pro.");
+      throw new Error("Online invoice payments require YardPilotUSA Pro.");
     }
 
     const { data: workspace } = await admin

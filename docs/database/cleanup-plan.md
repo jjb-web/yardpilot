@@ -1,4 +1,4 @@
-# YardPilot database cleanup plan
+# YardPilotUSA database cleanup plan
 
 ## Safety rule
 
@@ -35,7 +35,7 @@ Deleting a Dashboard snippet does not undo SQL that previously ran.
 
 ## Phase 2 — Preserve source in the repository
 
-Extract this overlay into the YardPilot repository root. It places old SQL under
+Extract this overlay into the YardPilotUSA repository root. It places old SQL under
 `supabase/sql/history`, not `supabase/migrations`, so it cannot be accidentally
 pushed as pending migrations.
 

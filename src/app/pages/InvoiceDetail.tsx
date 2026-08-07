@@ -378,12 +378,12 @@ export default function InvoiceDetail() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h2 className="text-xl font-bold text-gray-900">Mark paid in person</h2>
-            <p className="mt-2 text-sm text-gray-500">Choose how the customer paid outside YardPilot.</p>
+            <p className="mt-2 text-sm text-gray-500">Choose how the customer paid outside YardPilotUSA.</p>
             <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Payment method</label>
             <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm">
               <option value="cash">Cash</option>
               <option value="check">Check</option>
-              <option value="card_outside_yardpilot">Card outside YardPilot</option>
+              <option value="card_outside_yardpilot">Card outside YardPilotUSA</option>
               <option value="bank_transfer">Bank transfer</option>
               <option value="cash_app">Cash App</option>
               <option value="venmo">Venmo</option>

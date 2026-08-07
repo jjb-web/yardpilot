@@ -15,7 +15,7 @@ const PAYMENT_METHODS = [
   ["bank_transfer", "Bank transfer / ACH"],
   ["cash", "Cash"],
   ["check", "Check"],
-  ["card", "Card outside YardPilot"],
+  ["card", "Card outside YardPilotUSA"],
   ["other", "Other"],
 ] as const;
 
@@ -244,7 +244,7 @@ export default function EmployeePayments() {
       </div>
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-        YardPilot records the payment and its external method; it does not calculate payroll taxes, withholdings, benefits, or transmit employee wages. Use a payroll provider or another lawful payment method, then mark the record paid here.
+        YardPilotUSA records the payment and its external method; it does not calculate payroll taxes, withholdings, benefits, or transmit employee wages. Use a payroll provider or another lawful payment method, then mark the record paid here.
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}

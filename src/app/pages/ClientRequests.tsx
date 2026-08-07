@@ -183,7 +183,7 @@ export default function ClientRequests() {
       setError(rpcError.message);
       return;
     }
-    setMessage("Bid accepted. Review the selected company under Accepted projects, then continue through the YardPilot estimate and invoice workflow.");
+    setMessage("Bid accepted. Review the selected company under Accepted projects, then continue through the YardPilotUSA estimate and invoice workflow.");
     trackEvent("marketplace_bid_accepted");
     await load();
   }

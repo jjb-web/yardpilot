@@ -156,7 +156,7 @@ svg {
   max-width: 100%;
 }
 
-/* YardPilot authenticated page scrolling */
+/* YardPilotUSA authenticated page scrolling */
 body.yardpilot-app-open #root {
   height: 100dvh;
   overflow: hidden;
@@ -170,7 +170,7 @@ body.yardpilot-app-open #root {
   overscroll-behavior-y: contain;
 }
 
-/* YardPilot full application dark mode v1
+/* YardPilotUSA full application dark mode v1
    Most legacy pages use fixed Tailwind white/gray/slate utilities. These rules
    scope the dark conversion to signed-in shells while keeping printable client
    documents white. */

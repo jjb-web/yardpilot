@@ -86,7 +86,7 @@ export default function ResetPassword() {
           {success ? <CheckCircle2 size={21} /> : <KeyRound size={21} />}
         </div>
         <h1 className="mt-4 text-2xl font-bold text-gray-900">Choose a new password</h1>
-        <p className="mt-2 text-sm text-gray-600">This changes the password for your YardPilot account.</p>
+        <p className="mt-2 text-sm text-gray-600">This changes the password for your YardPilotUSA account.</p>
 
         {success ? (
           <div className="mt-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">

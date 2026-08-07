@@ -42,7 +42,7 @@ export default function ForgotPassword() {
         </div>
         <h1 className="mt-4 text-2xl font-bold text-gray-900">Reset your password</h1>
         <p className="mt-2 text-sm leading-relaxed text-gray-600">
-          Enter your account email. YardPilot will send a secure reset link when the account supports password sign-in.
+          Enter your account email. YardPilotUSA will send a secure reset link when the account supports password sign-in.
         </p>
 
         <form onSubmit={submit} className="mt-6 space-y-4">

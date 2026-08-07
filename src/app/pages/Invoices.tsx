@@ -649,7 +649,7 @@ export default function Invoices() {
                       type="button"
                       onClick={() => void shareInvoice(invoice, true)}
                       disabled={isBusy || status === "void" || !stripeReady || !onlinePaymentsUnlocked}
-                      title={!onlinePaymentsUnlocked ? "Online invoice payments require YardPilot Pro" : stripeReady ? "Send a public invoice link with online Stripe payment" : "Connect Stripe in Account first"}
+                      title={!onlinePaymentsUnlocked ? "Online invoice payments require YardPilotUSA Pro" : stripeReady ? "Send a public invoice link with online Stripe payment" : "Connect Stripe in Account first"}
                       className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                     >
                       <CreditCard size={14} /> Send online payment link
@@ -933,12 +933,12 @@ export default function Invoices() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h2 className="text-xl font-bold text-gray-900">Mark paid in person</h2>
-            <p className="mt-2 text-sm text-gray-500">Choose how {paymentInvoice.invoiceNumber} was paid outside YardPilot.</p>
+            <p className="mt-2 text-sm text-gray-500">Choose how {paymentInvoice.invoiceNumber} was paid outside YardPilotUSA.</p>
             <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Payment method</label>
             <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className={`${inputClass} mt-2`}>
               <option value="cash">Cash</option>
               <option value="check">Check</option>
-              <option value="card_outside_yardpilot">Card outside YardPilot</option>
+              <option value="card_outside_yardpilot">Card outside YardPilotUSA</option>
               <option value="bank_transfer">Bank transfer</option>
               <option value="cash_app">Cash App</option>
               <option value="venmo">Venmo</option>

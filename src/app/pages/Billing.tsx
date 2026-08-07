@@ -195,7 +195,7 @@ export default function Billing() {
 
       <section id="redeem" className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center gap-3"><Gift size={20}/><h2 className="text-lg font-bold">Redeem promotional access</h2></div>
-        <p className="mt-2 text-sm text-gray-500">Use a code from a YardPilot business card, QR campaign, event, or partner.</p>
+        <p className="mt-2 text-sm text-gray-500">Use a code from a YardPilotUSA business card, QR campaign, event, or partner.</p>
         <div className="mt-4 flex max-w-xl flex-col gap-3 sm:flex-row">
           <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Enter access code" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
           <button onClick={() => void redeem()} disabled={!canManage || !code.trim() || Boolean(busy)} className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">

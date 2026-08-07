@@ -931,7 +931,7 @@ export default function EstimateBuilder() {
 
         if (linkError) {
           showError(
-            `The estimate was saved, but YardPilot could not link it to the marketplace request: ${linkError.message}`,
+            `The estimate was saved, but YardPilotUSA could not link it to the marketplace request: ${linkError.message}`,
           );
           return;
         }
@@ -1104,7 +1104,7 @@ export default function EstimateBuilder() {
                   setOpenJobs((current) => [...current, job.id]);
                 }}
                 disabled={!canAddMultipleJobs && jobSections.length >= 1}
-                title={canAddMultipleJobs ? "Add another job" : "Multiple jobs per estimate requires YardPilot Pro"}
+                title={canAddMultipleJobs ? "Add another job" : "Multiple jobs per estimate requires YardPilotUSA Pro"}
                 className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={16} /> Add another job

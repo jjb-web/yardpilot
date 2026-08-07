@@ -1,4 +1,4 @@
-# YardPilot current code audit — August 4, 2026
+# YardPilotUSA current code audit — August 4, 2026
 
 ## Verified scroll state
 

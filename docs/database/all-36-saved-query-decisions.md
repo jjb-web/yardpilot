@@ -27,8 +27,8 @@
 | 23 | 4 | ACTIVE_REQUIRED_SOURCE | Add to repo migration history — Profile and service-role grants/RLS patch used to fix post-login/profile access. |
 | 24 | 3 | ONE_TIME_DATA_REPAIR | Archive outside baseline migrations — Promotes each recorded workspace creator's existing membership to owner. |
 | 25 | payments | CANONICAL_MIGRATION | Keep in repo — Payments, membership controls and invoice workflow; exact current repo file. |
-| 26 | YardPilot lifecycle, workgroup, property workflow, and invoice archive update. | ACTIVE_REQUIRED_SOURCE | Add to repo migration history — Defines workgroups, workspace rate, project deletion and invoice/archive workflow RPCs still called by the app. |
-| 27 | YardPilot jobs, invoices, contacts, profile, invite, and photo-policy update | ACTIVE_REQUIRED_SOURCE | Add to repo migration history — Defines profile update, invoice view and photo policies still used by the app. |
+| 26 | YardPilotUSA lifecycle, workgroup, property workflow, and invoice archive update. | ACTIVE_REQUIRED_SOURCE | Add to repo migration history — Defines workgroups, workspace rate, project deletion and invoice/archive workflow RPCs still called by the app. |
+| 27 | YardPilotUSA jobs, invoices, contacts, profile, invite, and photo-policy update | ACTIVE_REQUIRED_SOURCE | Add to repo migration history — Defines profile update, invoice view and photo policies still used by the app. |
 | 28 | yardpilot-polish-workflow.sql | ACTIVE_REQUIRED_SOURCE | Add to repo migration history — Defines invite acceptance and workflow polish needed by current app. |
 | 29 | yardpilot-workspace-lifecycle | ACTIVE_REQUIRED_SOURCE | Add to repo migration history — Defines company workspace, member management, response/view RPCs still called by the app. |
 | 30 | yardpilot-operations-team | FOUNDATIONAL_MIGRATION | Add to repo migration history — Creates workspaces, memberships, invites, assignments, invoices, schedules, follow-ups and job requests. |

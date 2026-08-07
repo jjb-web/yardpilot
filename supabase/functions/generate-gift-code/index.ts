@@ -78,7 +78,7 @@ Deno.serve(async (request) => {
       return json({ error: adminError.message }, 500);
     }
     if (!platformAdmin) {
-      return json({ error: "Only a YardPilot platform administrator can generate gift codes." }, 403);
+      return json({ error: "Only a YardPilotUSA platform administrator can generate gift codes." }, 403);
     }
 
     const body = (await request.json().catch(() => ({}))) as {

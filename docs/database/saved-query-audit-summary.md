@@ -1,4 +1,4 @@
-# YardPilot Supabase Saved-Query Audit
+# YardPilotUSA Supabase Saved-Query Audit
 
 Generated from the complete export uploaded on August 3, 2026.
 
@@ -22,7 +22,7 @@ Generated from the complete export uploaded on August 3, 2026.
 
 ## Important repository gap
 
-Static comparison against the uploaded YardPilot project found current frontend RPC calls whose SQL definitions are not stored in the current repository:
+Static comparison against the uploaded YardPilotUSA project found current frontend RPC calls whose SQL definitions are not stored in the current repository:
 
 | rpc                                      | query_defs   | app_locations                                           |
 |:-----------------------------------------|:-------------|:--------------------------------------------------------|

@@ -1,4 +1,4 @@
-# YardPilot launch readiness v1
+# YardPilotUSA launch readiness v1
 
 This update completes the parts that can safely live in source control. It does
 not configure third-party dashboards and does not enable browser push, AI, real

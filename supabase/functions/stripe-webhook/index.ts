@@ -131,7 +131,7 @@ Deno.serve(async (request) => {
       const eventAccount = connectedAccountId(event);
 
       if (!invoiceId || !workspaceId) {
-        throw new Error(`Stripe session ${session.id} is missing YardPilot metadata.`);
+        throw new Error(`Stripe session ${session.id} is missing YardPilotUSA metadata.`);
       }
 
       const { data: workspace, error: workspaceError } = await admin

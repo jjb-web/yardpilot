@@ -296,7 +296,7 @@ Deno.serve(async (request) => {
     return json({
       deleted: true,
       message:
-        "The Supabase Auth user, personal Storage, and account-scoped YardPilot data were permanently deleted.",
+        "The Supabase Auth user, personal Storage, and account-scoped YardPilotUSA data were permanently deleted.",
       deletedWorkspaceCount:
         preparation.deleted_workspace_count ?? 0,
     });

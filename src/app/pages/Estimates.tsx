@@ -112,7 +112,7 @@ export default function Estimates() {
       const url = estimateShareUrl(sharedProject.shareToken);
       const shareData = {
         title: `${sharedProject.estimateNumber} - ${sharedProject.name}`,
-        text: `Landscaping estimate from YardPilot for ${sharedProject.client || sharedProject.name}`,
+        text: `Landscaping estimate from YardPilotUSA for ${sharedProject.client || sharedProject.name}`,
         url,
       };
 

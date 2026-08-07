@@ -33,7 +33,7 @@
 - Privacy-limited analytics consent.
 - Client error reports, public contact, and waitlist endpoints with rate limits.
 - Account deletion blocks unsafe owner deletion and removes private resume files.
-- Uploaded YardPilot logo, favicon, and mobile icons are preserved.
+- Uploaded YardPilotUSA logo, favicon, and mobile icons are preserved.
 - Dark/mobile styles from the latest marketplace UX update are retained.
 
 ## Repository and deployment

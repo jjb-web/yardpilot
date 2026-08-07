@@ -23,7 +23,7 @@ export default function FeatureGate({
         </div>
         <h1 className="mt-5 text-2xl font-bold">{FEATURE_LABELS[feature]} is a Pro feature</h1>
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          Upgrade this workspace to YardPilot Pro or redeem a promotional access code.
+          Upgrade this workspace to YardPilotUSA Pro or redeem a promotional access code.
           Your existing data stays saved if Pro access expires.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">

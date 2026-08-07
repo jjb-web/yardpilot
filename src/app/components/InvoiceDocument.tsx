@@ -51,8 +51,8 @@ export default function InvoiceDocument({ invoice, company, contact, property }:
     <article className="invoice-print-root mx-auto w-full max-w-[900px] overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
       <header className="flex flex-col gap-5 bg-slate-950 px-8 py-7 text-white sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-white"><img src="/yardpilot-logo.png" alt="YardPilot logo" className="h-full w-full object-contain" /></div>
-          <div><p className="text-xl font-extrabold">{company.company || "YardPilot"}</p><p className="mt-1 text-sm text-slate-300">Final invoice</p>{company.email && <p className="mt-2 text-xs text-slate-400">{company.email}</p>}</div>
+          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-white"><img src="/yardpilot-logo.png" alt="YardPilotUSA logo" className="h-full w-full object-contain" /></div>
+          <div><p className="text-xl font-extrabold">{company.company || "YardPilotUSA"}</p><p className="mt-1 text-sm text-slate-300">Final invoice</p>{company.email && <p className="mt-2 text-xs text-slate-400">{company.email}</p>}</div>
         </div>
         <div className="sm:text-right"><p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">Invoice</p><p className="mt-1 text-2xl font-extrabold">{invoice.invoiceNumber}</p><p className="mt-2 text-sm capitalize text-slate-300">{invoice.status}</p></div>
       </header>

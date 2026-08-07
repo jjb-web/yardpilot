@@ -35,7 +35,7 @@ export default function Reports() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map(([label, value, definition]) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900"><p className="text-sm text-slate-500 dark:text-slate-400">{label}</p><p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{definition}</p></article>)}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Use exported invoice and job records with a qualified accountant for taxes and financial statements. YardPilot reports are operational summaries, not accounting or tax reports.</div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Use exported invoice and job records with a qualified accountant for taxes and financial statements. YardPilotUSA reports are operational summaries, not accounting or tax reports.</div>
     </div>
   );
 }

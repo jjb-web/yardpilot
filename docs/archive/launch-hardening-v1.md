@@ -1,6 +1,6 @@
-# YardPilot Launch Hardening v1
+# YardPilotUSA Launch Hardening v1
 
-This is a root-overlay update built on the latest YardPilot subscription,
+This is a root-overlay update built on the latest YardPilotUSA subscription,
 marketplace, client-account, mobile/dark-mode, and logo versions available in the
 project history.
 
@@ -50,4 +50,4 @@ profit accounting, and cross-workspace transfers are deferred. See
 
 A complete Vite build could not be executed in the artifact environment because
 the dependency registry was unavailable. `npm ci && npm run build` in the actual
-YardPilot project is required before deployment.
+YardPilotUSA project is required before deployment.

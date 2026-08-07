@@ -23,7 +23,7 @@ const nav = [
   { to: "/client/requests", label: "My Bid Requests", icon: FileBadge },
   { to: "/client/payments", label: "Payments", icon: CreditCard },
   { to: "/client/notifications", label: "Notifications", icon: Bell },
-  { to: "/client/feedback", label: "YardPilot feedback", icon: MessageSquareText },
+  { to: "/client/feedback", label: "YardPilotUSA feedback", icon: MessageSquareText },
   { to: "/client/account", label: "Account", icon: User },
 ];
 
@@ -45,7 +45,7 @@ export default function ClientLayout() {
 
   useEffect(() => {
     const item = nav.find((entry) => location.pathname.startsWith(entry.to));
-    document.title = item ? `${item.label} · YardPilot` : "YardPilot";
+    document.title = item ? `${item.label} · YardPilotUSA` : "YardPilotUSA";
   }, [location.pathname]);
 
   useEffect(() => {
@@ -82,10 +82,10 @@ export default function ClientLayout() {
       <div className="border-b border-white/10 px-4 py-5">
         <Link to="/client/market" className="flex items-center gap-2.5 px-1">
           <div className="h-9 w-9 overflow-hidden rounded-lg border border-white/15 bg-[#353c38]">
-            <img src="/yardpilot-logo.png" alt="YardPilot" className="h-full w-full object-contain" />
+            <img src="/yardpilot-logo.png" alt="YardPilotUSA" className="h-full w-full object-contain" />
           </div>
           <div>
-            <p className="text-sm font-bold text-white">YardPilot</p>
+            <p className="text-sm font-bold text-white">YardPilotUSA</p>
             <p className="text-xs text-[#b7c5bc]">Client marketplace</p>
           </div>
         </Link>

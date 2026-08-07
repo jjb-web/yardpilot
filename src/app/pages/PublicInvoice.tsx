@@ -175,9 +175,9 @@ function mapInvoice(row: Record<string, unknown>): Invoice {
 
 function mapCompany(row: Record<string, unknown> | null): User {
   return {
-    name: text(row?.full_name) || "YardPilot Professional",
+    name: text(row?.full_name) || "YardPilotUSA Professional",
     email: text(row?.email),
-    company: text(row?.company) || "YardPilot",
+    company: text(row?.company) || "YardPilotUSA",
     phone: text(row?.phone),
     city: text(row?.city),
     state: text(row?.state),

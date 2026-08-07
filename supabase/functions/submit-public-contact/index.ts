@@ -127,13 +127,13 @@ Deno.serve(async (request) => {
     if (insertError) throw new Error(insertError.message);
 
     const supportEmail = Deno.env.get("YARDPILOT_SUPPORT_EMAIL") ?? "support@yardpilotusa.com";
-    const from = Deno.env.get("YARDPILOT_EMAIL_FROM") ?? "YardPilot <no-reply@yardpilotusa.com>";
+    const from = Deno.env.get("YARDPILOT_EMAIL_FROM") ?? "YardPilotUSA <no-reply@yardpilotusa.com>";
     const delivery = await sendEmail({
       from,
       to: [supportEmail],
       replyTo: email,
-      subject: `[YardPilot Support] ${subject}`,
-      html: `<h2>New YardPilot support message</h2><p><strong>From:</strong> ${escapeHtml(email)}</p><p><strong>Source:</strong> ${escapeHtml(source)}</p><p><strong>Subject:</strong> ${escapeHtml(subject)}</p><hr><p style="white-space:pre-wrap">${escapeHtml(message)}</p>`,
+      subject: `[YardPilotUSA Support] ${subject}`,
+      html: `<h2>New YardPilotUSA support message</h2><p><strong>From:</strong> ${escapeHtml(email)}</p><p><strong>Source:</strong> ${escapeHtml(source)}</p><p><strong>Subject:</strong> ${escapeHtml(subject)}</p><hr><p style="white-space:pre-wrap">${escapeHtml(message)}</p>`,
     });
 
     await admin

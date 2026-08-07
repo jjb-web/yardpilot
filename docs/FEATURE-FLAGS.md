@@ -23,7 +23,7 @@ Disable hiring similarly with `marketplace_hiring`. The frontend hides/pauses
 the matching workflow and database policies block new requests, bids, openings,
 and applications. Existing records remain.
 
-`public_registration` disables the YardPilot registration UI. For a true
+`public_registration` disables the YardPilotUSA registration UI. For a true
 emergency registration shutdown, also disable new-user signups in Supabase Auth,
 because a browser flag alone cannot secure the Auth API. Valid existing sessions
 and team-invitation behavior should be tested after changing Auth settings.

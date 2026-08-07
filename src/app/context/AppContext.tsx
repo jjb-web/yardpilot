@@ -489,7 +489,7 @@ function userFromAuth(authUser: SupabaseAuthUser): User {
       metadata.full_name ??
       metadata.name ??
       authUser.email?.split("@")[0] ??
-      "YardPilot User",
+      "YardPilotUSA User",
     email: authUser.email ?? "",
     company: metadata.company ?? "",
     phone: metadata.phone ?? authUser.phone ?? "",
@@ -1446,7 +1446,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("yardpilot-workspace", selected.id);
         await loadWorkspaceBundle(selected.id, selected.role);
       } else {
-        setWorkspaceError("No YardPilot workspace was found for this account.");
+        setWorkspaceError("No YardPilotUSA workspace was found for this account.");
       }
     } catch (error) {
       setWorkspaceError(

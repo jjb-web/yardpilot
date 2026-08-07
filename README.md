@@ -1,7 +1,7 @@
-# YardPilot
+# YardPilotUSA
 
 Private-beta software for landscaping estimates, jobs, teams, scheduling,
-marketplace bidding, hiring, invoices, connected-business payments, and YardPilot
+marketplace bidding, hiring, invoices, connected-business payments, and YardPilotUSA
 Pro subscriptions.
 
 This repository is proprietary. See `LICENSE`, `NOTICE`, and `SECURITY.md`.
@@ -11,7 +11,7 @@ This repository is proprietary. See `LICENSE`, `NOTICE`, and `SECURITY.md`.
 - React + TypeScript + Vite
 - Tailwind CSS v4
 - Supabase Auth, Postgres, RLS, Storage, and Edge Functions
-- Stripe Billing for YardPilot Pro
+- Stripe Billing for YardPilotUSA Pro
 - Stripe Connect for landscaping-company invoice payments
 - Vercel deployment
 

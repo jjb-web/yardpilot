@@ -32,8 +32,8 @@ export default class AppErrorBoundary extends Component<Props, State> {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-slate-900 dark:bg-slate-950 dark:text-white">
         <section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <img src="/yardpilot-logo.png" alt="YardPilot" className="mx-auto h-14 w-14 object-contain" />
-          <h1 className="mt-5 text-2xl font-bold">YardPilot hit an unexpected error</h1>
+          <img src="/yardpilot-logo.png" alt="YardPilotUSA" className="mx-auto h-14 w-14 object-contain" />
+          <h1 className="mt-5 text-2xl font-bold">YardPilotUSA hit an unexpected error</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
             The technical details were reported without intentionally including form contents. Reload the page. If it happens again, contact support.
           </p>

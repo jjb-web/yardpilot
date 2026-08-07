@@ -12,7 +12,7 @@ export default function NotFound() {
           The link may be old, incomplete, or unavailable to your account.
         </p>
         <Link to="/" className="mt-6 inline-flex rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-emerald-700">
-          Return to YardPilot
+          Return to YardPilotUSA
         </Link>
       </div>
     </main>

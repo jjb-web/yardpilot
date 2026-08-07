@@ -369,7 +369,7 @@ Deno.serve(async (request) => {
             metadata: { yardpilot_workspace_id: "" },
           });
         } catch (error) {
-          console.warn("Could not remove YardPilot metadata during disconnect", error);
+          console.warn("Could not remove YardPilotUSA metadata during disconnect", error);
         }
       }
       await clearWorkspaceStripeStatus(admin, workspaceId);
@@ -377,7 +377,7 @@ Deno.serve(async (request) => {
         disconnected: true,
         previousAccountId,
         message:
-          "Stripe was disconnected from this YardPilot workspace. The external Stripe account was not closed or deleted.",
+          "Stripe was disconnected from this YardPilotUSA workspace. The external Stripe account was not closed or deleted.",
       });
     }
 

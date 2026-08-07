@@ -26,6 +26,6 @@ Deno.serve(async(request)=>{
   if(redemption.error) return json({error:redemption.error.message},400);
   await admin.from("access_codes").update({redemption_count:access.redemption_count+1}).eq("id",access.id).eq("redemption_count",access.redemption_count);
   await admin.from("workspace_subscriptions").upsert({workspace_id:workspaceId,plan_key:"pro",promotional_access_until:end.toISOString(),updated_at:now.toISOString()},{onConflict:"workspace_id"});
-  return json({message:`YardPilot Pro is unlocked until ${end.toLocaleDateString("en-US")}.`,accessUntil:end.toISOString()});
+  return json({message:`YardPilotUSA Pro is unlocked until ${end.toLocaleDateString("en-US")}.`,accessUntil:end.toISOString()});
  }catch(error){return json({error:error instanceof Error?error.message:"Could not redeem access code."},500)}
 });

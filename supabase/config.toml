@@ -1,4 +1,4 @@
-# Local Supabase CLI configuration for YardPilot.
+# Local Supabase CLI configuration for YardPilotUSA.
 # The hosted project is linked separately with:
 # npx supabase@latest link --project-ref zuaikajypdcrbfcksiuf
 
@@ -25,7 +25,7 @@ verify_jwt = false
 [functions.delete-account]
 enabled = true
 verify_jwt = false
-# YardPilot subscription checkout and customer portal require a signed-in owner/co-owner.
+# YardPilotUSA subscription checkout and customer portal require a signed-in owner/co-owner.
 [functions.create-subscription-checkout]
 enabled = true
 verify_jwt = true
@@ -44,7 +44,7 @@ verify_jwt = false
 enabled = true
 verify_jwt = true
 
-# Signed-in YardPilot platform administrators can create one-use gift codes.
+# Signed-in YardPilotUSA platform administrators can create one-use gift codes.
 [functions.generate-gift-code]
 enabled = true
 verify_jwt = true

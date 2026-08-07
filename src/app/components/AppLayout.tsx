@@ -60,7 +60,7 @@ const nav: NavItem[] = [
   { to: "/app/team", icon: Users, label: "Team", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
   { to: "/app/team-payments", icon: WalletCards, label: "Employee payments", roles: ["owner", "co_owner", "manager", "employee"], feature: "team" },
   { to: "/app/notifications", icon: BellRing, label: "Notifications", roles: ["owner", "co_owner", "manager", "employee"] },
-  { to: "/app/feedback", icon: MessageSquareText, label: "YardPilot feedback", roles: ["owner", "co_owner", "manager", "employee"] },
+  { to: "/app/feedback", icon: MessageSquareText, label: "YardPilotUSA feedback", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/account", icon: User, label: "Account", roles: ["owner", "co_owner", "manager", "employee"] },
   { to: "/app/billing", icon: CreditCard, label: "Plans & billing", roles: ["owner", "co_owner"] },
 ];
@@ -98,8 +98,8 @@ export default function AppLayout() {
   useEffect(() => {
     const routeLabel = nav.find((item) => location.pathname.startsWith(item.to))?.label;
     document.title = routeLabel === "Dashboard"
-      ? "YardPilot"
-      : routeLabel ? `${routeLabel} · YardPilot` : "YardPilot";
+      ? "YardPilotUSA"
+      : routeLabel ? `${routeLabel} · YardPilotUSA` : "YardPilotUSA";
   }, [location.pathname]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
@@ -140,7 +140,7 @@ export default function AppLayout() {
         <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm">
           <LockKeyhole className="mx-auto" size={28} />
           <h1 className="mt-4 text-2xl font-bold">Workspace team access is paused</h1>
-          <p className="mt-2 text-sm leading-6 text-gray-600">The workspace owner must restore YardPilot Pro before managers and employees can use this workspace. Existing records remain saved.</p>
+          <p className="mt-2 text-sm leading-6 text-gray-600">The workspace owner must restore YardPilotUSA Pro before managers and employees can use this workspace. Existing records remain saved.</p>
           <button type="button" onClick={() => void handleLogout()} className="mt-6 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">Sign out</button>
         </div>
       </div>
@@ -173,7 +173,7 @@ export default function AppLayout() {
           <div className="w-9 h-9 rounded-lg border border-white/15 bg-[#353c38] flex items-center justify-center shrink-0 overflow-hidden">
             <img
               src="/yardpilot-logo.png"
-              alt="YardPilot logo"
+              alt="YardPilotUSA logo"
               className="w-full h-full object-contain"
             />
           </div>
@@ -182,7 +182,7 @@ export default function AppLayout() {
               className="text-white font-bold text-sm"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
-              YardPilot
+              YardPilotUSA
             </p>
             <p className="text-[#b7c5bc] text-xs truncate">
               {activeWorkspace?.name || user.company || "Workspace"}

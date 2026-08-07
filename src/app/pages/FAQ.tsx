@@ -5,7 +5,7 @@ const questions = [
   {
     question: "When does an estimate become a job?",
     answer:
-      "An estimate starts as Draft. Sharing marks it Sent. When the client accepts it, YardPilot automatically moves it into Jobs. Declined estimates stay in the estimate record.",
+      "An estimate starts as Draft. Sharing marks it Sent. When the client accepts it, YardPilotUSA automatically moves it into Jobs. Declined estimates stay in the estimate record.",
   },
   {
     question: "What happens when a job is completed?",
@@ -20,12 +20,12 @@ const questions = [
   {
     question: "What is the difference between a company and a workgroup?",
     answer:
-      "A company name is uniquely claimed across YardPilot. Workgroups use the same shared roles and dashboard tools, but different users may create workgroups with the same display name.",
+      "A company name is uniquely claimed across YardPilotUSA. Workgroups use the same shared roles and dashboard tools, but different users may create workgroups with the same display name.",
   },
   {
-    question: "Does YardPilot automatically email team invitations?",
+    question: "Does YardPilotUSA automatically email team invitations?",
     answer:
-      "No. YardPilot creates a secure code and link. Copy one and send it to the invited person yourself.",
+      "No. YardPilotUSA creates a secure code and link. Copy one and send it to the invited person yourself.",
   },
 ];
 
@@ -37,7 +37,7 @@ export default function FAQ() {
           to="/"
           className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"
         >
-          <ArrowLeft size={16} /> Back to YardPilot
+          <ArrowLeft size={16} /> Back to YardPilotUSA
         </Link>
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="mb-7 flex items-center gap-3">

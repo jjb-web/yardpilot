@@ -1,4 +1,4 @@
-# YardPilot diagnostic fixes applied
+# YardPilotUSA diagnostic fixes applied
 
 - Corrected `CREATE POLICY ... ON ... AS RESTRICTIVE` ordering in the launch-hardening migration.
 - Corrected the diagnostics function-order expression.

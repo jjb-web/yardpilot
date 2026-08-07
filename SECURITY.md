@@ -1,7 +1,7 @@
 # Security Policy
 
 Do not report security issues through public GitHub issues or public reviews.
-Use the private YardPilot support channel and clearly label the message
+Use the private YardPilotUSA support channel and clearly label the message
 `SECURITY REPORT`. Do not include live secret keys, full card data, Social
 Security numbers, customer records, or unnecessary personal information.
 

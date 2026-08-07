@@ -98,7 +98,7 @@ export default function MarketplaceApplications() {
     <div className="space-y-6">
       <div>
         <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><Users size={21} /> Applications</h2>
-        <p className="mt-1 text-sm text-slate-500">Approve an applicant to add them directly to the active workspace. Team access still requires YardPilot Pro.</p>
+        <p className="mt-1 text-sm text-slate-500">Approve an applicant to add them directly to the active workspace. Team access still requires YardPilotUSA Pro.</p>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
