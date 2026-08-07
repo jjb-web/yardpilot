@@ -258,7 +258,7 @@ export default function Team() {
     );
     const invite = workspaceInvites.find((item) => item.token === token);
     const body = encodeURIComponent(
-      `You have been invited to join ${activeWorkspace?.name ?? "a YardPilotUSA workspace"}.\n\nInvite code: ${invite?.code ?? ""}\nInvite link: ${link}\n\nYardPilot does not send invitations automatically; this email was opened by the inviter.`
+      `You have been invited to join ${activeWorkspace?.name ?? "a YardPilotUSA workspace"}.\n\nInvite code: ${invite?.code ?? ""}\nInvite link: ${link}\n\nYardPilotUSA does not send invitations automatically; this email was opened by the inviter.`
     );
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   }
